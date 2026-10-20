@@ -84,6 +84,14 @@ public class FileHasherTests : IDisposable
     [InlineData("C:\\project\\root", "src\\Foo.cs", "src/Foo.cs")]
     [InlineData("C:\\project\\root", "./src/Foo.cs", "src/Foo.cs")]
     [InlineData("C:\\project\\root", ".\\src\\Foo.cs", "src/Foo.cs")]
+    [InlineData("/project/root", "/project/root/src/Foo.cs", "src/Foo.cs")]
+    [InlineData("/project/root", "src/Foo.cs", "src/Foo.cs")]
+    [InlineData("/project/root", "./src/Foo.cs", "src/Foo.cs")]
+    [InlineData("/project/root", "/project/other/Bar.cs", "../other/Bar.cs")]
+    [InlineData("C:/project/root", "C:/project/other/Bar.cs", "../other/Bar.cs")]
+    [InlineData("C:\\project\\root", "C:\\project\\other\\Bar.cs", "../other/Bar.cs")]
+    [InlineData("C:/project/root", "C:/project/root", ".")]
+    [InlineData("/project/root", "/project/root", ".")]
     public void NormalizeRelativePath_NormalizesSeparatorsAndRelativePrefix(string basePath, string inputPath, string expected)
     {
         var normalized = _hasher.NormalizeRelativePath(basePath, inputPath);

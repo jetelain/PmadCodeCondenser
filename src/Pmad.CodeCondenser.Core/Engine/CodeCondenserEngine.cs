@@ -210,7 +210,7 @@ public sealed class CodeCondenserEngine : ICodeCondenserEngine
 
             if (commentsToSummarize.Count > 0)
             {
-                var progressHandler = new Progress<CommentSummarizationProgress>(p =>
+                var progressHandler = new SynchronousProgress<CommentSummarizationProgress>(p =>
                 {
                     progress?.Report(p);
                     CommentSummarizationProgress?.Invoke(p);
@@ -469,5 +469,18 @@ public sealed class CodeCondenserEngine : ICodeCondenserEngine
         }
 
         return Path.Combine(baseDirectory, snapshotFilePath);
+    }
+
+    private sealed class SynchronousProgress<T>(Action<T> handler) : IProgress<T>
+    {
+        private readonly object _gate = new();
+
+        public void Report(T value)
+        {
+            lock (_gate)
+            {
+                handler(value);
+            }
+        }
     }
 }

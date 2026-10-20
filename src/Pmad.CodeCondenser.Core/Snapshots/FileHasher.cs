@@ -74,22 +74,111 @@ public sealed class FileHasher : IFileHasher
         ArgumentException.ThrowIfNullOrWhiteSpace(basePath);
         ArgumentException.ThrowIfNullOrWhiteSpace(fullOrRelativePath);
 
-        string relative;
-        if (Path.IsPathRooted(fullOrRelativePath))
+        var normBase = basePath.Replace('\\', '/');
+        if (normBase.Length > 1 && normBase.EndsWith('/'))
         {
-            relative = Path.GetRelativePath(basePath, fullOrRelativePath);
-        }
-        else
-        {
-            relative = fullOrRelativePath;
+            normBase = normBase.TrimEnd('/');
         }
 
-        var normalized = relative.Replace('\\', '/');
-        if (normalized.StartsWith("./", StringComparison.Ordinal))
+        var normPath = fullOrRelativePath.Replace('\\', '/');
+        while (normPath.StartsWith("./", StringComparison.Ordinal))
         {
-            normalized = normalized[2..];
+            normPath = normPath[2..];
         }
 
-        return normalized;
+        if (string.Equals(normBase, normPath, StringComparison.OrdinalIgnoreCase))
+        {
+            return ".";
+        }
+
+        if (normBase == "/" && normPath.StartsWith('/'))
+        {
+            return normPath[1..];
+        }
+
+        if (normPath.StartsWith(normBase + "/", StringComparison.OrdinalIgnoreCase))
+        {
+            return normPath[(normBase.Length + 1)..];
+        }
+
+        if (!IsRooted(normPath))
+        {
+            return normPath;
+        }
+
+        if (Path.IsPathRooted(basePath) && Path.IsPathRooted(fullOrRelativePath))
+        {
+            try
+            {
+                var rel = Path.GetRelativePath(basePath, fullOrRelativePath).Replace('\\', '/');
+                if (rel.StartsWith("./", StringComparison.Ordinal))
+                {
+                    rel = rel[2..];
+                }
+                return rel;
+            }
+            catch
+            {
+                // Fall back to manual computation
+            }
+        }
+
+        return ComputeRelativePath(normBase, normPath);
+    }
+
+    private static bool IsRooted(string path)
+    {
+        if (Path.IsPathRooted(path))
+        {
+            return true;
+        }
+
+        if (path.StartsWith('/'))
+        {
+            return true;
+        }
+
+        if (path.Length >= 2 && char.IsAsciiLetter(path[0]) && path[1] == ':')
+        {
+            return true;
+        }
+
+        return false;
+    }
+
+    private static string ComputeRelativePath(string fromPath, string toPath)
+    {
+        var fromSegments = fromPath.Split('/', StringSplitOptions.RemoveEmptyEntries);
+        var toSegments = toPath.Split('/', StringSplitOptions.RemoveEmptyEntries);
+
+        if (fromSegments.Length > 0 && toSegments.Length > 0 &&
+            fromSegments[0].EndsWith(':') && toSegments[0].EndsWith(':') &&
+            !string.Equals(fromSegments[0], toSegments[0], StringComparison.OrdinalIgnoreCase))
+        {
+            return toPath;
+        }
+
+        int commonCount = 0;
+        int maxCommon = Math.Min(fromSegments.Length, toSegments.Length);
+        while (commonCount < maxCommon &&
+               string.Equals(fromSegments[commonCount], toSegments[commonCount], StringComparison.OrdinalIgnoreCase))
+        {
+            commonCount++;
+        }
+
+        var sb = new StringBuilder();
+        for (int i = commonCount; i < fromSegments.Length; i++)
+        {
+            if (sb.Length > 0) sb.Append('/');
+            sb.Append("..");
+        }
+
+        for (int i = commonCount; i < toSegments.Length; i++)
+        {
+            if (sb.Length > 0) sb.Append('/');
+            sb.Append(toSegments[i]);
+        }
+
+        return sb.Length > 0 ? sb.ToString() : ".";
     }
 }
