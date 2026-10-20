@@ -184,6 +184,26 @@ public static class CliArgumentParser
                 continue;
             }
 
+            if (TryExtractOptionValue(args, ref i, "--summarized-comments", "-sc", out var scVal, out errorMessage) ||
+                TryExtractOptionValue(args, ref i, "--comments-file", "-cf", out scVal, out errorMessage))
+            {
+                if (errorMessage != null) return false;
+                options.SummarizedCommentsPath = scVal;
+                continue;
+            }
+
+            if (TryExtractOptionValue(args, ref i, "--max-line-length", "-mll", out var mllVal, out errorMessage))
+            {
+                if (errorMessage != null) return false;
+                if (!int.TryParse(mllVal, out var mll) || mll < 40)
+                {
+                    errorMessage = $"Invalid value for --max-line-length: '{mllVal}'. Must be an integer >= 40.";
+                    return false;
+                }
+                options.MaxLineLength = mll;
+                continue;
+            }
+
             if (arg.StartsWith('-'))
             {
                 errorMessage = $"Unrecognized option: '{arg}'. Use --help to view available options.";
@@ -293,6 +313,8 @@ public static class CliArgumentParser
           -tc, --threshold-comments <n>    Minimum character length for verbose comments (default: 100)
           -txs, --threshold-xml-summary <n> Minimum content length for XML summary/remarks (default: threshold-comments)
           -txp, --threshold-xml-param <n>   Minimum content length for XML param (default: threshold-comments / 2)
+          -sc, --summarized-comments <path> Path to summarized comments JSON file stored in git (default: .codecondenser/summarized-comments.json)
+          -mll, --max-line-length <n>  Maximum line length for formatted comments (default: 120)
           -m, --model <name>          Specify LLM model name (default: gemma4:e4b)
           -e, --endpoint <url>        Specify Ollama endpoint URL (default: http://localhost:11434)
           -cs, --context-size <n>     Specify context window size in tokens (default: 24576)

@@ -228,4 +228,80 @@ class Outer
         Action act3 = () => extractor.Extract((SyntaxNode)null!);
         act3.Should().Throw<ArgumentNullException>();
     }
+
+    [Fact]
+    public void Extract_MethodWithIgnoreDuplicateComment_IsSkipped()
+    {
+        var tree = ParseTree(@"
+class C
+{
+    // codecondenser:ignore-duplicate
+    void Execute()
+    {
+        int a = 1; int b = 2; int c = 3; int d = 4;
+        int e = 5; int f = 6; int g = 7; int h = 8;
+    }
+}");
+        var extractor = new MethodExtractor(minStatements: 8);
+        var extracted = extractor.Extract(tree);
+
+        extracted.Should().BeEmpty();
+    }
+
+    [Fact]
+    public void Extract_MethodWithSuppressMessageAttribute_IsSkipped()
+    {
+        var tree = ParseTree(@"
+class C
+{
+    [System.Diagnostics.CodeAnalysis.SuppressMessage(""CodeCondenser"", ""Duplication"")]
+    void Execute()
+    {
+        int a = 1; int b = 2; int c = 3; int d = 4;
+        int e = 5; int f = 6; int g = 7; int h = 8;
+    }
+}");
+        var extractor = new MethodExtractor(minStatements: 8);
+        var extracted = extractor.Extract(tree);
+
+        extracted.Should().BeEmpty();
+    }
+
+    [Fact]
+    public void Extract_MethodWithCodeCondenserIgnoreAttribute_IsSkipped()
+    {
+        var tree = ParseTree(@"
+class C
+{
+    [CodeCondenserIgnore]
+    void Execute()
+    {
+        int a = 1; int b = 2; int c = 3; int d = 4;
+        int e = 5; int f = 6; int g = 7; int h = 8;
+    }
+}");
+        var extractor = new MethodExtractor(minStatements: 8);
+        var extracted = extractor.Extract(tree);
+
+        extracted.Should().BeEmpty();
+    }
+
+    [Fact]
+    public void Extract_MethodWithBodyIgnoreComment_IsSkipped()
+    {
+        var tree = ParseTree(@"
+class C
+{
+    void Execute()
+    {
+        // codecondenser:ignore-duplicate
+        int a = 1; int b = 2; int c = 3; int d = 4;
+        int e = 5; int f = 6; int g = 7; int h = 8;
+    }
+}");
+        var extractor = new MethodExtractor(minStatements: 8);
+        var extracted = extractor.Extract(tree);
+
+        extracted.Should().BeEmpty();
+    }
 }

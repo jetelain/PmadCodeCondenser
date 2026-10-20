@@ -1,3 +1,4 @@
+using Pmad.CodeCondenser.Core.Comments;
 using Pmad.CodeCondenser.Core.Models;
 
 namespace Pmad.CodeCondenser.Infrastructure.Llm.Prompts;
@@ -22,10 +23,11 @@ public static class CommentPrompts
         You are a concise C# code condenser specialized in XML documentation comments.
         Your task is to condense verbose XML documentation comments while strictly preserving valid XML documentation comment structure.
         Rules:
-        1. Preserve the XML tags (such as <summary>, <param name="...">, <returns>, <remarks>, <exception>).
-        2. Condense the text payload inside each tag to be direct, precise, and succinct.
-        3. Format each line of the output starting with C# XML doc comment slashes (///).
-        4. Output ONLY the condensed XML documentation comment. Do NOT wrap in markdown code blocks, and do NOT include preamble or conversational commentary.
+        1. Always include the <summary> tag (and </summary>) for the main summary description. Never omit <summary> tags.
+        2. Preserve other XML tags (such as <param name="...">, <returns>, <remarks>, <exception>).
+        3. Condense the text payload inside each tag to be direct, precise, and succinct.
+        4. Format each line of the output starting with C# XML doc comment slashes (///) and wrap lines so that lines do not exceed 100 columns.
+        5. Output ONLY the condensed XML documentation comment. Do NOT wrap in markdown code blocks, and do NOT include preamble or conversational commentary.
         """;
 
     /// <summary>
@@ -50,7 +52,7 @@ public static class CommentPrompts
         ArgumentNullException.ThrowIfNull(originalComment);
 
         return $"""
-            Condense the following verbose C# XML documentation comment, preserving its XML tags and /// formatting:
+            Condense the following verbose C# XML documentation comment, ensuring <summary> tags are included and /// formatting is preserved:
 
             {originalComment.Trim()}
             """;
@@ -109,14 +111,7 @@ public static class CommentPrompts
 
         if (kind == CommentKind.XmlDocumentation)
         {
-            // Ensure lines start with ///
-            var lines = text.Replace("\r\n", "\n").Split('\n');
-            var formattedLines = lines
-                .Select(l => l.Trim())
-                .Where(l => !string.IsNullOrEmpty(l))
-                .Select(l => l.StartsWith("///") ? l : $"/// {l}");
-
-            return string.Join("\r\n", formattedLines);
+            return XmlDocumentationFormatter.Format(text, indentation: string.Empty, maxLineLength: XmlDocumentationFormatter.DefaultMaxLineLength);
         }
 
         return text;

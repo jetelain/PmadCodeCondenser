@@ -87,6 +87,33 @@ public sealed class VerboseCommentExtractor : CSharpSyntaxWalker, ICommentExtrac
                 }
 
                 var text = trivia.ToString();
+                if (CommentIgnoreMarker.IsIgnored(text) ||
+                    CommentIgnoreMarker.IsPrecedingTriviaIgnored(triviaList, i))
+                {
+                    continue;
+                }
+
+                var trimmed = text.Trim();
+                var hash = VerboseComment.ComputeSha256(trimmed);
+                var fullTrimmed = trivia.ToFullString().Trim();
+                var fullHash = VerboseComment.ComputeSha256(fullTrimmed);
+
+                if (_settings.IgnoredCommentHashes.Contains(hash) ||
+                    _settings.IgnoredCommentHashes.Contains(fullHash))
+                {
+                    continue;
+                }
+
+                if (kind == CommentKind.XmlDocumentation)
+                {
+                    var xmlText = XmlDocumentationParser.ExtractXmlText(text).Trim();
+                    var xmlHash = VerboseComment.ComputeSha256(xmlText);
+                    if (_settings.IgnoredCommentHashes.Contains(xmlHash))
+                    {
+                        continue;
+                    }
+                }
+
                 bool isVerbose = kind == CommentKind.XmlDocumentation
                     ? XmlDocumentationParser.IsVerbose(trivia, text, _settings)
                     : text.Length >= _settings.CommentLengthThreshold;

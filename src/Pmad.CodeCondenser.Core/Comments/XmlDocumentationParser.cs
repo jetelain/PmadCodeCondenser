@@ -242,6 +242,11 @@ public static class XmlDocumentationParser
             return false;
         }
 
+        if (CommentIgnoreMarker.IsIgnored(commentText))
+        {
+            return false;
+        }
+
         var rootTags = GetRootTags(trivia, commentText, out var textOutsideTags);
 
         if (rootTags.Count > 0)

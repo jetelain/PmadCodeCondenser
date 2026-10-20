@@ -100,8 +100,19 @@ public static class Program
             settings.DuplicationTolerance = options.DuplicationTolerance.Value;
         }
 
+        if (!string.IsNullOrWhiteSpace(options.SummarizedCommentsPath))
+        {
+            settings.SummarizedCommentsFilePath = options.SummarizedCommentsPath;
+        }
+
+        if (options.MaxLineLength.HasValue)
+        {
+            settings.MaxCommentLineLength = options.MaxLineLength.Value;
+        }
+
         var engine = customEngine ?? new CodeCondenserEngine(
             snapshotStore: new JsonSnapshotStore(),
+            summarizedCommentsStore: new JsonSummarizedCommentsStore(),
             commentSummarizer: new CommentSummarizer(new OllamaClientFactory()));
 
         ICommand command = options.Command switch

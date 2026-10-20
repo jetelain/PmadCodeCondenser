@@ -18,7 +18,10 @@ public sealed record VerboseComment(
     /// </summary>
     public string ContentHash { get; init; } = ComputeSha256(OriginalText.Trim());
 
-    private static string ComputeSha256(string input)
+    /// <summary>
+    /// Computes the SHA256 hex string of the given text.
+    /// </summary>
+    public static string ComputeSha256(string input)
     {
         var bytes = System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(input));
         return Convert.ToHexStringLower(bytes);

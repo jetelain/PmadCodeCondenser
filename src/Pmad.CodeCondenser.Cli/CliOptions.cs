@@ -96,6 +96,16 @@ public sealed class CliOptions
     public int? DuplicationTolerance { get; set; }
 
     /// <summary>
+    /// Path to JSON file stored in git recording summarized comments.
+    /// </summary>
+    public string? SummarizedCommentsPath { get; set; }
+
+    /// <summary>
+    /// Maximum line length for formatted comments (default: 120 columns).
+    /// </summary>
+    public int? MaxLineLength { get; set; }
+
+    /// <summary>
     /// When true, shows help and usage information.
     /// </summary>
     public bool Help { get; set; }

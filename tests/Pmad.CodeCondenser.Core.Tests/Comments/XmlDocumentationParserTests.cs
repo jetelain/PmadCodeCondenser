@@ -295,4 +295,24 @@ public class XmlDocumentationParserTests
         };
         XmlDocumentationParser.IsVerbose(trivia, comment, strictParamSettings).Should().BeTrue();
     }
+
+    [Fact]
+    public void IsVerbose_WithCondenseNoAttribute_ReturnsFalseEvenWhenContentExceedsThreshold()
+    {
+        var comment = """
+            /// <summary condense="no">
+            /// This is an excessively long summary that would definitely exceed any threshold, but it has condense="no".
+            /// </summary>
+            """;
+
+        var tree = CSharpSyntaxTree.ParseText($"public class C {{\n{comment}\npublic void F() {{}} }}");
+        var trivia = tree.GetRoot().DescendantTrivia().First(t => t.IsKind(SyntaxKind.SingleLineDocumentationCommentTrivia));
+        var settings = new CodeCondenserSettings
+        {
+            CommentLengthThreshold = 20,
+            XmlSummaryLengthThreshold = 20
+        };
+
+        XmlDocumentationParser.IsVerbose(trivia, comment, settings).Should().BeFalse();
+    }
 }

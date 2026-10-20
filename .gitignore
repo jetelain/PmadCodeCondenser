@@ -434,3 +434,7 @@ artifacts/
 
 /benchmark-output
 /benchmark-comments.json
+
+# CodeCondenser: ignore session-scoped snapshot cache, commit summarized comments store
+/.codecondenser/snapshot.json
+

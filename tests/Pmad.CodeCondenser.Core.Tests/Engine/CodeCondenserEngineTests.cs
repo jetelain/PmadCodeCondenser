@@ -317,6 +317,86 @@ public class CodeCondenserEngineTests : IDisposable
         progressList.Last().Completed.Should().Be(1);
     }
 
+    [Fact]
+    public async Task ApplySummariesAsync_PersistsSummariesToSummarizedCommentsStore()
+    {
+        var file = Path.Combine(_testDir, "ApplyTest.cs");
+        var code = """
+        namespace MyTest;
+        public class ApplyTest
+        {
+            // This is an extremely long and verbose single line comment that easily exceeds the default threshold of one hundred characters in total length
+            public void TestMethod() {}
+        }
+        """;
+        await File.WriteAllTextAsync(file, code);
+
+        var summarizedStore = new InMemorySummarizedCommentsStore();
+        var engine = new CodeCondenserEngine(
+            snapshotStore: _snapshotStore,
+            commentSummarizer: _commentSummarizer,
+            summarizedCommentsStore: summarizedStore);
+
+        var settings = new CodeCondenserSettings { CommentLengthThreshold = 100 };
+        var analysis = await engine.AnalyzeAsync(_testDir, settings);
+        analysis.VerboseComments.Should().HaveCount(1);
+
+        var applied = await engine.ApplySummariesWithModifiedFilesAsync(analysis, settings);
+        applied.Should().HaveCount(1);
+
+        summarizedStore.Stored.Should().NotBeEmpty();
+    }
+
+    [Fact]
+    public async Task AnalyzeAsync_WhenCommentInSummarizedCommentsStore_SkipsItEvenIfExceedingThreshold()
+    {
+        var file = Path.Combine(_testDir, "AlreadySummarizedTest.cs");
+        var comment = "// This is an already summarized comment that happens to still exceed fifty characters in total length";
+        var code = $$"""
+        namespace MyTest;
+        public class AlreadySummarizedTest
+        {
+            {{comment}}
+            public void TestMethod() {}
+        }
+        """;
+        await File.WriteAllTextAsync(file, code);
+
+        var hash = VerboseComment.ComputeSha256(comment.Trim());
+        var summarizedStore = new InMemorySummarizedCommentsStore();
+        summarizedStore.Stored[hash] = comment.Trim();
+
+        var engine = new CodeCondenserEngine(
+            snapshotStore: _snapshotStore,
+            commentSummarizer: _commentSummarizer,
+            summarizedCommentsStore: summarizedStore);
+
+        var settings = new CodeCondenserSettings { CommentLengthThreshold = 50 };
+        var analysis = await engine.AnalyzeAsync(_testDir, settings);
+
+        analysis.VerboseComments.Should().BeEmpty();
+    }
+
+    private sealed class InMemorySummarizedCommentsStore : ISummarizedCommentsStore
+    {
+        public Dictionary<string, string> Stored { get; } = new(StringComparer.Ordinal);
+
+        public Task<IReadOnlyDictionary<string, string>> LoadAsync(string filePath, CancellationToken cancellationToken = default)
+        {
+            return Task.FromResult<IReadOnlyDictionary<string, string>>(new Dictionary<string, string>(Stored));
+        }
+
+        public Task SaveAsync(string filePath, IReadOnlyDictionary<string, string> summarizedComments, CancellationToken cancellationToken = default)
+        {
+            Stored.Clear();
+            foreach (var (k, v) in summarizedComments)
+            {
+                Stored[k] = v;
+            }
+            return Task.CompletedTask;
+        }
+    }
+
     private sealed class InMemorySnapshotStore : ISnapshotStore
     {
         private AnalysisSnapshot? _stored;

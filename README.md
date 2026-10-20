@@ -212,6 +212,8 @@ jobs:
 | `-tc, --threshold-comments <n>` | `-tc` | Minimum character length for comments to be flagged as verbose | `100` |
 | `-txs, --threshold-xml-summary <n>` | `-txs` | Minimum content length for XML `<summary>` / `<remarks>` tags | `threshold-comments` (`100`) |
 | `-txp, --threshold-xml-param <n>` | `-txp` | Minimum content length for XML `<param>` tags | `threshold-comments / 2` (`50`) |
+| `-sc, --summarized-comments <path>` | `-sc` | Path to summarized comments JSON file stored in git | `.codecondenser/summarized-comments.json` |
+| `-mll, --max-line-length <n>` | `-mll` | Maximum line length for formatted comments | `120` |
 | `-m, --model <name>` | `-m` | LLM model tag for comment summarization | `gemma4:e4b` |
 | `-e, --endpoint <url>` | `-e` | Ollama endpoint URL | `http://localhost:11434` |
 | `-cs, --context-size <n>` | `-cs` | Ollama context window size (`num_ctx`) | `24576` |
@@ -231,6 +233,40 @@ jobs:
 
 ---
 
+## Suppression Markers & Persistent Storage
+
+### 1. XML Documentation Formatting (120 Columns & Summary Tags)
+
+- **Missing `<summary>` Tags**: XML documentation comments missing `<summary>` tags automatically have them added.
+- **120 Columns Line Length**: Comments are formatted and word-wrapped so that every line stays within 120 columns (including indentation and comment prefixes), while preserving inline tags (e.g. `<see cref="..."/>`, `<c>...</c>`).
+
+### 2. Persistent Summarized Comments (`.codecondenser/summarized-comments.json`)
+
+Even summarized comments might exceed the character threshold (e.g. 110 characters). To ensure they are not re-analyzed or flagged across new sessions or clean checkouts:
+- Applied summaries are saved to `.codecondenser/summarized-comments.json`, which should be **committed to Git**.
+- `.codecondenser/snapshot.json` remains scoped to the local agent/developer session and should be gitignored:
+
+```gitignore
+# CodeCondenser: ignore session-scoped snapshot cache, commit summarized comments store
+/.codecondenser/snapshot.json
+```
+
+### 3. Suppression & Ignore Markers
+
+- **Ignore a Regular Comment**:
+  Use `// codecondenser:ignore` or `// nocondense` on the line preceding the comment, or embed `codecondenser:ignore` / `nocondense` inside the comment.
+- **Ignore an XML Documentation Comment**:
+  Add `condense="no"` (or `condense="false"`, `nocondense="true"`, `nocondense`) as an attribute on any XML tag, e.g.:
+  - `<summary condense="no">...</summary>`
+  - `<summary condense="false">...</summary>`
+  - `<summary nocondense="true">...</summary>`
+  - `<remarks condense="no">...</remarks>`
+- **Ignore Code Duplication on a Method**:
+  - Comment above or inside method: `// codecondenser:ignore-duplicate` or `// codecondenser:ignore`
+  - Attribute on method: `[SuppressMessage("CodeCondenser", "Duplication")]` or `[CodeCondenserIgnore]`
+
+---
+
 ## Configuration (`codecondenser.json`)
 
 `Pmad.CodeCondenser` automatically looks for a `codecondenser.json` configuration file in the target directory or working directory:
@@ -244,6 +280,7 @@ jobs:
   "commentLengthThreshold": 100,
   "xmlSummaryLengthThreshold": 100,
   "xmlParamLengthThreshold": 50,
+  "maxCommentLineLength": 120,
   "duplicationStatementThreshold": 8,
   "includeXmlDocumentation": true,
   "maxParallelLlmRequests": 4,
@@ -253,7 +290,8 @@ jobs:
     "model": "gemma4:e4b",
     "contextSize": 24576
   },
-  "snapshotFilePath": ".codecondenser/snapshot.json"
+  "snapshotFilePath": ".codecondenser/snapshot.json",
+  "summarizedCommentsFilePath": ".codecondenser/summarized-comments.json"
 }
 ```
 

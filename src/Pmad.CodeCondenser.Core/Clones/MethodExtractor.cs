@@ -61,7 +61,7 @@ public sealed class MethodExtractor : CSharpSyntaxWalker, IMethodExtractor
     {
         ArgumentNullException.ThrowIfNull(node);
 
-        if (GetStatementCount(node) >= _minStatements)
+        if (!DuplicationIgnoreMarker.IsIgnored(node) && GetStatementCount(node) >= _minStatements)
         {
             _methods.Add(node);
         }

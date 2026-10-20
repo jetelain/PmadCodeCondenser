@@ -135,23 +135,12 @@ public sealed class VerboseCommentRewriter : CSharpSyntaxRewriter, ICommentRewri
     private static SyntaxTrivia CreateXmlDocumentationTrivia(SyntaxTrivia originalTrivia, string replacementText, string lineEnding)
     {
         string indentation = GetIndentation(originalTrivia);
+        var lines = XmlDocumentationFormatter.FormatLines(replacementText, indentation, XmlDocumentationFormatter.DefaultMaxLineLength);
 
-        var lines = replacementText.Replace("\r\n", "\n").Split('\n');
-        var formattedLines = new List<string>();
-
-        for (int i = 0; i < lines.Length; i++)
+        var formattedLines = new List<string>(lines.Count);
+        for (int i = 0; i < lines.Count; i++)
         {
-            var line = lines[i].Trim();
-            if (string.IsNullOrEmpty(line) && i == lines.Length - 1)
-            {
-                continue;
-            }
-
-            if (!line.StartsWith("///"))
-            {
-                line = "/// " + line;
-            }
-
+            var line = lines[i];
             // The first line will already have leading indentation from the token's preceding whitespace trivia.
             // Subsequent lines must have indentation prefixed inside the doc comment structure.
             if (i > 0 && !string.IsNullOrEmpty(indentation))

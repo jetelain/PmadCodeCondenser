@@ -179,4 +179,21 @@ public sealed class CodeCondenserSettings
     /// Default is ".codecondenser/snapshot.json".
     /// </summary>
     public string SnapshotFilePath { get; set; } = ".codecondenser/snapshot.json";
+
+    /// <summary>
+    /// Relative or absolute path to the JSON file stored in git that records comments that have already been summarized.
+    /// Default is ".codecondenser/summarized-comments.json".
+    /// </summary>
+    public string SummarizedCommentsFilePath { get; set; } = ".codecondenser/summarized-comments.json";
+
+    /// <summary>
+    /// Maximum line length in columns for comments (XML doc comments are wrapped to stay within this limit).
+    /// Default is 120 columns.
+    /// </summary>
+    public int MaxCommentLineLength { get; set; } = 120;
+
+    /// <summary>
+    /// Set of comment content hashes that have already been summarized or marked to ignore.
+    /// </summary>
+    public ISet<string> IgnoredCommentHashes { get; set; } = new HashSet<string>(StringComparer.Ordinal);
 }

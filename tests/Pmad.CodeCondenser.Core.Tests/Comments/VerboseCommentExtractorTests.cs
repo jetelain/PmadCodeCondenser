@@ -319,4 +319,136 @@ public class VerboseCommentExtractorTests
         };
         _extractor.Extract(tree, "TestClass.cs", paramSettings).Should().HaveCount(1);
     }
+
+    [Fact]
+    public void Extract_SingleLineComment_WithIgnoreMarker_IsIgnored()
+    {
+        var longComment = "// " + new string('a', 120) + " codecondenser:ignore";
+        var code = $$"""
+            public class TestClass
+            {
+                {{longComment}}
+                public void DoSomething() {}
+            }
+            """;
+
+        var tree = CSharpSyntaxTree.ParseText(code);
+        var settings = new CodeCondenserSettings { CommentLengthThreshold = 100 };
+
+        var comments = _extractor.Extract(tree, "TestClass.cs", settings);
+
+        comments.Should().BeEmpty();
+    }
+
+    [Fact]
+    public void Extract_Comment_WithPrecedingIgnoreMarker_IsIgnored()
+    {
+        var longComment = "/* " + new string('a', 150) + " */";
+        var code = $$"""
+            public class TestClass
+            {
+                // codecondenser:ignore
+                {{longComment}}
+                public void DoSomething() {}
+            }
+            """;
+
+        var tree = CSharpSyntaxTree.ParseText(code);
+        var settings = new CodeCondenserSettings { CommentLengthThreshold = 100 };
+
+        var comments = _extractor.Extract(tree, "TestClass.cs", settings);
+
+        comments.Should().BeEmpty();
+    }
+
+    [Fact]
+    public void Extract_XmlComment_WithNocondenseMarker_IsIgnored()
+    {
+        var code = """
+            public class TestClass
+            {
+                /// <summary>
+                /// This is an excessively verbose XML documentation comment explaining everything in enormous detail.
+                /// nocondense
+                /// </summary>
+                public void DoSomething() {}
+            }
+            """;
+
+        var tree = CSharpSyntaxTree.ParseText(code);
+        var settings = new CodeCondenserSettings { CommentLengthThreshold = 50 };
+
+        var comments = _extractor.Extract(tree, "TestClass.cs", settings);
+
+        comments.Should().BeEmpty();
+    }
+
+    [Fact]
+    public void Extract_XmlComment_WithCondenseNoAttribute_IsIgnored()
+    {
+        var code = """
+            public class TestClass
+            {
+                /// <summary condense="no">
+                /// This is an excessively verbose XML documentation comment explaining everything in enormous detail.
+                /// </summary>
+                public void DoSomething() {}
+            }
+            """;
+
+        var tree = CSharpSyntaxTree.ParseText(code);
+        var settings = new CodeCondenserSettings { CommentLengthThreshold = 50 };
+
+        var comments = _extractor.Extract(tree, "TestClass.cs", settings);
+
+        comments.Should().BeEmpty();
+    }
+
+    [Fact]
+    public void Extract_XmlComment_WithCondenseFalseAttribute_IsIgnored()
+    {
+        var code = """
+            public class TestClass
+            {
+                /// <summary condense="false">
+                /// This is an excessively verbose XML documentation comment explaining everything in enormous detail.
+                /// </summary>
+                public void DoSomething() {}
+            }
+            """;
+
+        var tree = CSharpSyntaxTree.ParseText(code);
+        var settings = new CodeCondenserSettings { CommentLengthThreshold = 50 };
+
+        var comments = _extractor.Extract(tree, "TestClass.cs", settings);
+
+        comments.Should().BeEmpty();
+    }
+
+    [Fact]
+    public void Extract_CommentInIgnoredCommentHashes_IsIgnoredEvenIfExceedingThreshold()
+    {
+        // Simulates a comment that was summarized, but still exceeds threshold (e.g. 110 characters)
+        var commentText = "/// <summary>Checks wallet before run. Warns in <see cref=\"WalletEnforcement.Warn\"/> mode or throws exception. Post-run balance.</summary>";
+        var code = $$"""
+            public class TestClass
+            {
+                {{commentText}}
+                public void Gate() {}
+            }
+            """;
+
+        var tree = CSharpSyntaxTree.ParseText(code);
+        var hash = VerboseComment.ComputeSha256(commentText.Trim());
+
+        var settings = new CodeCondenserSettings
+        {
+            CommentLengthThreshold = 50,
+            IgnoredCommentHashes = new HashSet<string> { hash }
+        };
+
+        var comments = _extractor.Extract(tree, "TestClass.cs", settings);
+
+        comments.Should().BeEmpty();
+    }
 }

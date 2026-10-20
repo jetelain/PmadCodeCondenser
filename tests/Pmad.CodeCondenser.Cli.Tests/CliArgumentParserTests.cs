@@ -328,4 +328,38 @@ public class CliArgumentParserTests
         success.Should().BeFalse();
         error.Should().Contain("Invalid value for --duplication-tolerance");
     }
+
+    [Theory]
+    [InlineData("--summarized-comments", ".codecondenser/custom-comments.json")]
+    [InlineData("-sc", ".codecondenser/custom-comments.json")]
+    [InlineData("--comments-file", ".codecondenser/custom-comments.json")]
+    public void TryParse_SummarizedCommentsOption_SetsPath(string flag, string path)
+    {
+        var success = CliArgumentParser.TryParse([flag, path], out var options, out var error);
+
+        success.Should().BeTrue();
+        error.Should().BeNull();
+        options.SummarizedCommentsPath.Should().Be(path);
+    }
+
+    [Theory]
+    [InlineData("--max-line-length", "100", 100)]
+    [InlineData("-mll", "120", 120)]
+    public void TryParse_MaxLineLength_SetsValue(string flag, string val, int expected)
+    {
+        var success = CliArgumentParser.TryParse([flag, val], out var options, out var error);
+
+        success.Should().BeTrue();
+        error.Should().BeNull();
+        options.MaxLineLength.Should().Be(expected);
+    }
+
+    [Fact]
+    public void TryParse_TooShortMaxLineLength_ReturnsError()
+    {
+        var success = CliArgumentParser.TryParse(["--max-line-length", "10"], out _, out var error);
+
+        success.Should().BeFalse();
+        error.Should().Contain("Invalid value for --max-line-length");
+    }
 }

@@ -18,6 +18,7 @@ public sealed class CodeCondenserEngine : ICodeCondenserEngine
     private readonly ICommentRewriter _commentRewriter;
     private readonly ISnapshotDiffer _snapshotDiffer;
     private readonly ISnapshotStore? _snapshotStore;
+    private readonly ISummarizedCommentsStore? _summarizedCommentsStore;
     private readonly ICommentSummarizer? _commentSummarizer;
     private readonly IFileHasher _fileHasher;
     private string? _lastBaseDirectory;
@@ -40,13 +41,15 @@ public sealed class CodeCondenserEngine : ICodeCondenserEngine
         ISnapshotDiffer? snapshotDiffer = null,
         ISnapshotStore? snapshotStore = null,
         ICommentSummarizer? commentSummarizer = null,
-        IFileHasher? fileHasher = null)
+        IFileHasher? fileHasher = null,
+        ISummarizedCommentsStore? summarizedCommentsStore = null)
     {
         _cloneDetector = cloneDetector ?? new CloneDetector();
         _commentExtractor = commentExtractor ?? new VerboseCommentExtractor();
         _commentRewriter = commentRewriter ?? new VerboseCommentRewriter();
         _snapshotDiffer = snapshotDiffer ?? new SnapshotDiffer(fileHasher);
         _snapshotStore = snapshotStore;
+        _summarizedCommentsStore = summarizedCommentsStore;
         _commentSummarizer = commentSummarizer;
         _fileHasher = fileHasher ?? new FileHasher();
     }
@@ -112,6 +115,26 @@ public sealed class CodeCondenserEngine : ICodeCondenserEngine
 
         // 3. Initialize WYSIWYG comment cache from baseline
         var cache = WysiwygCommentCache.FromSnapshot(baseline);
+
+        // Load stored summarized comments from git file if store is available
+        var summarizedPath = ResolveSnapshotPath(baseDirectory, settings.SummarizedCommentsFilePath);
+        if (_summarizedCommentsStore != null)
+        {
+            var storedSummaries = await _summarizedCommentsStore.LoadAsync(summarizedPath, cancellationToken).ConfigureAwait(false);
+            foreach (var hash in storedSummaries.Keys)
+            {
+                settings.IgnoredCommentHashes.Add(hash);
+            }
+        }
+
+        if (baseline?.CommentCache != null)
+        {
+            foreach (var summaryText in baseline.CommentCache.Values)
+            {
+                var summaryHash = VerboseComment.ComputeSha256(summaryText.Trim());
+                settings.IgnoredCommentHashes.Add(summaryHash);
+            }
+        }
 
         // 4. Determine files to scan
         FileDiffResult? fileDiff = null;
@@ -325,6 +348,28 @@ public sealed class CodeCondenserEngine : ICodeCondenserEngine
             }
         }
 
+        if (_summarizedCommentsStore != null && modifiedFiles.Count > 0)
+        {
+            var baseDir = _lastBaseDirectory ?? Directory.GetCurrentDirectory();
+            var summarizedPath = ResolveSnapshotPath(baseDir, settings.SummarizedCommentsFilePath);
+            var existingSummaries = await _summarizedCommentsStore.LoadAsync(summarizedPath, cancellationToken).ConfigureAwait(false);
+            var merged = new Dictionary<string, string>(existingSummaries, StringComparer.Ordinal);
+
+            foreach (var group in commentsByFile)
+            {
+                foreach (var comment in group)
+                {
+                    if (analysisResult.SummarizedComments.TryGetValue(comment.ContentHash, out var summaryText))
+                    {
+                        var appliedHash = VerboseComment.ComputeSha256(summaryText.Trim());
+                        merged[appliedHash] = summaryText.Trim();
+                    }
+                }
+            }
+
+            await _summarizedCommentsStore.SaveAsync(summarizedPath, merged, cancellationToken).ConfigureAwait(false);
+        }
+
         return modifiedFiles;
     }
 
@@ -402,6 +447,22 @@ public sealed class CodeCondenserEngine : ICodeCondenserEngine
         }
 
         await _snapshotStore.SaveAsync(snapshotPath, newSnapshot, cancellationToken).ConfigureAwait(false);
+
+        if (_summarizedCommentsStore != null && commentCache.Count > 0)
+        {
+            var summarizedPath = ResolveSnapshotPath(baseDirectory, settings.SummarizedCommentsFilePath);
+            var existingSummaries = await _summarizedCommentsStore.LoadAsync(summarizedPath, cancellationToken).ConfigureAwait(false);
+            var merged = new Dictionary<string, string>(existingSummaries, StringComparer.Ordinal);
+
+            foreach (var summaryText in commentCache.Values)
+            {
+                var appliedHash = VerboseComment.ComputeSha256(summaryText.Trim());
+                merged[appliedHash] = summaryText.Trim();
+            }
+
+            await _summarizedCommentsStore.SaveAsync(summarizedPath, merged, cancellationToken).ConfigureAwait(false);
+        }
+
         return newSnapshot;
     }
 
