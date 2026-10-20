@@ -1,0 +1,221 @@
+using FluentAssertions;
+
+namespace Pmad.CodeCondenser.Cli.Tests;
+
+public class CliArgumentParserTests
+{
+    [Fact]
+    public void TryParse_EmptyArgs_ReturnsDefaults()
+    {
+        var success = CliArgumentParser.TryParse([], out var options, out var error);
+
+        success.Should().BeTrue();
+        error.Should().BeNull();
+        options.Command.Should().Be(CliOptions.CommandAnalyze);
+        options.TargetPath.Should().Be(".");
+        options.Apply.Should().BeFalse();
+        options.Incremental.Should().BeFalse();
+        options.UpdateSnapshot.Should().BeFalse();
+        options.ThresholdStatements.Should().BeNull();
+        options.ThresholdComments.Should().BeNull();
+    }
+
+    [Theory]
+    [InlineData("analyze", CliOptions.CommandAnalyze)]
+    [InlineData("apply", CliOptions.CommandApply)]
+    [InlineData("snapshot", CliOptions.CommandSnapshot)]
+    public void TryParse_CommandVerbs_SetsCommandCorrectly(string verb, string expectedCommand)
+    {
+        var success = CliArgumentParser.TryParse([verb, "./src"], out var options, out var error);
+
+        success.Should().BeTrue();
+        error.Should().BeNull();
+        options.Command.Should().Be(expectedCommand);
+        options.TargetPath.Should().Be("./src");
+    }
+
+    [Fact]
+    public void TryParse_PositionalPathOnly_SetsTargetPath()
+    {
+        var success = CliArgumentParser.TryParse(["src/MyApp"], out var options, out var error);
+
+        success.Should().BeTrue();
+        error.Should().BeNull();
+        options.Command.Should().Be(CliOptions.CommandAnalyze);
+        options.TargetPath.Should().Be("src/MyApp");
+    }
+
+    [Fact]
+    public void TryParse_ApplyFlag_SetsApplyMode()
+    {
+        var success = CliArgumentParser.TryParse(["--apply", "src/MyApp"], out var options, out var error);
+
+        success.Should().BeTrue();
+        error.Should().BeNull();
+        options.Apply.Should().BeTrue();
+        options.Command.Should().Be(CliOptions.CommandApply);
+        options.TargetPath.Should().Be("src/MyApp");
+    }
+
+    [Fact]
+    public void TryParse_IncrementalFlag_SetsIncrementalTrue()
+    {
+        var success = CliArgumentParser.TryParse(["-i"], out var options, out var error);
+
+        success.Should().BeTrue();
+        options.Incremental.Should().BeTrue();
+    }
+
+    [Fact]
+    public void TryParse_UpdateSnapshotFlag_SetsUpdateSnapshot()
+    {
+        var success = CliArgumentParser.TryParse(["-u"], out var options, out var error);
+
+        success.Should().BeTrue();
+        options.UpdateSnapshot.Should().BeTrue();
+        options.Command.Should().Be(CliOptions.CommandSnapshot);
+    }
+
+    [Fact]
+    public void TryParse_ThresholdOptions_ParsesIntegerValues()
+    {
+        var success = CliArgumentParser.TryParse(
+            ["--threshold-statements", "12", "-tc", "150"],
+            out var options,
+            out var error);
+
+        success.Should().BeTrue();
+        error.Should().BeNull();
+        options.ThresholdStatements.Should().Be(12);
+        options.ThresholdComments.Should().Be(150);
+    }
+
+    [Fact]
+    public void TryParse_EqualsSyntax_ParsesCorrectly()
+    {
+        var success = CliArgumentParser.TryParse(
+            ["--threshold-statements=10", "--threshold-comments=80", "--model=deepseek"],
+            out var options,
+            out var error);
+
+        success.Should().BeTrue();
+        options.ThresholdStatements.Should().Be(10);
+        options.ThresholdComments.Should().Be(80);
+        options.Model.Should().Be("deepseek");
+    }
+
+    [Fact]
+    public void TryParse_ShortOptionsWithEqualsSyntax_ParsesCorrectly()
+    {
+        var success = CliArgumentParser.TryParse(
+            ["-ts=15", "-tc=120", "-m=llama3.2", "-e=http://myollama:11434", "-c=myconfig.json"],
+            out var options,
+            out var error);
+
+        success.Should().BeTrue();
+        error.Should().BeNull();
+        options.ThresholdStatements.Should().Be(15);
+        options.ThresholdComments.Should().Be(120);
+        options.Model.Should().Be("llama3.2");
+        options.Endpoint.Should().Be("http://myollama:11434");
+        options.ConfigPath.Should().Be("myconfig.json");
+    }
+
+    [Fact]
+    public void TryParse_OllamaSettings_ParsesModelAndEndpoint()
+    {
+        var success = CliArgumentParser.TryParse(
+            ["--model", "mistral:7b", "--endpoint", "http://ai.local:11434"],
+            out var options,
+            out var error);
+
+        success.Should().BeTrue();
+        options.Model.Should().Be("mistral:7b");
+        options.Endpoint.Should().Be("http://ai.local:11434");
+    }
+
+    [Fact]
+    public void TryParse_ConfigPath_ParsesCorrectly()
+    {
+        var success = CliArgumentParser.TryParse(["--config", "custom.json"], out var options, out var error);
+
+        success.Should().BeTrue();
+        options.ConfigPath.Should().Be("custom.json");
+    }
+
+    [Fact]
+    public void TryParse_NoColorFlag_SetsNoColor()
+    {
+        var success = CliArgumentParser.TryParse(["--no-color"], out var options, out var error);
+
+        success.Should().BeTrue();
+        options.NoColor.Should().BeTrue();
+    }
+
+    [Theory]
+    [InlineData("-h")]
+    [InlineData("--help")]
+    [InlineData("-?")]
+    public void TryParse_HelpFlags_SetsHelp(string flag)
+    {
+        var success = CliArgumentParser.TryParse([flag], out var options, out var error);
+
+        success.Should().BeTrue();
+        options.Help.Should().BeTrue();
+    }
+
+    [Theory]
+    [InlineData("-v")]
+    [InlineData("--version")]
+    public void TryParse_VersionFlags_SetsVersion(string flag)
+    {
+        var success = CliArgumentParser.TryParse([flag], out var options, out var error);
+
+        success.Should().BeTrue();
+        options.Version.Should().BeTrue();
+    }
+
+    [Fact]
+    public void TryParse_UnknownOption_ReturnsError()
+    {
+        var success = CliArgumentParser.TryParse(["--invalid-option"], out _, out var error);
+
+        success.Should().BeFalse();
+        error.Should().Contain("Unrecognized option: '--invalid-option'");
+    }
+
+    [Fact]
+    public void TryParse_InvalidThresholdStatement_ReturnsError()
+    {
+        var success = CliArgumentParser.TryParse(["--threshold-statements", "not-a-number"], out _, out var error);
+
+        success.Should().BeFalse();
+        error.Should().Contain("Invalid value for --threshold-statements");
+    }
+
+    [Fact]
+    public void TryParse_MissingValue_ReturnsError()
+    {
+        var success = CliArgumentParser.TryParse(["--threshold-comments"], out _, out var error);
+
+        success.Should().BeFalse();
+        error.Should().Contain("Missing required value for option '--threshold-comments'");
+    }
+
+    [Fact]
+    public void GetHelpText_ReturnsNonEmptyDocumentation()
+    {
+        var help = CliArgumentParser.GetHelpText();
+        help.Should().Contain("pmad-codecondenser");
+        help.Should().Contain("--apply");
+        help.Should().Contain("--incremental");
+        help.Should().Contain("--update-snapshot");
+    }
+
+    [Fact]
+    public void GetVersionText_ReturnsVersionString()
+    {
+        var version = CliArgumentParser.GetVersionText();
+        version.Should().Contain("pmad-codecondenser version");
+    }
+}

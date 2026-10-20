@@ -1,0 +1,113 @@
+using Pmad.CodeCondenser.Core.Models;
+
+namespace Pmad.CodeCondenser.Infrastructure.Llm.Prompts;
+
+/// <summary>
+/// Provides system and user prompt definitions for condensing verbose C# comments and XML documentation.
+/// </summary>
+public static class CommentPrompts
+{
+    public const string RegularCommentSystemPrompt =
+        """
+        You are a concise C# code condenser. Your task is to summarize verbose code comments into concise, high-value explanations.
+        Rules:
+        1. Keep essential technical intent, assumptions, and constraints.
+        2. Remove conversational filler, obvious restatements of code, and unnecessary verbosity.
+        3. Aim for 1-2 clear, direct sentences.
+        4. Output ONLY the summarized comment text. Do NOT wrap in markdown code blocks, and do NOT include preamble or conversational commentary.
+        """;
+
+    public const string XmlDocumentationSystemPrompt =
+        """
+        You are a concise C# code condenser specialized in XML documentation comments.
+        Your task is to condense verbose XML documentation comments while strictly preserving valid XML documentation comment structure.
+        Rules:
+        1. Preserve the XML tags (such as <summary>, <param name="...">, <returns>, <remarks>, <exception>).
+        2. Condense the text payload inside each tag to be direct, precise, and succinct.
+        3. Format each line of the output starting with C# XML doc comment slashes (///).
+        4. Output ONLY the condensed XML documentation comment. Do NOT wrap in markdown code blocks, and do NOT include preamble or conversational commentary.
+        """;
+
+    /// <summary>
+    /// Builds the user prompt for a single-line or multi-line comment.
+    /// </summary>
+    public static string BuildRegularCommentPrompt(string originalComment)
+    {
+        ArgumentNullException.ThrowIfNull(originalComment);
+
+        return $"""
+            Summarize the following verbose C# comment:
+
+            {originalComment.Trim()}
+            """;
+    }
+
+    /// <summary>
+    /// Builds the user prompt for an XML documentation comment.
+    /// </summary>
+    public static string BuildXmlDocumentationPrompt(string originalComment)
+    {
+        ArgumentNullException.ThrowIfNull(originalComment);
+
+        return $"""
+            Condense the following verbose C# XML documentation comment, preserving its XML tags and /// formatting:
+
+            {originalComment.Trim()}
+            """;
+    }
+
+    /// <summary>
+    /// Cleans and sanitizes raw model output, removing markdown code fences and ensuring proper formatting.
+    /// </summary>
+    public static string CleanModelResponse(string rawResponse, CommentKind kind)
+    {
+        if (string.IsNullOrWhiteSpace(rawResponse))
+        {
+            return string.Empty;
+        }
+
+        var text = rawResponse.Trim();
+
+        // Strip markdown code fences if present (e.g. ```csharp ... ``` or ```xml ... ``` or ``` ... ```)
+        int firstFence = text.IndexOf("```", StringComparison.Ordinal);
+        if (firstFence >= 0)
+        {
+            int lastFence = text.LastIndexOf("```", StringComparison.Ordinal);
+            if (lastFence > firstFence)
+            {
+                var inside = text[(firstFence + 3)..lastFence].Trim();
+                int firstNewline = inside.IndexOf('\n');
+                if (firstNewline >= 0)
+                {
+                    var firstLine = inside[..firstNewline].Trim();
+                    if (firstLine.Equals("csharp", StringComparison.OrdinalIgnoreCase) ||
+                        firstLine.Equals("cs", StringComparison.OrdinalIgnoreCase) ||
+                        firstLine.Equals("xml", StringComparison.OrdinalIgnoreCase) ||
+                        firstLine.Equals("c#", StringComparison.OrdinalIgnoreCase))
+                    {
+                        inside = inside[(firstNewline + 1)..].Trim();
+                    }
+                }
+                text = inside;
+            }
+            else
+            {
+                text = text.Replace("```", string.Empty).Trim();
+            }
+        }
+
+        if (kind == CommentKind.XmlDocumentation)
+        {
+            // Ensure lines start with ///
+            var lines = text.Replace("\r\n", "\n").Split('\n');
+            var formattedLines = lines
+                .Select(l => l.Trim())
+                .Where(l => !string.IsNullOrEmpty(l))
+                .Select(l => l.StartsWith("///") ? l : $"/// {l}");
+
+            return string.Join("\r\n", formattedLines);
+        }
+
+        return text;
+    }
+}
