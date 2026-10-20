@@ -148,4 +148,42 @@ public class CodeCondenserConfigurationLoaderTests : IDisposable
 
         settings.CommentLengthThreshold.Should().Be(77);
     }
+
+    [Fact]
+    public void LoadFromString_ParsesFeatureFlagsAndDuplicationTolerance()
+    {
+        var json = """
+        {
+            "enableCommentSummarization": false,
+            "enableDuplicationDetection": false,
+            "duplicationTolerance": 3,
+            "duplicationExitCode": 42
+        }
+        """;
+
+        var settings = CodeCondenserConfigurationLoader.LoadFromString(json);
+
+        settings.EnableCommentSummarization.Should().BeFalse();
+        settings.EnableDuplicationDetection.Should().BeFalse();
+        settings.DuplicationTolerance.Should().Be(3);
+        settings.DuplicationExitCode.Should().Be(42);
+    }
+
+    [Fact]
+    public void LoadFromString_ParsesFeatureFlagAliases()
+    {
+        var json = """
+        {
+            "enableComments": false,
+            "enableCodeDuplication": false,
+            "incrementalDuplicationTolerance": 5
+        }
+        """;
+
+        var settings = CodeCondenserConfigurationLoader.LoadFromString(json);
+
+        settings.EnableCommentSummarization.Should().BeFalse();
+        settings.EnableDuplicationDetection.Should().BeFalse();
+        settings.DuplicationTolerance.Should().Be(5);
+    }
 }

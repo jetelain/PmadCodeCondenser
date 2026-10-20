@@ -359,6 +359,17 @@ public sealed class OllamaBenchmarkClient : IDisposable
 
         var text = rawResponse.Trim();
 
+        // Strip thinking monologue if present (e.g. <think>...</think> or ...</think>)
+        int thinkEnd = text.IndexOf("</think>", StringComparison.OrdinalIgnoreCase);
+        if (thinkEnd >= 0)
+        {
+            text = text[(thinkEnd + "</think>".Length)..].Trim();
+        }
+        else if (text.StartsWith("<think>", StringComparison.OrdinalIgnoreCase))
+        {
+            text = text["<think>".Length..].Trim();
+        }
+
         // Extract JSON substring if wrapped in markdown code fence
         int firstBrace = text.IndexOf('{');
         int lastBrace = text.LastIndexOf('}');

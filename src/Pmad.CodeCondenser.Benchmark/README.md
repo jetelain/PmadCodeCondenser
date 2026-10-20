@@ -48,11 +48,17 @@ flowchart TD
    ollama pull Qwen3.5-4B:latest
    ollama pull gemma4:e2b
    ```
-3. **Judge Model**:
+3. **Cloud Models (Optional)**:
+   For zero-VRAM cloud models (`gpt-oss:20b-cloud`, `nemotron-3-nano:30b-cloud`, `nemotron-3-super:cloud`), create a free account at [ollama.com](https://ollama.com) and authenticate:
+   ```bash
+   ollama login
+   ```
+   The Ollama free tier typically covers summarizing ~50,000 comments.
+4. **Judge Model**:
    ```bash
    ollama pull Qwen3.6-35B-A3B:latest
    ```
-4. **.NET 10 SDK**: Required to build and run the tool.
+5. **.NET 10 SDK**: Required to build and run the tool.
 
 ---
 
@@ -153,27 +159,33 @@ The benchmark produces multi-dimensional metrics for each model:
 
 ## Latest Benchmark Results (Reference Run)
 
-> Evaluated on 2026-10-20 using **`Qwen3.6-35B-A3B:latest`** (Temperature: `0.0`, strict multi-criteria JSON scoring) across 25 curated comments (125 candidate generations, 125 judge calls) with 24k context window and internal thinking disabled:
+> Evaluated on 2026-10-20 using **`Qwen3.6-35B-A3B:latest`** (Temperature: `0.0`, strict multi-criteria JSON scoring) across 25 curated comments (200 candidate generations, 200 judge calls) with 24k context window and internal thinking disabled:
 
 ### Overall Rankings
 
-| Rank | Model | Overall (/10) | Avg Latency | Median Latency | P95 Latency | Throughput | Compression | Format % | Success % |
-| :---: | :--- | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: |
-| 🥇 | **`gemma4:e4b`** | **9.92** | 464 ms | **198 ms** | 499 ms | 205.8 tok/s | **20.9%** | 100% | **100%** |
-| 🥈 | **`Qwen3.5-4B:latest`** | **9.90** | 365 ms | 212 ms | 507 ms | 214.3 tok/s | 16.4% | 100% | **100%** |
-| 🥉 | **`qwen3.5:4b`** | **9.84** | 429 ms | 236 ms | 833 ms | 142.8 tok/s | 20.0% | 100% | **100%** |
-| 4 | **`gemma4:e2b`** | **9.82** | 551 ms | **126 ms** | **319 ms** | **309.3 tok/s** | 19.7% | 100% | **100%** |
-| 5 | **`qwen3.5:2b`** | **9.54** | **342 ms** | 176 ms | 641 ms | 191.9 tok/s | 13.6% | 100% | **100%** |
+| Rank | Model | Type | Overall (/10) | Avg Latency | Median Latency | P95 Latency | Throughput | Compression | Format % | Success % |
+| :---: | :--- | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: |
+| 🥇 | **`gemma4:e4b`** | Local | **9.92** | 464 ms | **198 ms** | 499 ms | 205.8 tok/s | **20.9%** | 100% | **100%** |
+| 🥇 | **`gpt-oss:20b-cloud`** | Cloud | **9.92** | 2,313 ms | 1,807 ms | 4,593 ms | 88.0 tok/s | **21.4%** | 100% | **100%** |
+| 🥈 | **`Qwen3.5-4B:latest`** | Local | **9.90** | 365 ms | 212 ms | 507 ms | 214.3 tok/s | 16.4% | 100% | **100%** |
+| 🥉 | **`qwen3.5:4b`** | Local | **9.84** | 429 ms | 236 ms | 833 ms | 142.8 tok/s | 20.0% | 100% | **100%** |
+| 4 | **`gemma4:e2b`** | Local | **9.82** | 551 ms | **126 ms** | **319 ms** | **309.3 tok/s** | 19.7% | 100% | **100%** |
+| 5 | **`nemotron-3-super:cloud`** | Cloud | **9.78** | 1,307 ms | 654 ms | 2,190 ms | 45.1 tok/s | 15.0% | 96% | **100%** |
+| 6 | **`nemotron-3-nano:30b-cloud`** | Cloud | **9.68** | **424 ms** | 413 ms | 601 ms | 78.5 tok/s | 19.8% | 100% | **100%** |
+| 7 | **`qwen3.5:2b`** | Local | **9.54** | **342 ms** | 176 ms | 641 ms | 191.9 tok/s | 13.6% | 100% | **100%** |
 
 ### Evaluation Criteria Breakdown
 
-| Model | Overall Score | Technical Accuracy | Conciseness | Format Compliance | Recommendation |
-| :--- | :---: | :---: | :---: | :---: | :--- |
-| **`gemma4:e4b`** | **9.92** | **9.80** | **9.96** | **10.00** | 🏆 **Default / Top Quality** (near-perfect technical fidelity) |
-| **`Qwen3.5-4B:latest`** | **9.90** | **9.80** | **9.92** | **10.00** | ⚖️ **Best Balanced** (fastest 4B model with `think: false`) |
-| **`qwen3.5:4b`** | **9.84** | 9.68 | 9.92 | **10.00** | Strong XML documentation summaries |
-| **`gemma4:e2b`** | **9.82** | 9.76 | 9.88 | **10.00** | Highest generation throughput (309 tok/s) |
-| **`qwen3.5:2b`** | **9.54** | 9.40 | 9.72 | **10.00** | ⚡ **Fastest / Lightweight** (lowest VRAM footprint) |
+| Model | Type | Overall Score | Technical Accuracy | Conciseness | Format Compliance | Recommendation |
+| :--- | :---: | :---: | :---: | :---: | :---: | :--- |
+| **`gemma4:e4b`** | Local | **9.92** | 9.80 | **9.96** | **10.00** | 🏆 **Default / Top Local Quality** (near-perfect technical fidelity) |
+| **`gpt-oss:20b-cloud`** | Cloud | **9.92** | **9.88** | 9.92 | **10.00** | ☁️ **Top Cloud Quality** (highest accuracy score, 0 GB local VRAM, free tier) |
+| **`Qwen3.5-4B:latest`** | Local | **9.90** | 9.80 | 9.92 | **10.00** | ⚖️ **Best Balanced Local** (fastest 4B model with `think: false`) |
+| **`qwen3.5:4b`** | Local | **9.84** | 9.68 | 9.92 | **10.00** | Strong XML documentation summaries |
+| **`gemma4:e2b`** | Local | **9.82** | 9.76 | 9.88 | **10.00** | Highest local generation throughput (309 tok/s) |
+| **`nemotron-3-super:cloud`** | Cloud | **9.78** | 9.68 | 9.88 | **10.00** | High-parameter cloud MoE (120B) |
+| **`nemotron-3-nano:30b-cloud`** | Cloud | **9.68** | 9.44 | 9.88 | **10.00** | ⚡ **Fastest & Lightest Cloud** (sub-second 424 ms, free tier) |
+| **`qwen3.5:2b`** | Local | **9.54** | 9.40 | 9.72 | **10.00** | ⚡ **Fastest Local** (lowest VRAM footprint) |
 
 ---
 

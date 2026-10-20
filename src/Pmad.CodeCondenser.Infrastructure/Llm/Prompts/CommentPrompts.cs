@@ -68,6 +68,17 @@ public static class CommentPrompts
 
         var text = rawResponse.Trim();
 
+        // Strip thinking monologue if present (e.g. <think>...</think> or ...</think>)
+        int thinkEnd = text.IndexOf("</think>", StringComparison.OrdinalIgnoreCase);
+        if (thinkEnd >= 0)
+        {
+            text = text[(thinkEnd + "</think>".Length)..].Trim();
+        }
+        else if (text.StartsWith("<think>", StringComparison.OrdinalIgnoreCase))
+        {
+            text = text["<think>".Length..].Trim();
+        }
+
         // Strip markdown code fences if present (e.g. ```csharp ... ``` or ```xml ... ``` or ``` ... ```)
         int firstFence = text.IndexOf("```", StringComparison.Ordinal);
         if (firstFence >= 0)

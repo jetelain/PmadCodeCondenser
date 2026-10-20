@@ -71,6 +71,9 @@ pmad-codecondenser snapshot ./src
 | `-a, --apply` | `-a` | Write shortened comments directly to source files on disk | `false` |
 | `-i, --incremental` | `-i` | Use snapshot baseline to analyze only new/modified files | `false` |
 | `-u, --update-snapshot` | `-u` | Refresh the snapshot baseline | `false` |
+| `-dt, --duplication-tolerance <n>` | `-dt` | Maximum new clone clusters tolerated in incremental mode | `0` |
+| `--no-comments` | | Disable comment extraction and LLM summarization | `false` |
+| `--no-duplication` | | Disable structural code clone detection | `false` |
 | `--threshold-statements <n>` | `-ts` | Minimum statement count to analyze a method for clones | `8` |
 | `--threshold-comments <n>` | `-tc` | Minimum comment character length to flag as verbose | `100` |
 | `--threshold-xml-summary <n>` | `-txs` | Minimum content length for XML `<summary>` / `<remarks>` tags | `100` |
@@ -83,6 +86,15 @@ pmad-codecondenser snapshot ./src
 | `-h, --help` | | Show usage instructions and help | |
 | `-v, --version` | | Show version information | |
 
+### Exit Codes
+
+| Exit Code | Meaning |
+| :---: | :--- |
+| `0` | Success (analysis clean, within duplication tolerance) |
+| `1` | General error (invalid arguments or unhandled exception) |
+| `2` | **Code Duplication Policy Violation**: In incremental mode, new duplication was introduced that exceeds `duplicationTolerance`. Outputs precise, actionable feedback for AI agents. |
+| `130` | Execution canceled by user (Ctrl+C) |
+
 ---
 
 ## Configuration (`codecondenser.json`)
@@ -91,6 +103,10 @@ Pmad.CodeCondenser automatically searches for a `codecondenser.json` configurati
 
 ```json
 {
+  "enableCommentSummarization": true,
+  "enableDuplicationDetection": true,
+  "duplicationTolerance": 0,
+  "duplicationExitCode": 2,
   "commentLengthThreshold": 100,
   "xmlSummaryLengthThreshold": 100,
   "xmlParamLengthThreshold": 50,
@@ -107,21 +123,41 @@ Pmad.CodeCondenser automatically searches for a `codecondenser.json` configurati
 }
 ```
 
+Each main feature can be turned off independently in settings:
+- `"enableCommentSummarization": false` (or `"enableComments": false`) disables comment extraction and LLM summarization.
+- `"enableDuplicationDetection": false` (or `"enableCodeDuplication": false`) disables structural code clone detection.
+
 CLI options override settings from `codecondenser.json`.
 
 ---
 
 ## Comment Summarization Model Benchmark Results
 
-To select the optimal default model, a comprehensive benchmark was conducted evaluating local Ollama candidates against comments extracted from reference projects (`ComicGenCLI`, `NightCodeForge`, `HugeImages`, `Pmad.Git`), judged by **`jetelain/Qwen3.6-35B-A3B:latest`** (Temperature: `0.0`, strict multi-criteria JSON scoring) with a 24k context window and internal thinking disabled:
+To select the optimal default models, a comprehensive benchmark was conducted evaluating local and cloud Ollama candidates against comments extracted from reference projects (`ComicGenCLI`, `NightCodeForge`, `HugeImages`, `Pmad.Git`), judged by **`Qwen3.6-35B-A3B:latest`** (Temperature: `0.0`, strict multi-criteria JSON scoring) with a 24k context window and internal thinking disabled:
 
-| Rank | Model | Overall Score | Avg Latency | Median Latency | Throughput | Compression | Recommendation |
-| :---: | :--- | :---: | :---: | :---: | :---: | :---: | :--- |
-| 🥇 | **`gemma4:e4b`** | **9.92 / 10** | 464 ms | **198 ms** | 205.8 tok/s | **20.9%** | 🏆 **Default / Top Quality** (near-perfect technical fidelity & conciseness) |
-| 🥈 | **`jetelain/Qwen3.5-4B:latest`** | **9.90 / 10** | 365 ms | 212 ms | 214.3 tok/s | 16.4% | ⚖️ **Best Balanced** (ultra-fast latency with `think: false`) |
-| 🥉 | **`qwen3.5:4b`** | **9.84 / 10** | 429 ms | 236 ms | 142.8 tok/s | 20.0% | Strong XML doc summaries |
-| 4 | **`gemma4:e2b`** | **9.82 / 10** | 551 ms | **126 ms** | **309.3 tok/s** | 19.7% | Highest raw generation speed |
-| 5 | **`qwen3.5:2b`** | **9.54 / 10** | **342 ms** | 176 ms | 191.9 tok/s | 13.6% | ⚡ **Fastest / Lightweight** (minimal VRAM footprint) |
+| Rank | Model | Type | Overall Score | Avg Latency | Median Latency | Throughput | Compression | Recommendation |
+| :---: | :--- | :---: | :---: | :---: | :---: | :---: | :---: | :--- |
+| 🥇 | **`gemma4:e4b`** | Local | **9.92 / 10** | 464 ms | **198 ms** | 205.8 tok/s | **20.9%** | 🏆 **Default / Top Local Quality** (near-perfect technical fidelity & conciseness) |
+| 🥇 | **`gpt-oss:20b-cloud`** | Cloud | **9.92 / 10** | 2,313 ms | 1,807 ms | 88.0 tok/s | **21.4%** | ☁️ **Top Cloud Quality** (highest accuracy 9.88/10, zero local VRAM, free tier) |
+| 🥈 | **`jetelain/Qwen3.5-4B:latest`** | Local | **9.90 / 10** | 365 ms | 212 ms | 214.3 tok/s | 16.4% | ⚖️ **Best Balanced Local** (ultra-fast latency with `think: false`) |
+| 🥉 | **`qwen3.5:4b`** | Local | **9.84 / 10** | 429 ms | 236 ms | 142.8 tok/s | 20.0% | Strong XML doc summaries |
+| 4 | **`gemma4:e2b`** | Local | **9.82 / 10** | 551 ms | **126 ms** | **309.3 tok/s** | 19.7% | Highest raw generation speed |
+| 5 | **`nemotron-3-super:cloud`** | Cloud | **9.78 / 10** | 1,307 ms | 654 ms | 45.1 tok/s | 15.0% | Fast cloud alternative (120B MoE) |
+| 6 | **`nemotron-3-nano:30b-cloud`** | Cloud | **9.68 / 10** | **424 ms** | 413 ms | 78.5 tok/s | 19.8% | ⚡ **Fastest & Lightest Cloud** (sub-second, free tier, zero local VRAM) |
+| 7 | **`qwen3.5:2b`** | Local | **9.54 / 10** | **342 ms** | 176 ms | 191.9 tok/s | 13.6% | ⚡ **Fastest Local** (minimal VRAM footprint) |
+
+### Model Recommendations by Environment
+
+- **Dedicated GPU (>= 8–12 GB VRAM):** Use **`gemma4:e4b`** (default). 100% offline, 200+ tok/s, top-tier fidelity.
+- **Limited VRAM / Running in Parallel with Primary Coding LLM (Cloud Models):**
+  - **Highest Quality:** Use **`gpt-oss:20b-cloud`** (`-m gpt-oss:20b-cloud`). Ties with `gemma4:e4b` at 9.92/10, highest accuracy (9.88/10), and uses 0 GB local VRAM.
+  - **Fastest Cloud:** Use **`nemotron-3-nano:30b-cloud`** (`-m nemotron-3-nano:30b-cloud`). Sub-second response (424 ms average), 9.68/10 score, and uses 0 GB local VRAM.
+
+> [!TIP]
+> **Free Cloud Tier**: The proposed cloud models (`gpt-oss:20b-cloud`, `nemotron-3-nano:30b-cloud`, `nemotron-3-super:cloud`) are available through Ollama Cloud with an included free tier. The free tier quota typically accommodates summarizing up to **50,000 comments**. To use cloud models, create an account on [ollama.com](https://ollama.com) and log in via the Ollama CLI:
+> ```bash
+> ollama login
+> ```
 
 *For full benchmark methodology, CLI runner, and qualitative side-by-side case studies, see [src/Pmad.CodeCondenser.Benchmark/README.md](src/Pmad.CodeCondenser.Benchmark/README.md).*
 

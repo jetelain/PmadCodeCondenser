@@ -40,10 +40,21 @@ public sealed class CommentSummarizer : ICommentSummarizer
     }
 
     /// <inheritdoc />
+    public Task<IReadOnlyDictionary<string, string>> SummarizeAsync(
+        IReadOnlyList<VerboseComment> comments,
+        IReadOnlyDictionary<string, string> existingCache,
+        CodeCondenserSettings settings,
+        CancellationToken cancellationToken = default)
+    {
+        return SummarizeAsync(comments, existingCache, settings, progress: null, cancellationToken);
+    }
+
+    /// <inheritdoc />
     public async Task<IReadOnlyDictionary<string, string>> SummarizeAsync(
         IReadOnlyList<VerboseComment> comments,
         IReadOnlyDictionary<string, string> existingCache,
         CodeCondenserSettings settings,
+        IProgress<CommentSummarizationProgress>? progress,
         CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(comments);
@@ -67,12 +78,17 @@ public sealed class CommentSummarizer : ICommentSummarizer
             return results;
         }
 
+        progress?.Report(new CommentSummarizationProgress(0, uncachedComments.Count));
+
         int maxParallelism = Math.Max(1, settings.MaxParallelLlmRequests);
         var parallelOptions = new ParallelOptions
         {
             MaxDegreeOfParallelism = maxParallelism,
             CancellationToken = cancellationToken
         };
+
+        int completed = 0;
+        var progressLock = new object();
 
         await Parallel.ForEachAsync(uncachedComments, parallelOptions, async (comment, ct) =>
         {
@@ -91,6 +107,14 @@ public sealed class CommentSummarizer : ICommentSummarizer
             catch (Exception ex)
             {
                 Console.Error.WriteLine($"[Warning] LLM summarization request failed: {ex.Message}. Skipping summarization for this comment.");
+            }
+            finally
+            {
+                lock (progressLock)
+                {
+                    completed++;
+                    progress?.Report(new CommentSummarizationProgress(completed, uncachedComments.Count, comment));
+                }
             }
         }).ConfigureAwait(false);
 

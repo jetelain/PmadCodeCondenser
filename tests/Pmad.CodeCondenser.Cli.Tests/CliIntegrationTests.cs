@@ -346,6 +346,199 @@ public class CliIntegrationTests : IDisposable
         capturedSettings!.Ollama.ContextSize.Should().Be(16384);
     }
 
+    [Fact]
+    public async Task RunAsync_IncrementalMode_WhenAdditionalDuplicationDetected_ReturnsExitCode2AndActionableFeedback()
+    {
+        // Arrange
+        var file1 = Path.Combine(_testDirectory, "OriginalService.cs");
+        var cloneCode = """
+        namespace MyCompany;
+        public class OriginalService
+        {
+            public void Compute(int a, int b)
+            {
+                int x = a + b;
+                int y = x * 2;
+                int z = y - 5;
+                if (z > 10) z = 10;
+                int result = z + 1;
+                Console.WriteLine(result);
+                int finalVal = result * 3;
+                Console.WriteLine(finalVal);
+            }
+        }
+        """;
+        await File.WriteAllTextAsync(file1, cloneCode);
+
+        var engine = new CodeCondenserEngine(snapshotStore: new JsonSnapshotStore());
+
+        // Step 1: establish baseline snapshot
+        using var outSnapshot = new StringWriter();
+        var exitSnapshot = await Program.RunAsync(
+            ["snapshot", _testDirectory, "--no-color"],
+            outSnapshot,
+            new StringWriter(),
+            customEngine: engine);
+        exitSnapshot.Should().Be(0);
+
+        // Step 2: introduce a new file with duplicated method logic
+        var file2 = Path.Combine(_testDirectory, "DuplicatedService.cs");
+        var duplicateCode = """
+        namespace MyCompany;
+        public class DuplicatedService
+        {
+            public void Calculate(int p1, int p2)
+            {
+                int val1 = p1 + p2;
+                int val2 = val1 * 2;
+                int val3 = val2 - 5;
+                if (val3 > 10) val3 = 10;
+                int res = val3 + 1;
+                Console.WriteLine(res);
+                int outputVal = res * 3;
+                Console.WriteLine(outputVal);
+            }
+        }
+        """;
+        await File.WriteAllTextAsync(file2, duplicateCode);
+
+        // Step 3: Run incremental analysis
+        using var outInc = new StringWriter();
+        using var errInc = new StringWriter();
+        var exitCode = await Program.RunAsync(
+            [_testDirectory, "--incremental", "--no-color"],
+            outInc,
+            errInc,
+            customEngine: engine);
+
+        // Assert: Exits with code 2 and outputs actionable feedback for an AI agent
+        exitCode.Should().Be(2);
+        var outputText = outInc.ToString();
+        outputText.Should().Contain("[AI AGENT ACTION REQUIRED]");
+        outputText.Should().Contain("Code Duplication Policy Violation (Exit Code: 2)");
+        outputText.Should().Contain("Incremental analysis detected 1 new code duplication cluster(s) exceeding tolerance margin (allowed: 0).");
+        outputText.Should().Contain("DuplicatedService.cs");
+        outputText.Should().Contain("OriginalService.cs");
+        outputText.Should().Contain("Actionable Instructions for AI Agent:");
+        outputText.Should().Contain("Extract the identical structural logic into a shared helper method");
+    }
+
+    [Fact]
+    public async Task RunAsync_IncrementalMode_WhenDuplicationWithinTolerance_ReturnsExitCode0()
+    {
+        // Arrange
+        var file1 = Path.Combine(_testDirectory, "BaseSvc.cs");
+        var cloneCode = """
+        namespace MyCompany;
+        public class BaseSvc
+        {
+            public void Execute(int a, int b)
+            {
+                int x = a + b;
+                int y = x * 2;
+                int z = y - 5;
+                if (z > 10) z = 10;
+                int result = z + 1;
+                Console.WriteLine(result);
+                int finalVal = result * 3;
+                Console.WriteLine(finalVal);
+            }
+        }
+        """;
+        await File.WriteAllTextAsync(file1, cloneCode);
+
+        var engine = new CodeCondenserEngine(snapshotStore: new JsonSnapshotStore());
+
+        // Step 1: establish baseline snapshot
+        await Program.RunAsync(
+            ["snapshot", _testDirectory, "--no-color"],
+            new StringWriter(),
+            new StringWriter(),
+            customEngine: engine);
+
+        // Step 2: introduce a clone
+        var file2 = Path.Combine(_testDirectory, "CloneSvc.cs");
+        await File.WriteAllTextAsync(file2, cloneCode.Replace("BaseSvc", "CloneSvc"));
+
+        // Step 3: Run incremental with tolerance = 1
+        using var outInc = new StringWriter();
+        var exitCode = await Program.RunAsync(
+            [_testDirectory, "--incremental", "--duplication-tolerance", "1", "--no-color"],
+            outInc,
+            new StringWriter(),
+            customEngine: engine);
+
+        // Assert: Allowed by tolerance, exits with 0
+        exitCode.Should().Be(0);
+        outInc.ToString().Should().NotContain("[AI AGENT ACTION REQUIRED]");
+    }
+
+    [Fact]
+    public async Task RunAsync_DisableDuplicationDetection_DoesNotReportClones()
+    {
+        var file1 = Path.Combine(_testDirectory, "Svc1.cs");
+        var file2 = Path.Combine(_testDirectory, "Svc2.cs");
+        var code = """
+        namespace MyCompany;
+        public class Svc
+        {
+            public void M(int a, int b)
+            {
+                int x = a + b;
+                int y = x * 2;
+                int z = y - 5;
+                if (z > 10) z = 10;
+                int r = z + 1;
+                Console.WriteLine(r);
+                int f = r * 3;
+                Console.WriteLine(f);
+            }
+        }
+        """;
+        await File.WriteAllTextAsync(file1, code);
+        await File.WriteAllTextAsync(file2, code.Replace("Svc", "Svc2"));
+
+        var engine = new CodeCondenserEngine(snapshotStore: new JsonSnapshotStore());
+
+        using var output = new StringWriter();
+        var exitCode = await Program.RunAsync(
+            [_testDirectory, "--no-duplication", "--no-color"],
+            output,
+            new StringWriter(),
+            customEngine: engine);
+
+        exitCode.Should().Be(0);
+        output.ToString().Should().Contain("No structural code duplication detected.");
+        output.ToString().Should().NotContain("Found 1 code duplication cluster(s):");
+    }
+
+    [Fact]
+    public async Task RunAsync_DisableCommentSummarization_DoesNotReportComments()
+    {
+        var file = Path.Combine(_testDirectory, "CommentSvc.cs");
+        await File.WriteAllTextAsync(file, """
+        namespace MyCompany;
+        public class CommentSvc
+        {
+            // This is an extremely long and verbose explanation that easily exceeds the default threshold of one hundred characters in total length
+            public void M() {}
+        }
+        """);
+
+        var engine = new CodeCondenserEngine(snapshotStore: new JsonSnapshotStore());
+
+        using var output = new StringWriter();
+        var exitCode = await Program.RunAsync(
+            [_testDirectory, "--no-comments", "--no-color"],
+            output,
+            new StringWriter(),
+            customEngine: engine);
+
+        exitCode.Should().Be(0);
+        output.ToString().Should().Contain("No verbose comments detected.");
+        output.ToString().Should().NotContain("Found 1 verbose comment(s) exceeding threshold:");
+    }
+
     private sealed class SettingsCapturingSummarizer : ICommentSummarizer
     {
         private readonly Action<CodeCondenserSettings> _onSummarize;

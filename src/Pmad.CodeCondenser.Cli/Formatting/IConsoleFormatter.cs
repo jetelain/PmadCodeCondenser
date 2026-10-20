@@ -26,4 +26,8 @@ public interface IConsoleFormatter
     void PrintWarning(TextWriter writer, string message);
 
     void PrintInfo(TextWriter writer, string message);
+
+    void PrintCommentProgress(TextWriter writer, int completed, int total, string? currentItem = null);
+
+    void PrintAiActionableDuplicationFeedback(TextWriter writer, IReadOnlyList<CodeCloneGroup> cloneGroups, string baseDirectory, int tolerance);
 }

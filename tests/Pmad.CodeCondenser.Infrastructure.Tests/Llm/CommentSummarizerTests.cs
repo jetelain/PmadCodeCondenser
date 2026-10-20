@@ -1,5 +1,6 @@
 using FluentAssertions;
 using Microsoft.Extensions.AI;
+using Pmad.CodeCondenser.Core.Comments;
 using Pmad.CodeCondenser.Core.Configuration;
 using Pmad.CodeCondenser.Core.Models;
 using Pmad.CodeCondenser.Infrastructure.Llm;
@@ -239,6 +240,41 @@ public class CommentSummarizerTests
         response.Should().NotBeNull();
         capturedJson.Should().Contain("\"num_ctx\":24576");
         capturedJson.Should().Contain("\"think\":false");
+    }
+
+    [Fact]
+    public async Task SummarizeAsync_WithProgress_ReportsCompletedAndTotal()
+    {
+        var comment1 = CreateComment("// " + new string('a', 120), filePath: "a.cs");
+        var comment2 = CreateComment("// " + new string('b', 120), filePath: "b.cs");
+
+        var client = new TestChatClient(_ => "Summary");
+        var summarizer = new CommentSummarizer(client);
+        var progressReports = new List<CommentSummarizationProgress>();
+        var progress = new DirectProgress<CommentSummarizationProgress>(p =>
+        {
+            lock (progressReports)
+            {
+                progressReports.Add(p);
+            }
+        });
+
+        var result = await summarizer.SummarizeAsync(
+            [comment1, comment2],
+            new Dictionary<string, string>(),
+            new CodeCondenserSettings(),
+            progress: progress);
+
+        result.Should().HaveCount(2);
+        progressReports.Should().NotBeEmpty();
+        progressReports.First().Total.Should().Be(2);
+        progressReports.Last().Completed.Should().Be(2);
+        progressReports.Last().Percentage.Should().Be(100);
+    }
+
+    private sealed class DirectProgress<T>(Action<T> handler) : IProgress<T>
+    {
+        public void Report(T value) => handler(value);
     }
 
     private class DelegatingHandlerStub : HttpMessageHandler

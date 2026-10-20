@@ -88,6 +88,93 @@ public sealed class CodeCondenserSettings
     public OllamaSettings Ollama { get; set; } = new();
 
     /// <summary>
+    /// When true, enables verbose comment extraction and LLM summarization.
+    /// Default is true.
+    /// </summary>
+    public bool EnableCommentSummarization { get; set; } = true;
+
+    /// <summary>
+    /// Alias for <see cref="EnableCommentSummarization"/>.
+    /// </summary>
+    public bool? EnableComments
+    {
+        get => EnableCommentSummarization;
+        set { if (value.HasValue) EnableCommentSummarization = value.Value; }
+    }
+
+    /// <summary>
+    /// Alias for <see cref="EnableCommentSummarization"/>.
+    /// </summary>
+    public bool? CommentSummarization
+    {
+        get => EnableCommentSummarization;
+        set { if (value.HasValue) EnableCommentSummarization = value.Value; }
+    }
+
+    /// <summary>
+    /// When true, enables structural code clone (duplication) detection.
+    /// Default is true.
+    /// </summary>
+    public bool EnableDuplicationDetection { get; set; } = true;
+
+    /// <summary>
+    /// Alias for <see cref="EnableDuplicationDetection"/>.
+    /// </summary>
+    public bool? EnableCodeDuplication
+    {
+        get => EnableDuplicationDetection;
+        set { if (value.HasValue) EnableDuplicationDetection = value.Value; }
+    }
+
+    /// <summary>
+    /// Alias for <see cref="EnableDuplicationDetection"/>.
+    /// </summary>
+    public bool? EnableCodeDuplicationDetection
+    {
+        get => EnableDuplicationDetection;
+        set { if (value.HasValue) EnableDuplicationDetection = value.Value; }
+    }
+
+    /// <summary>
+    /// Alias for <see cref="EnableDuplicationDetection"/>.
+    /// </summary>
+    public bool? EnableCloneDetection
+    {
+        get => EnableDuplicationDetection;
+        set { if (value.HasValue) EnableDuplicationDetection = value.Value; }
+    }
+
+    /// <summary>
+    /// Alias for <see cref="EnableDuplicationDetection"/>.
+    /// </summary>
+    public bool? CodeDuplicationDetection
+    {
+        get => EnableDuplicationDetection;
+        set { if (value.HasValue) EnableDuplicationDetection = value.Value; }
+    }
+
+    /// <summary>
+    /// Maximum number of new or modified code clone clusters tolerated in incremental mode before returning an error exit code.
+    /// Default is 0 (zero tolerance).
+    /// </summary>
+    public int DuplicationTolerance { get; set; } = 0;
+
+    /// <summary>
+    /// Alias for <see cref="DuplicationTolerance"/>.
+    /// </summary>
+    public int? IncrementalDuplicationTolerance
+    {
+        get => DuplicationTolerance;
+        set { if (value.HasValue) DuplicationTolerance = value.Value; }
+    }
+
+    /// <summary>
+    /// Exit code returned when additional code duplication exceeds <see cref="DuplicationTolerance"/> in incremental mode.
+    /// Default is 2.
+    /// </summary>
+    public int DuplicationExitCode { get; set; } = 2;
+
+    /// <summary>
     /// Relative or absolute path to the snapshot cache file for incremental analysis and WYSIWYG summaries.
     /// Default is ".codecondenser/snapshot.json".
     /// </summary>

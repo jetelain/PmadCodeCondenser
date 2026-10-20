@@ -70,6 +70,35 @@ public class OllamaBenchmarkClientTests
     }
 
     [Fact]
+    public void ParseJudgeResponse_WithThinkingTags_ParsesAccurately()
+    {
+        var raw = """
+            Let's evaluate this comment. The original comment is: { foo: 1 }.
+            I think the summary is great!
+            </think>
+            ```json
+            {
+              "accuracy": 9.5,
+              "conciseness": 10.0,
+              "formatting": 10.0,
+              "overall": 9.5,
+              "critique": "The summary faithfully captures the method's core purpose."
+            }
+            ```
+            """;
+
+        var eval = new JudgeEvaluation();
+        OllamaBenchmarkClient.ParseJudgeResponse(raw, eval);
+
+        eval.Success.Should().BeTrue();
+        eval.AccuracyScore.Should().Be(9.5);
+        eval.ConcisenessScore.Should().Be(10.0);
+        eval.FormatComplianceScore.Should().Be(10.0);
+        eval.OverallScore.Should().Be(9.5);
+        eval.Critique.Should().Be("The summary faithfully captures the method's core purpose.");
+    }
+
+    [Fact]
     public void ParseJudgeResponse_EmptyResponse_SetsError()
     {
         var eval = new JudgeEvaluation();

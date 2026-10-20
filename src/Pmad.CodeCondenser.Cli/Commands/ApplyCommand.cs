@@ -27,10 +27,16 @@ public sealed class ApplyCommand : ICommand
         formatter.PrintInfo(output, $"Applying comment summaries to target: {Path.GetFullPath(options.TargetPath)}");
         output.WriteLine();
 
+        var progress = new Progress<Pmad.CodeCondenser.Core.Comments.CommentSummarizationProgress>(p =>
+        {
+            formatter.PrintCommentProgress(output, p.Completed, p.Total);
+        });
+
         var result = await engine.AnalyzeAsync(
             options.TargetPath,
             settings,
             incremental: options.Incremental,
+            progress: progress,
             cancellationToken: cancellationToken).ConfigureAwait(false);
 
         formatter.PrintCloneGroups(output, result.CloneGroups, options.TargetPath);
@@ -83,6 +89,12 @@ public sealed class ApplyCommand : ICommand
             result.VerboseComments.Count,
             mode);
 
-        return 0;
+        if (options.Incremental && settings.EnableDuplicationDetection && result.CloneGroups.Count > settings.DuplicationTolerance)
+        {
+            formatter.PrintAiActionableDuplicationFeedback(output, result.CloneGroups, options.TargetPath, settings.DuplicationTolerance);
+            return settings.DuplicationExitCode;
+        }
+
+        return ExitCodes.Success;
     }
 }

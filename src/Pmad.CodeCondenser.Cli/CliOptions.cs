@@ -81,6 +81,21 @@ public sealed class CliOptions
     public bool NoColor { get; set; }
 
     /// <summary>
+    /// When specified, explicitly enables or disables comment summarization.
+    /// </summary>
+    public bool? EnableCommentSummarization { get; set; }
+
+    /// <summary>
+    /// When specified, explicitly enables or disables duplication detection.
+    /// </summary>
+    public bool? EnableDuplicationDetection { get; set; }
+
+    /// <summary>
+    /// Maximum number of new clone clusters tolerated in incremental mode before returning an error exit code.
+    /// </summary>
+    public int? DuplicationTolerance { get; set; }
+
+    /// <summary>
     /// When true, shows help and usage information.
     /// </summary>
     public bool Help { get; set; }

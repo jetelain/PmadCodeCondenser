@@ -281,4 +281,51 @@ public class CliArgumentParserTests
         var version = CliArgumentParser.GetVersionText();
         version.Should().Contain("pmad-codecondenser version");
     }
+
+    [Theory]
+    [InlineData("--no-comments")]
+    [InlineData("--disable-comments")]
+    [InlineData("--no-comment-summarization")]
+    public void TryParse_DisableComments_SetsOptionFalse(string flag)
+    {
+        var success = CliArgumentParser.TryParse([flag], out var options, out var error);
+
+        success.Should().BeTrue();
+        error.Should().BeNull();
+        options.EnableCommentSummarization.Should().Be(false);
+    }
+
+    [Theory]
+    [InlineData("--no-duplication")]
+    [InlineData("--disable-duplication")]
+    [InlineData("--no-clone-detection")]
+    public void TryParse_DisableDuplication_SetsOptionFalse(string flag)
+    {
+        var success = CliArgumentParser.TryParse([flag], out var options, out var error);
+
+        success.Should().BeTrue();
+        error.Should().BeNull();
+        options.EnableDuplicationDetection.Should().Be(false);
+    }
+
+    [Theory]
+    [InlineData("--duplication-tolerance", "3", 3)]
+    [InlineData("-dt", "0", 0)]
+    public void TryParse_DuplicationTolerance_SetsValue(string flag, string val, int expected)
+    {
+        var success = CliArgumentParser.TryParse([flag, val], out var options, out var error);
+
+        success.Should().BeTrue();
+        error.Should().BeNull();
+        options.DuplicationTolerance.Should().Be(expected);
+    }
+
+    [Fact]
+    public void TryParse_NegativeDuplicationTolerance_ReturnsError()
+    {
+        var success = CliArgumentParser.TryParse(["--duplication-tolerance", "-1"], out _, out var error);
+
+        success.Should().BeFalse();
+        error.Should().Contain("Invalid value for --duplication-tolerance");
+    }
 }

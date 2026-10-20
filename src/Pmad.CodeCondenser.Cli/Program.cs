@@ -85,6 +85,21 @@ public static class Program
             settings.Ollama.ContextSize = options.ContextSize.Value;
         }
 
+        if (options.EnableCommentSummarization.HasValue)
+        {
+            settings.EnableCommentSummarization = options.EnableCommentSummarization.Value;
+        }
+
+        if (options.EnableDuplicationDetection.HasValue)
+        {
+            settings.EnableDuplicationDetection = options.EnableDuplicationDetection.Value;
+        }
+
+        if (options.DuplicationTolerance.HasValue)
+        {
+            settings.DuplicationTolerance = options.DuplicationTolerance.Value;
+        }
+
         var engine = customEngine ?? new CodeCondenserEngine(
             snapshotStore: new JsonSnapshotStore(),
             commentSummarizer: new CommentSummarizer(new OllamaClientFactory()));
@@ -110,12 +125,12 @@ public static class Program
         catch (OperationCanceledException)
         {
             formatter.PrintWarning(output, "Operation was canceled.");
-            return 130;
+            return ExitCodes.Canceled;
         }
         catch (Exception ex)
         {
             formatter.PrintError(error, ex.Message);
-            return 1;
+            return ExitCodes.Error;
         }
     }
 }

@@ -14,6 +14,17 @@ public interface ICodeCondenserEngine
         bool incremental = false,
         CancellationToken cancellationToken = default);
 
+    /// <summary>
+    /// Analyzes the codebase with optional progress reporting for comment summarization.
+    /// </summary>
+    Task<AnalysisResult> AnalyzeAsync(
+        string targetPath,
+        CodeCondenserSettings settings,
+        bool incremental,
+        IProgress<Comments.CommentSummarizationProgress>? progress,
+        CancellationToken cancellationToken = default)
+        => AnalyzeAsync(targetPath, settings, incremental, cancellationToken);
+
     Task ApplySummariesAsync(
         AnalysisResult analysisResult,
         CodeCondenserSettings settings,

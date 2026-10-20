@@ -174,6 +174,68 @@ public sealed class ConsoleFormatter : IConsoleFormatter
         writer.WriteLine(Dim($"[Info] {message}"));
     }
 
+    public void PrintCommentProgress(TextWriter writer, int completed, int total, string? currentItem = null)
+    {
+        ArgumentNullException.ThrowIfNull(writer);
+        if (total <= 0) return;
+
+        int percent = (int)Math.Round((double)completed / total * 100);
+        percent = Math.Clamp(percent, 0, 100);
+
+        var itemDetail = !string.IsNullOrWhiteSpace(currentItem) ? $" ({currentItem})" : string.Empty;
+        var tag = _useColor ? Cyan("[Progress]") : "[Progress]";
+        var message = $"{tag} Summarizing comments: {completed}/{total} ({percent}%){itemDetail}";
+
+        writer.Write($"\r{message}   ");
+        writer.Flush();
+
+        if (completed >= total)
+        {
+            writer.WriteLine();
+        }
+    }
+
+    public void PrintAiActionableDuplicationFeedback(
+        TextWriter writer,
+        IReadOnlyList<CodeCloneGroup> cloneGroups,
+        string baseDirectory,
+        int tolerance)
+    {
+        ArgumentNullException.ThrowIfNull(writer);
+        ArgumentNullException.ThrowIfNull(cloneGroups);
+
+        writer.WriteLine();
+        writer.WriteLine(Red(Bold("========================================================================")));
+        writer.WriteLine(Red(Bold("[AI AGENT ACTION REQUIRED] Code Duplication Policy Violation (Exit Code: 2)")));
+        writer.WriteLine(Red(Bold("========================================================================")));
+        writer.WriteLine($"Incremental analysis detected {Bold(cloneGroups.Count.ToString())} new code duplication cluster(s) exceeding tolerance margin (allowed: {tolerance}).");
+        writer.WriteLine();
+
+        for (int i = 0; i < cloneGroups.Count; i++)
+        {
+            var group = cloneGroups[i];
+            var shortHash = group.NormalizedHash.Length > 12 ? group.NormalizedHash[..12] : group.NormalizedHash;
+            int statementCount = group.Methods.FirstOrDefault()?.StatementCount ?? 0;
+
+            writer.WriteLine(Yellow($"Cluster #{i + 1} [AST Hash: {shortHash}..., {statementCount} statements]:"));
+            foreach (var method in group.Methods)
+            {
+                var relPath = FormatPath(method.FilePath, baseDirectory);
+                var signature = !string.IsNullOrWhiteSpace(method.Signature) ? method.Signature : method.MethodName;
+                writer.WriteLine($"  • {Cyan(relPath)}:{method.StartLine}-{method.EndLine} in {Bold(signature)}");
+            }
+            writer.WriteLine();
+        }
+
+        writer.WriteLine(Bold("Actionable Instructions for AI Agent:"));
+        writer.WriteLine("  1. Inspect the duplicate methods listed in each cluster above.");
+        writer.WriteLine("  2. Extract the identical structural logic into a shared helper method or service.");
+        writer.WriteLine("  3. Replace the bodies of the duplicate methods with a call to the extracted helper.");
+        writer.WriteLine("  4. Re-run 'pmad-codecondenser --incremental' to confirm the violation is resolved.");
+        writer.WriteLine(Red(Bold("========================================================================")));
+        writer.WriteLine();
+    }
+
     private string Bold(string text) => _useColor ? $"{AnsiBold}{text}{AnsiReset}" : text;
     private string Dim(string text) => _useColor ? $"{AnsiDim}{text}{AnsiReset}" : text;
     private string Red(string text) => _useColor ? $"{AnsiRed}{text}{AnsiReset}" : text;

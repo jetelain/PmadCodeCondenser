@@ -132,4 +132,43 @@ public class ConsoleFormatterTests
         output.Should().Contain("[Warning] Sample warning");
         output.Should().Contain("[Info] Sample info");
     }
+
+    [Fact]
+    public void PrintCommentProgress_OutputsProgressLine()
+    {
+        var formatter = new ConsoleFormatter(enableColor: false);
+        using var writer = new StringWriter();
+
+        formatter.PrintCommentProgress(writer, 1, 4);
+        formatter.PrintCommentProgress(writer, 4, 4);
+
+        var output = writer.ToString();
+        output.Should().Contain("Summarizing comments: 1/4 (25%)");
+        output.Should().Contain("Summarizing comments: 4/4 (100%)");
+    }
+
+    [Fact]
+    public void PrintAiActionableDuplicationFeedback_OutputsStructuredGuidance()
+    {
+        var formatter = new ConsoleFormatter(enableColor: false);
+        using var writer = new StringWriter();
+
+        var methods = new List<MethodCloneInfo>
+        {
+            new("src/ServiceA.cs", "ProcessA", 10, 25, 12, "hashXYZ", "void ProcessA(int x)"),
+            new("src/ServiceB.cs", "ProcessB", 30, 45, 12, "hashXYZ", "void ProcessB(int y)")
+        };
+        var cloneGroup = new CodeCloneGroup("hashXYZ", methods);
+
+        formatter.PrintAiActionableDuplicationFeedback(writer, [cloneGroup], ".", tolerance: 0);
+
+        var output = writer.ToString();
+        output.Should().Contain("[AI AGENT ACTION REQUIRED]");
+        output.Should().Contain("Code Duplication Policy Violation (Exit Code: 2)");
+        output.Should().Contain("exceeding tolerance margin (allowed: 0)");
+        output.Should().Contain("src/ServiceA.cs:10-25");
+        output.Should().Contain("src/ServiceB.cs:30-45");
+        output.Should().Contain("Actionable Instructions for AI Agent:");
+        output.Should().Contain("Extract the identical structural logic into a shared helper method");
+    }
 }

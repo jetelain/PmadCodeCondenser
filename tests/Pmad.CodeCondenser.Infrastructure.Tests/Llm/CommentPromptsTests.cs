@@ -78,6 +78,21 @@ public class CommentPromptsTests
         cleaned.Should().Contain("/// </summary>");
     }
 
+    [Fact]
+    public void CleanModelResponse_WithThinkingTags_StripsThinkingMonologue()
+    {
+        var response = """
+            <think>
+            The user wants me to summarize this comment.
+            I should be concise and remove fluff.
+            </think>
+            // Concise summary of the code.
+            """;
+
+        var cleaned = CommentPrompts.CleanModelResponse(response, CommentKind.SingleLine);
+        cleaned.Should().Be("// Concise summary of the code.");
+    }
+
     [Theory]
     [InlineData("")]
     [InlineData("   ")]

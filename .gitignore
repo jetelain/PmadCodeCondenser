@@ -432,3 +432,5 @@ artifacts/
 *.nupkg
 *.snupkg
 
+/benchmark-output
+/benchmark-comments.json

@@ -28,6 +28,11 @@ public sealed class CodeCondenserEngine : ICodeCondenserEngine
     /// </summary>
     public event Action<string>? FileApplied;
 
+    /// <summary>
+    /// Event raised when comment summarization progress is updated (completed count, total count).
+    /// </summary>
+    public event Action<CommentSummarizationProgress>? CommentSummarizationProgress;
+
     public CodeCondenserEngine(
         ICloneDetector? cloneDetector = null,
         ICommentExtractor? commentExtractor = null,
@@ -47,10 +52,21 @@ public sealed class CodeCondenserEngine : ICodeCondenserEngine
     }
 
     /// <inheritdoc />
-    public async Task<AnalysisResult> AnalyzeAsync(
+    public Task<AnalysisResult> AnalyzeAsync(
         string targetPath,
         CodeCondenserSettings settings,
         bool incremental = false,
+        CancellationToken cancellationToken = default)
+    {
+        return AnalyzeAsync(targetPath, settings, incremental, progress: null, cancellationToken);
+    }
+
+    /// <inheritdoc />
+    public async Task<AnalysisResult> AnalyzeAsync(
+        string targetPath,
+        CodeCondenserSettings settings,
+        bool incremental,
+        IProgress<CommentSummarizationProgress>? progress,
         CancellationToken cancellationToken = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(targetPath);
@@ -112,24 +128,32 @@ public sealed class CodeCondenserEngine : ICodeCondenserEngine
             filesToScan = discoveredFiles;
         }
 
-        // 5. Parse syntax trees and extract comments & methods in parallel
+        // 5. Parse syntax trees and extract comments & methods in parallel (if features are enabled)
         var fileResults = new (List<VerboseComment> Comments, List<MethodCloneInfo> Methods)[filesToScan.Count];
 
-        await Parallel.ForEachAsync(
-            filesToScan.Select((f, idx) => (f, idx)),
-            parallelOptions,
-            async (item, ct) =>
-            {
-                var file = item.f;
-                var normalizedRelPath = fileToNormalizedPath[file];
-                var sourceText = await File.ReadAllTextAsync(file, ct).ConfigureAwait(false);
-                var syntaxTree = CSharpSyntaxTree.ParseText(sourceText, path: file, cancellationToken: ct);
+        if (settings.EnableCommentSummarization || settings.EnableDuplicationDetection)
+        {
+            await Parallel.ForEachAsync(
+                filesToScan.Select((f, idx) => (f, idx)),
+                parallelOptions,
+                async (item, ct) =>
+                {
+                    var file = item.f;
+                    var normalizedRelPath = fileToNormalizedPath[file];
+                    var sourceText = await File.ReadAllTextAsync(file, ct).ConfigureAwait(false);
+                    var syntaxTree = CSharpSyntaxTree.ParseText(sourceText, path: file, cancellationToken: ct);
 
-                var comments = _commentExtractor.Extract(syntaxTree, file, settings);
-                var methods = _cloneDetector.ExtractMethods(syntaxTree, normalizedRelPath, settings);
+                    var comments = settings.EnableCommentSummarization
+                        ? _commentExtractor.Extract(syntaxTree, file, settings).ToList()
+                        : [];
 
-                fileResults[item.idx] = (comments.ToList(), methods.ToList());
-            }).ConfigureAwait(false);
+                    var methods = settings.EnableDuplicationDetection
+                        ? _cloneDetector.ExtractMethods(syntaxTree, normalizedRelPath, settings).ToList()
+                        : [];
+
+                    fileResults[item.idx] = (comments, methods);
+                }).ConfigureAwait(false);
+        }
 
         var allExtractedComments = new List<VerboseComment>();
         var allAnalyzedMethods = new List<MethodCloneInfo>();
@@ -142,7 +166,11 @@ public sealed class CodeCondenserEngine : ICodeCondenserEngine
 
         // 6. Detect Clones
         IReadOnlyList<CodeCloneGroup> cloneGroups;
-        if (incremental && baseline != null)
+        if (!settings.EnableDuplicationDetection)
+        {
+            cloneGroups = [];
+        }
+        else if (incremental && baseline != null)
         {
             // Include methods from unchanged files from baseline so clones between modified and unchanged files are caught
             var combinedMethods = new List<MethodCloneInfo>(allAnalyzedMethods);
@@ -174,29 +202,58 @@ public sealed class CodeCondenserEngine : ICodeCondenserEngine
         }
 
         // 7. Filter & Summarize comments via LLM
-        var commentsToSummarize = (incremental && baseline != null)
-            ? _snapshotDiffer.FilterNewComments(allExtractedComments, baseline)
-            : allExtractedComments;
-
-        if (_commentSummarizer != null && commentsToSummarize.Count > 0)
+        if (settings.EnableCommentSummarization && _commentSummarizer != null)
         {
-            var summaries = await _commentSummarizer.SummarizeAsync(
-                commentsToSummarize,
-                cache.ToDictionary(),
-                settings,
-                cancellationToken).ConfigureAwait(false);
+            var commentsToSummarize = (incremental && baseline != null)
+                ? _snapshotDiffer.FilterNewComments(allExtractedComments, baseline)
+                : allExtractedComments;
 
-            cache.SetRange(summaries);
+            if (commentsToSummarize.Count > 0)
+            {
+                var progressHandler = new Progress<CommentSummarizationProgress>(p =>
+                {
+                    progress?.Report(p);
+                    CommentSummarizationProgress?.Invoke(p);
+                });
+
+                var summaries = await _commentSummarizer.SummarizeAsync(
+                    commentsToSummarize,
+                    cache.ToDictionary(),
+                    settings,
+                    progress: progressHandler,
+                    cancellationToken: cancellationToken).ConfigureAwait(false);
+
+                cache.SetRange(summaries);
+            }
         }
 
         // 8. Persist/update snapshot WYSIWYG cache and file baseline
         if (_snapshotStore != null)
         {
+            // When duplication detection is disabled, preserve baseline methods instead of clearing them
+            var methodsForSnapshot = settings.EnableDuplicationDetection
+                ? allAnalyzedMethods
+                : (baseline != null ? [] : allAnalyzedMethods);
+
+            // When comment summarization is disabled, preserve baseline comment cache
+            var cacheForSnapshot = settings.EnableCommentSummarization
+                ? cache.ToDictionary()
+                : (baseline?.CommentCache ?? cache.ToDictionary());
+
             var newSnapshot = _snapshotDiffer.CreateOrUpdateSnapshot(
                 baseline,
                 currentFileHashes,
-                allAnalyzedMethods,
-                cache.ToDictionary());
+                methodsForSnapshot,
+                cacheForSnapshot);
+
+            // If duplication detection was disabled, restore baseline method hashes
+            if (!settings.EnableDuplicationDetection && baseline?.MethodHashes != null)
+            {
+                foreach (var (k, v) in baseline.MethodHashes)
+                {
+                    newSnapshot.MethodHashes[k] = v;
+                }
+            }
 
             await _snapshotStore.SaveAsync(snapshotPath, newSnapshot, cancellationToken).ConfigureAwait(false);
         }
@@ -232,7 +289,7 @@ public sealed class CodeCondenserEngine : ICodeCondenserEngine
         settings ??= new CodeCondenserSettings();
 
         var modifiedFiles = new List<string>();
-        if (analysisResult.VerboseComments.Count == 0 || analysisResult.SummarizedComments.Count == 0)
+        if (!settings.EnableCommentSummarization || analysisResult.VerboseComments.Count == 0 || analysisResult.SummarizedComments.Count == 0)
         {
             return modifiedFiles;
         }
@@ -302,11 +359,15 @@ public sealed class CodeCondenserEngine : ICodeCondenserEngine
                 var relPath = _fileHasher.NormalizeRelativePath(baseDirectory, file);
                 var hash = await _fileHasher.ComputeFileHashAsync(file, ct).ConfigureAwait(false);
 
-                var sourceText = await File.ReadAllTextAsync(file, ct).ConfigureAwait(false);
-                var tree = CSharpSyntaxTree.ParseText(sourceText, path: file, cancellationToken: ct);
-                var methods = _cloneDetector.ExtractMethods(tree, relPath, settings);
+                List<MethodCloneInfo> methods = [];
+                if (settings.EnableDuplicationDetection)
+                {
+                    var sourceText = await File.ReadAllTextAsync(file, ct).ConfigureAwait(false);
+                    var tree = CSharpSyntaxTree.ParseText(sourceText, path: file, cancellationToken: ct);
+                    methods = _cloneDetector.ExtractMethods(tree, relPath, settings).ToList();
+                }
 
-                baselineResults[item.idx] = (relPath, hash, methods.ToList());
+                baselineResults[item.idx] = (relPath, hash, methods);
             }).ConfigureAwait(false);
 
         var currentFileHashes = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
@@ -322,11 +383,23 @@ public sealed class CodeCondenserEngine : ICodeCondenserEngine
         var baseline = await _snapshotStore.LoadAsync(snapshotPath, cancellationToken).ConfigureAwait(false);
         var commentCache = baseline?.CommentCache ?? new Dictionary<string, string>();
 
+        var methodsForSnapshot = settings.EnableDuplicationDetection
+            ? allMethods
+            : (baseline != null ? [] : allMethods);
+
         var newSnapshot = _snapshotDiffer.CreateOrUpdateSnapshot(
             baseline,
             currentFileHashes,
-            allMethods,
+            methodsForSnapshot,
             commentCache);
+
+        if (!settings.EnableDuplicationDetection && baseline?.MethodHashes != null)
+        {
+            foreach (var (k, v) in baseline.MethodHashes)
+            {
+                newSnapshot.MethodHashes[k] = v;
+            }
+        }
 
         await _snapshotStore.SaveAsync(snapshotPath, newSnapshot, cancellationToken).ConfigureAwait(false);
         return newSnapshot;

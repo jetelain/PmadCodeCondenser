@@ -27,18 +27,17 @@ public sealed class AnalyzeCommand : ICommand
         formatter.PrintInfo(output, $"Analyzing target: {Path.GetFullPath(options.TargetPath)} (Mode: Dry-Run{(options.Incremental ? " Incremental" : "")})");
         output.WriteLine();
 
+        var progress = new Progress<Pmad.CodeCondenser.Core.Comments.CommentSummarizationProgress>(p =>
+        {
+            formatter.PrintCommentProgress(output, p.Completed, p.Total);
+        });
+
         var result = await engine.AnalyzeAsync(
             options.TargetPath,
             settings,
             incremental: options.Incremental,
+            progress: progress,
             cancellationToken: cancellationToken).ConfigureAwait(false);
-
-        if (options.UpdateSnapshot && engine is CodeCondenserEngine cce)
-        {
-            await cce.UpdateSnapshotBaselineAsync(options.TargetPath, settings, cancellationToken).ConfigureAwait(false);
-            formatter.PrintSnapshotSaved(output, settings.SnapshotFilePath);
-            output.WriteLine();
-        }
 
         formatter.PrintCloneGroups(output, result.CloneGroups, options.TargetPath);
         formatter.PrintVerboseComments(output, result.VerboseComments, result.SummarizedComments, options.TargetPath);
@@ -52,6 +51,19 @@ public sealed class AnalyzeCommand : ICommand
             result.VerboseComments.Count,
             mode);
 
-        return 0;
+        if (options.Incremental && settings.EnableDuplicationDetection && result.CloneGroups.Count > settings.DuplicationTolerance)
+        {
+            formatter.PrintAiActionableDuplicationFeedback(output, result.CloneGroups, options.TargetPath, settings.DuplicationTolerance);
+            return settings.DuplicationExitCode;
+        }
+
+        if (options.UpdateSnapshot && engine is CodeCondenserEngine cce)
+        {
+            await cce.UpdateSnapshotBaselineAsync(options.TargetPath, settings, cancellationToken).ConfigureAwait(false);
+            formatter.PrintSnapshotSaved(output, settings.SnapshotFilePath);
+            output.WriteLine();
+        }
+
+        return ExitCodes.Success;
     }
 }

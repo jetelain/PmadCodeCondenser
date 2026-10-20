@@ -61,7 +61,48 @@ public static class CliArgumentParser
                 continue;
             }
 
+            if (string.Equals(arg, "--no-comments", StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(arg, "--disable-comments", StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(arg, "--no-comment-summarization", StringComparison.OrdinalIgnoreCase))
+            {
+                options.EnableCommentSummarization = false;
+                continue;
+            }
+
+            if (string.Equals(arg, "--enable-comments", StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(arg, "--enable-comment-summarization", StringComparison.OrdinalIgnoreCase))
+            {
+                options.EnableCommentSummarization = true;
+                continue;
+            }
+
+            if (string.Equals(arg, "--no-duplication", StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(arg, "--disable-duplication", StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(arg, "--no-clone-detection", StringComparison.OrdinalIgnoreCase))
+            {
+                options.EnableDuplicationDetection = false;
+                continue;
+            }
+
+            if (string.Equals(arg, "--enable-duplication", StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(arg, "--enable-duplication-detection", StringComparison.OrdinalIgnoreCase))
+            {
+                options.EnableDuplicationDetection = true;
+                continue;
+            }
+
             // Options with values: check both "--option value" and "--option=value"
+            if (TryExtractOptionValue(args, ref i, "--duplication-tolerance", "-dt", out var dtVal, out errorMessage))
+            {
+                if (errorMessage != null) return false;
+                if (!int.TryParse(dtVal, out var dt) || dt < 0)
+                {
+                    errorMessage = $"Invalid value for --duplication-tolerance: '{dtVal}'. Must be a non-negative integer.";
+                    return false;
+                }
+                options.DuplicationTolerance = dt;
+                continue;
+            }
             if (TryExtractOptionValue(args, ref i, "--threshold-statements", "-ts", out var tsVal, out errorMessage))
             {
                 if (errorMessage != null) return false;
@@ -245,6 +286,9 @@ public static class CliArgumentParser
           -a, --apply                 Write shortened comments directly to source files
           -i, --incremental           Use snapshot cache to analyze only modified or new files
           -u, --update-snapshot       Refresh the snapshot baseline
+          -dt, --duplication-tolerance <n> Maximum new clone clusters tolerated in incremental mode (default: 0)
+          --no-comments               Disable comment extraction and summarization
+          --no-duplication            Disable structural code clone detection
           -ts, --threshold-statements <n>  Minimum statements for clone detection (default: 8)
           -tc, --threshold-comments <n>    Minimum character length for verbose comments (default: 100)
           -txs, --threshold-xml-summary <n> Minimum content length for XML summary/remarks (default: threshold-comments)

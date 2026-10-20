@@ -230,6 +230,93 @@ public class CodeCondenserEngineTests : IDisposable
         snapshot.MethodHashes.Should().NotBeEmpty();
     }
 
+    [Fact]
+    public async Task AnalyzeAsync_WhenCommentSummarizationDisabled_SkipsComments()
+    {
+        var file = Path.Combine(_testDir, "CommentSkip.cs");
+        await File.WriteAllTextAsync(file, """
+        public class CommentSkip
+        {
+            // This is an extremely long and verbose single line comment that easily exceeds the default threshold of one hundred characters in total length
+            public void Run() {}
+        }
+        """);
+
+        var engine = new CodeCondenserEngine(
+            snapshotStore: _snapshotStore,
+            commentSummarizer: _commentSummarizer);
+
+        var settings = new CodeCondenserSettings
+        {
+            EnableCommentSummarization = false
+        };
+
+        var result = await engine.AnalyzeAsync(_testDir, settings);
+
+        result.VerboseComments.Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task AnalyzeAsync_WhenDuplicationDetectionDisabled_SkipsClones()
+    {
+        var file1 = Path.Combine(_testDir, "CloneSkip1.cs");
+        var file2 = Path.Combine(_testDir, "CloneSkip2.cs");
+
+        var code = """
+        public class CloneSkip
+        {
+            public void M()
+            {
+                int a = 1; int b = 2; int c = a + b; int d = c * 2;
+                int e = d - 1; if (e > 5) e = 5; int f = e + 2;
+                Console.WriteLine(f); int g = f * 3; Console.WriteLine(g);
+            }
+        }
+        """;
+        await File.WriteAllTextAsync(file1, code);
+        await File.WriteAllTextAsync(file2, code);
+
+        var engine = new CodeCondenserEngine(
+            snapshotStore: _snapshotStore,
+            commentSummarizer: _commentSummarizer);
+
+        var settings = new CodeCondenserSettings
+        {
+            EnableDuplicationDetection = false
+        };
+
+        var result = await engine.AnalyzeAsync(_testDir, settings);
+
+        result.CloneGroups.Should().BeEmpty();
+        result.TotalMethodsScanned.Should().Be(0);
+    }
+
+    [Fact]
+    public async Task AnalyzeAsync_ReportsCommentSummarizationProgress()
+    {
+        var file = Path.Combine(_testDir, "ProgressTest.cs");
+        await File.WriteAllTextAsync(file, """
+        public class ProgressTest
+        {
+            // This is an extremely long and verbose single line comment that easily exceeds the default threshold of one hundred characters in total length
+            public void Run() {}
+        }
+        """);
+
+        var engine = new CodeCondenserEngine(
+            snapshotStore: _snapshotStore,
+            commentSummarizer: _commentSummarizer);
+
+        var progressList = new List<CommentSummarizationProgress>();
+        engine.CommentSummarizationProgress += p => progressList.Add(p);
+
+        var settings = new CodeCondenserSettings();
+        await engine.AnalyzeAsync(_testDir, settings);
+
+        progressList.Should().NotBeEmpty();
+        progressList.Last().Completed.Should().Be(1);
+    }
+
     private sealed class InMemorySnapshotStore : ISnapshotStore
     {
         private AnalysisSnapshot? _stored;
@@ -254,12 +341,25 @@ public class CodeCondenserEngineTests : IDisposable
             CodeCondenserSettings settings,
             CancellationToken cancellationToken = default)
         {
+            return SummarizeAsync(comments, existingCache, settings, progress: null, cancellationToken);
+        }
+
+        public Task<IReadOnlyDictionary<string, string>> SummarizeAsync(
+            IReadOnlyList<VerboseComment> comments,
+            IReadOnlyDictionary<string, string> existingCache,
+            CodeCondenserSettings settings,
+            IProgress<CommentSummarizationProgress>? progress,
+            CancellationToken cancellationToken = default)
+        {
             var dict = new Dictionary<string, string>(existingCache);
+            int count = 0;
             foreach (var c in comments)
             {
                 if (!dict.ContainsKey(c.ContentHash))
                 {
                     dict[c.ContentHash] = "// [Summarized] Concise summary";
+                    count++;
+                    progress?.Report(new CommentSummarizationProgress(count, comments.Count, c));
                 }
             }
 

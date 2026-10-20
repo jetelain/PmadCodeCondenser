@@ -52,6 +52,14 @@ public sealed class BenchmarkRunner
             await using var stream = File.OpenRead(runFilePath);
             run = await JsonSerializer.DeserializeAsync<BenchmarkRun>(stream, JsonOptions, cancellationToken).ConfigureAwait(false)
                   ?? new BenchmarkRun();
+
+            foreach (var m in candidateModels)
+            {
+                if (!run.CandidateModels.Contains(m, StringComparer.OrdinalIgnoreCase))
+                {
+                    run.CandidateModels.Add(m);
+                }
+            }
         }
         else
         {
