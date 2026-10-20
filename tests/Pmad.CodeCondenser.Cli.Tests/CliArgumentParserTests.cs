@@ -77,6 +77,18 @@ public class CliArgumentParserTests
     }
 
     [Fact]
+    public void TryParse_ExplicitAnalyzeWithUpdateSnapshotFlag_PreservesAnalyzeCommand()
+    {
+        var success = CliArgumentParser.TryParse(["analyze", "-u", "src/MyApp"], out var options, out var error);
+
+        success.Should().BeTrue();
+        error.Should().BeNull();
+        options.Command.Should().Be(CliOptions.CommandAnalyze);
+        options.UpdateSnapshot.Should().BeTrue();
+        options.TargetPath.Should().Be("src/MyApp");
+    }
+
+    [Fact]
     public void TryParse_ThresholdOptions_ParsesIntegerValues()
     {
         var success = CliArgumentParser.TryParse(

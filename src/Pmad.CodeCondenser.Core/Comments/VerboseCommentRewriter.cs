@@ -2,6 +2,7 @@ using System.Security.Cryptography;
 using System.Text;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
+using Pmad.CodeCondenser.Core.Models;
 
 namespace Pmad.CodeCondenser.Core.Comments;
 
@@ -190,27 +191,5 @@ public sealed class VerboseCommentRewriter : CSharpSyntaxRewriter, ICommentRewri
                trivia.IsKind(SyntaxKind.MultiLineDocumentationCommentTrivia);
     }
 
-    private static string ComputeSha256(string input)
-    {
-        int byteCount = Encoding.UTF8.GetByteCount(input);
-        byte[]? rented = null;
-        Span<byte> utf8Bytes = byteCount <= 512
-            ? stackalloc byte[byteCount]
-            : (rented = System.Buffers.ArrayPool<byte>.Shared.Rent(byteCount));
-
-        try
-        {
-            int written = Encoding.UTF8.GetBytes(input, utf8Bytes);
-            Span<byte> hash = stackalloc byte[32];
-            SHA256.HashData(utf8Bytes[..written], hash);
-            return Convert.ToHexStringLower(hash);
-        }
-        finally
-        {
-            if (rented != null)
-            {
-                System.Buffers.ArrayPool<byte>.Shared.Return(rented);
-            }
-        }
-    }
+    private static string ComputeSha256(string input) => VerboseComment.ComputeSha256(input);
 }

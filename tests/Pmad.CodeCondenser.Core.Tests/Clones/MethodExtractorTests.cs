@@ -304,4 +304,34 @@ class C
 
         extracted.Should().BeEmpty();
     }
+
+    [Fact]
+    public void Extract_MethodWithExpressionBodyIgnoreComment_IsSkipped()
+    {
+        var tree = ParseTree(@"
+class C
+{
+    int Add(int a, int b) =>
+        // codecondenser:ignore-duplicate
+        a + b;
+}");
+        var extractor = new MethodExtractor(minStatements: 1);
+        var extracted = extractor.Extract(tree);
+
+        extracted.Should().BeEmpty();
+    }
+
+    [Fact]
+    public void DuplicationIgnoreMarker_ExpressionBodyWithBlockComment_IsIgnored()
+    {
+        var method = ParseMethod("int Add(int a, int b) => /* no-clone */ a + b;");
+        DuplicationIgnoreMarker.IsIgnored(method).Should().BeTrue();
+    }
+
+    [Fact]
+    public void DuplicationIgnoreMarker_ExpressionBodyWithoutComment_IsNotIgnored()
+    {
+        var method = ParseMethod("int Add(int a, int b) => a + b;");
+        DuplicationIgnoreMarker.IsIgnored(method).Should().BeFalse();
+    }
 }

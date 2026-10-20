@@ -196,4 +196,36 @@ public sealed class CodeCondenserSettings
     /// Set of comment content hashes that have already been summarized or marked to ignore.
     /// </summary>
     public ISet<string> IgnoredCommentHashes { get; set; } = new HashSet<string>(StringComparer.Ordinal);
+
+    /// <summary>
+    /// Creates a clone of the current settings, including a copy of <see cref="IgnoredCommentHashes"/>.
+    /// </summary>
+    public CodeCondenserSettings Clone()
+    {
+        return new CodeCondenserSettings
+        {
+            CommentLengthThreshold = CommentLengthThreshold,
+            XmlSummaryLengthThreshold = XmlSummaryLengthThreshold,
+            XmlRemarksLengthThreshold = XmlRemarksLengthThreshold,
+            XmlParamLengthThreshold = XmlParamLengthThreshold,
+            DuplicationStatementThreshold = DuplicationStatementThreshold,
+            IncludeXmlDocumentation = IncludeXmlDocumentation,
+            MaxParallelLlmRequests = MaxParallelLlmRequests,
+            Provider = Provider,
+            Ollama = new OllamaSettings
+            {
+                Endpoint = Ollama.Endpoint,
+                Model = Ollama.Model,
+                ContextSize = Ollama.ContextSize
+            },
+            EnableCommentSummarization = EnableCommentSummarization,
+            EnableDuplicationDetection = EnableDuplicationDetection,
+            DuplicationTolerance = DuplicationTolerance,
+            DuplicationExitCode = DuplicationExitCode,
+            SnapshotFilePath = SnapshotFilePath,
+            SummarizedCommentsFilePath = SummarizedCommentsFilePath,
+            MaxCommentLineLength = MaxCommentLineLength,
+            IgnoredCommentHashes = new HashSet<string>(IgnoredCommentHashes, StringComparer.Ordinal)
+        };
+    }
 }

@@ -39,15 +39,14 @@ public sealed class CloneDetector : ICloneDetector
         ArgumentNullException.ThrowIfNull(syntaxTree);
         ArgumentNullException.ThrowIfNull(settings);
 
-        var methods = _extractor.Extract(syntaxTree, settings.DuplicationStatementThreshold);
+        var methods = _extractor.ExtractWithStatementCounts(syntaxTree, settings.DuplicationStatementThreshold);
         var result = new List<MethodCloneInfo>(methods.Count);
 
-        foreach (var method in methods)
+        foreach (var (method, statementCount) in methods)
         {
             var lineSpan = syntaxTree.GetLineSpan(method.Span);
             int startLine = lineSpan.StartLinePosition.Line + 1;
             int endLine = lineSpan.EndLinePosition.Line + 1;
-            int statementCount = MethodExtractor.GetStatementCount(method);
 
             var normalized = _normalizer.Normalize(method);
             var hash = _hasher.ComputeHash(normalized);

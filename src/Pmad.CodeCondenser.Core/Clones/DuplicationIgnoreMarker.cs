@@ -57,6 +57,11 @@ public static class DuplicationIgnoreMarker
             return true;
         }
 
+        if (method.ExpressionBody != null && HasIgnoreCommentTrivia(method.ExpressionBody.DescendantTrivia()))
+        {
+            return true;
+        }
+
         return false;
     }
 

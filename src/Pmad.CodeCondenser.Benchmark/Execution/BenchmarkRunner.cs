@@ -199,52 +199,53 @@ public sealed class BenchmarkRunner
             throw new FileNotFoundException($"Benchmark run file not found: {runFilePath}", runFilePath);
         }
 
+        BenchmarkRun loadedRun;
         await using (var stream = File.OpenRead(runFilePath))
         {
-            var loadedRun = await JsonSerializer.DeserializeAsync<BenchmarkRun>(stream, JsonOptions, cancellationToken).ConfigureAwait(false)
-                            ?? throw new InvalidOperationException("Failed to deserialize run file.");
+            loadedRun = await JsonSerializer.DeserializeAsync<BenchmarkRun>(stream, JsonOptions, cancellationToken).ConfigureAwait(false)
+                        ?? throw new InvalidOperationException("Failed to deserialize run file.");
+        }
 
-            loadedRun.JudgeModel = judgeModel;
+        loadedRun.JudgeModel = judgeModel;
 
-            var pendingJudges = loadedRun.Results
-                .Where(r => r.Success)
-                .ToList();
+        var pendingJudges = loadedRun.Results
+            .Where(r => r.Success)
+            .ToList();
 
-            int judgeCount = pendingJudges.Count;
-            int judgeDone = 0;
+        int judgeCount = pendingJudges.Count;
+        int judgeDone = 0;
 
-            LogMessage?.Invoke($"Evaluating {judgeCount} model outputs with judge: {judgeModel}...");
+        LogMessage?.Invoke($"Evaluating {judgeCount} model outputs with judge: {judgeModel}...");
 
-            foreach (var result in pendingJudges)
+        foreach (var result in pendingJudges)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            judgeDone++;
+
+            LogMessage?.Invoke($"[Judge {judgeDone}/{judgeCount}] Evaluating {result.ModelName} on {result.CommentId}...");
+
+            var eval = await _client.EvaluateWithJudgeAsync(
+                judgeModel,
+                result.Kind,
+                result.OriginalText,
+                result.CleanedSummary,
+                cancellationToken).ConfigureAwait(false);
+
+            result.Evaluation = eval;
+
+            if (eval.Success)
             {
-                cancellationToken.ThrowIfCancellationRequested();
-                judgeDone++;
-
-                LogMessage?.Invoke($"[Judge {judgeDone}/{judgeCount}] Evaluating {result.ModelName} on {result.CommentId}...");
-
-                var eval = await _client.EvaluateWithJudgeAsync(
-                    judgeModel,
-                    result.Kind,
-                    result.OriginalText,
-                    result.CleanedSummary,
-                    cancellationToken).ConfigureAwait(false);
-
-                result.Evaluation = eval;
-
-                if (eval.Success)
-                {
-                    LogMessage?.Invoke($"  ✓ Score: {eval.OverallScore:F1}/10 (Acc: {eval.AccuracyScore:F1}, Conc: {eval.ConcisenessScore:F1}, Fmt: {eval.FormatComplianceScore:F1})");
-                }
-                else
-                {
-                    LogMessage?.Invoke($"  ✗ Judge failed: {eval.ErrorMessage}");
-                }
-
-                await SaveRunAsync(loadedRun, runFilePath, cancellationToken).ConfigureAwait(false);
+                LogMessage?.Invoke($"  ✓ Score: {eval.OverallScore:F1}/10 (Acc: {eval.AccuracyScore:F1}, Conc: {eval.ConcisenessScore:F1}, Fmt: {eval.FormatComplianceScore:F1})");
+            }
+            else
+            {
+                LogMessage?.Invoke($"  ✗ Judge failed: {eval.ErrorMessage}");
             }
 
-            return loadedRun;
+            await SaveRunAsync(loadedRun, runFilePath, cancellationToken).ConfigureAwait(false);
         }
+
+        return loadedRun;
     }
 
     private static async Task SaveRunAsync(BenchmarkRun run, string filePath, CancellationToken ct)

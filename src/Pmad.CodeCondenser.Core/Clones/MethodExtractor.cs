@@ -11,6 +11,7 @@ public sealed class MethodExtractor : CSharpSyntaxWalker, IMethodExtractor
 {
     private readonly int _minStatements;
     private readonly List<MethodDeclarationSyntax> _methods = new();
+    private readonly List<(MethodDeclarationSyntax Method, int StatementCount)> _methodsWithCount = new();
 
     /// <summary>
     /// Initializes a new instance of <see cref="MethodExtractor"/> with the specified statement threshold.
@@ -25,6 +26,11 @@ public sealed class MethodExtractor : CSharpSyntaxWalker, IMethodExtractor
     /// Gets the list of extracted method declarations.
     /// </summary>
     public IReadOnlyList<MethodDeclarationSyntax> Methods => _methods;
+
+    /// <summary>
+    /// Gets the list of extracted method declarations along with their statement count.
+    /// </summary>
+    public IReadOnlyList<(MethodDeclarationSyntax Method, int StatementCount)> MethodsWithCount => _methodsWithCount;
 
     /// <summary>
     /// Calculates the number of non-block executable statements in the given method.
@@ -61,9 +67,14 @@ public sealed class MethodExtractor : CSharpSyntaxWalker, IMethodExtractor
     {
         ArgumentNullException.ThrowIfNull(node);
 
-        if (!DuplicationIgnoreMarker.IsIgnored(node) && GetStatementCount(node) >= _minStatements)
+        if (!DuplicationIgnoreMarker.IsIgnored(node))
         {
-            _methods.Add(node);
+            var count = GetStatementCount(node);
+            if (count >= _minStatements)
+            {
+                _methods.Add(node);
+                _methodsWithCount.Add((node, count));
+            }
         }
 
         base.VisitMethodDeclaration(node);
@@ -86,5 +97,24 @@ public sealed class MethodExtractor : CSharpSyntaxWalker, IMethodExtractor
         var extractor = new MethodExtractor(minStatements);
         extractor.Visit(node);
         return extractor.Methods;
+    }
+
+    /// <inheritdoc />
+    public IReadOnlyList<(MethodDeclarationSyntax Method, int StatementCount)> ExtractWithStatementCounts(SyntaxTree syntaxTree, int minStatements = 8)
+    {
+        ArgumentNullException.ThrowIfNull(syntaxTree);
+
+        var root = syntaxTree.GetRoot();
+        return ExtractWithStatementCounts(root, minStatements);
+    }
+
+    /// <inheritdoc />
+    public IReadOnlyList<(MethodDeclarationSyntax Method, int StatementCount)> ExtractWithStatementCounts(SyntaxNode node, int minStatements = 8)
+    {
+        ArgumentNullException.ThrowIfNull(node);
+
+        var extractor = new MethodExtractor(minStatements);
+        extractor.Visit(node);
+        return extractor.MethodsWithCount;
     }
 }

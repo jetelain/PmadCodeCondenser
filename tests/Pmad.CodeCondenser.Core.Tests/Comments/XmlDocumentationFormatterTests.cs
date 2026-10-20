@@ -125,4 +125,55 @@ public class XmlDocumentationFormatterTests
         formatted.Should().Contain("<summary>Calculates total price.</summary>");
         formatted.Should().Contain("<param name=\"count\">The quantity.</param>");
     }
+
+    [Fact]
+    public void Format_TypeparamOrInheritdocWithoutSummary_DoesNotWrapInSummaryTag()
+    {
+        var input = """
+            /// <typeparam name="T">The item type.</typeparam>
+            /// <param name="item">The item to add.</param>
+            /// <returns>True if added.</returns>
+            """;
+
+        var formatted = XmlDocumentationFormatter.Format(input, indentation: "", maxLineLength: 120);
+
+        formatted.Should().NotContain("<summary><typeparam");
+        formatted.Should().Contain("<typeparam name=\"T\">The item type.</typeparam>");
+        formatted.Should().Contain("<param name=\"item\">The item to add.</param>");
+        formatted.Should().Contain("<returns>True if added.</returns>");
+    }
+
+    [Fact]
+    public void Format_EmptyTag_EmitsSelfClosingSyntax()
+    {
+        var input = """
+            /// <inheritdoc />
+            /// <seealso cref="System.String" />
+            """;
+
+        var formatted = XmlDocumentationFormatter.Format(input, indentation: "", maxLineLength: 120);
+
+        formatted.Should().Contain("/// <inheritdoc />");
+        formatted.Should().Contain("/// <seealso cref=\"System.String\" />");
+        formatted.Should().NotContain("<inheritdoc></inheritdoc>");
+        formatted.Should().NotContain("<seealso cref=\"System.String\"></seealso>");
+    }
+
+    [Fact]
+    public void Format_MultilineRemarks_PreservesParagraphSeparators()
+    {
+        var input = """
+            /// <remarks>
+            /// First paragraph of remarks text.
+            ///
+            /// Second paragraph of remarks text.
+            /// </remarks>
+            """;
+
+        var formatted = XmlDocumentationFormatter.Format(input, indentation: "", maxLineLength: 120);
+
+        var lines = formatted.Split("\r\n");
+        lines.Should().Contain("///");
+        formatted.Should().Contain("/// First paragraph of remarks text.\r\n///\r\n/// Second paragraph of remarks text.");
+    }
 }

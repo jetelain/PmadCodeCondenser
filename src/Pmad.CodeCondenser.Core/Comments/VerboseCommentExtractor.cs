@@ -81,7 +81,23 @@ public sealed class VerboseCommentExtractor : CSharpSyntaxWalker, ICommentExtrac
             var trivia = triviaList[i];
             if (TryGetCommentKind(trivia, out var kind))
             {
-                if (kind == CommentKind.XmlDocumentation && !_settings.IncludeXmlDocumentation)
+                if (kind == CommentKind.XmlDocumentation)
+                {
+                    if (!_settings.IncludeXmlDocumentation)
+                    {
+                        continue;
+                    }
+
+                    var minXmlThreshold = Math.Min(
+                        Math.Min(_settings.GetEffectiveXmlSummaryThreshold(), _settings.GetEffectiveXmlRemarksThreshold()),
+                        _settings.GetEffectiveXmlParamThreshold());
+
+                    if (trivia.Span.Length < minXmlThreshold)
+                    {
+                        continue;
+                    }
+                }
+                else if (trivia.Span.Length < _settings.CommentLengthThreshold)
                 {
                     continue;
                 }

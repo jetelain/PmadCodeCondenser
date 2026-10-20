@@ -61,64 +61,75 @@ public sealed class CommentSummarizer : ICommentSummarizer
         ArgumentNullException.ThrowIfNull(existingCache);
         ArgumentNullException.ThrowIfNull(settings);
 
+        var createdLocally = _chatClient == null;
         var client = _chatClient ?? _clientFactory?.CreateClient(settings)
             ?? throw new InvalidOperationException("No IChatClient or ILlmClientFactory configured.");
 
-        var results = new Dictionary<string, string>(existingCache);
-
-        // Deduplicate comments by ContentHash and filter out any comments already present in cache
-        var uncachedComments = comments
-            .GroupBy(c => c.ContentHash)
-            .Where(g => !results.ContainsKey(g.Key))
-            .Select(g => g.First())
-            .ToList();
-
-        if (uncachedComments.Count == 0)
+        try
         {
+            var results = new Dictionary<string, string>(existingCache);
+
+            // Deduplicate comments by ContentHash and filter out any comments already present in cache
+            var uncachedComments = comments
+                .GroupBy(c => c.ContentHash)
+                .Where(g => !results.ContainsKey(g.Key))
+                .Select(g => g.First())
+                .ToList();
+
+            if (uncachedComments.Count == 0)
+            {
+                return results;
+            }
+
+            progress?.Report(new CommentSummarizationProgress(0, uncachedComments.Count));
+
+            int maxParallelism = Math.Max(1, settings.MaxParallelLlmRequests);
+            var parallelOptions = new ParallelOptions
+            {
+                MaxDegreeOfParallelism = maxParallelism,
+                CancellationToken = cancellationToken
+            };
+
+            int completed = 0;
+            var progressLock = new object();
+
+            await Parallel.ForEachAsync(uncachedComments, parallelOptions, async (comment, ct) =>
+            {
+                try
+                {
+                    var summary = await SummarizeCommentAsync(client, comment, settings, ct).ConfigureAwait(false);
+                    lock (results)
+                    {
+                        results[comment.ContentHash] = summary;
+                    }
+                }
+                catch (OperationCanceledException)
+                {
+                    throw;
+                }
+                catch (Exception ex)
+                {
+                    Console.Error.WriteLine($"[Warning] LLM summarization request failed: {ex.Message}. Skipping summarization for this comment.");
+                }
+                finally
+                {
+                    lock (progressLock)
+                    {
+                        completed++;
+                        progress?.Report(new CommentSummarizationProgress(completed, uncachedComments.Count, comment));
+                    }
+                }
+            }).ConfigureAwait(false);
+
             return results;
         }
-
-        progress?.Report(new CommentSummarizationProgress(0, uncachedComments.Count));
-
-        int maxParallelism = Math.Max(1, settings.MaxParallelLlmRequests);
-        var parallelOptions = new ParallelOptions
+        finally
         {
-            MaxDegreeOfParallelism = maxParallelism,
-            CancellationToken = cancellationToken
-        };
-
-        int completed = 0;
-        var progressLock = new object();
-
-        await Parallel.ForEachAsync(uncachedComments, parallelOptions, async (comment, ct) =>
-        {
-            try
+            if (createdLocally && client is IDisposable disposable)
             {
-                var summary = await SummarizeCommentAsync(client, comment, settings, ct).ConfigureAwait(false);
-                lock (results)
-                {
-                    results[comment.ContentHash] = summary;
-                }
+                disposable.Dispose();
             }
-            catch (OperationCanceledException)
-            {
-                throw;
-            }
-            catch (Exception ex)
-            {
-                Console.Error.WriteLine($"[Warning] LLM summarization request failed: {ex.Message}. Skipping summarization for this comment.");
-            }
-            finally
-            {
-                lock (progressLock)
-                {
-                    completed++;
-                    progress?.Report(new CommentSummarizationProgress(completed, uncachedComments.Count, comment));
-                }
-            }
-        }).ConfigureAwait(false);
-
-        return results;
+        }
     }
 
     private static async Task<string> SummarizeCommentAsync(

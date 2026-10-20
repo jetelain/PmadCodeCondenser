@@ -23,7 +23,27 @@ public sealed record VerboseComment(
     /// </summary>
     public static string ComputeSha256(string input)
     {
-        var bytes = System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(input));
-        return Convert.ToHexStringLower(bytes);
+        ArgumentNullException.ThrowIfNull(input);
+
+        int maxByteCount = System.Text.Encoding.UTF8.GetMaxByteCount(input.Length);
+        byte[]? rented = null;
+        Span<byte> utf8Bytes = maxByteCount <= 512
+            ? stackalloc byte[maxByteCount]
+            : (rented = System.Buffers.ArrayPool<byte>.Shared.Rent(maxByteCount));
+
+        try
+        {
+            int written = System.Text.Encoding.UTF8.GetBytes(input, utf8Bytes);
+            Span<byte> hash = stackalloc byte[32];
+            System.Security.Cryptography.SHA256.HashData(utf8Bytes[..written], hash);
+            return Convert.ToHexStringLower(hash);
+        }
+        finally
+        {
+            if (rented != null)
+            {
+                System.Buffers.ArrayPool<byte>.Shared.Return(rented);
+            }
+        }
     }
 }

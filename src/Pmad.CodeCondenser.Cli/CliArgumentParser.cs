@@ -215,12 +215,14 @@ public static class CliArgumentParser
 
         // Process positional arguments
         int positionalIdx = 0;
+        var explicitCommand = false;
         if (positionalArgs.Count > 0)
         {
             var first = positionalArgs[0].ToLowerInvariant();
             if (first is CliOptions.CommandAnalyze or CliOptions.CommandApply or CliOptions.CommandSnapshot)
             {
                 options.Command = first;
+                explicitCommand = true;
                 positionalIdx = 1;
             }
         }
@@ -235,7 +237,7 @@ public static class CliArgumentParser
         {
             options.Command = CliOptions.CommandApply;
         }
-        else if (options.UpdateSnapshot && options.Command == CliOptions.CommandAnalyze)
+        else if (options.UpdateSnapshot && !explicitCommand)
         {
             options.Command = CliOptions.CommandSnapshot;
         }

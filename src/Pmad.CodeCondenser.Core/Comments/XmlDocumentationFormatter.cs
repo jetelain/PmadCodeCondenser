@@ -102,6 +102,12 @@ public static class XmlDocumentationFormatter
         return FallbackFormatLines(xmlContent, availableWidth);
     }
 
+    private static readonly HashSet<string> StandardRootTags = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "summary", "remarks", "param", "typeparam", "returns", "value",
+        "exception", "example", "seealso", "inheritdoc", "include"
+    };
+
     private static string EnsureSummaryTag(string xmlContent)
     {
         // Check if <summary> or <summary ...> is already present
@@ -110,7 +116,7 @@ public static class XmlDocumentationFormatter
             return xmlContent;
         }
 
-        // Check if there are other root XML tags (e.g. <remarks>, <param>, <returns>)
+        // Check if there are other root XML tags (e.g. <remarks>, <param>, <returns>, <typeparam>)
         var firstTagMatch = Regex.Match(xmlContent, @"<\s*([a-zA-Z0-9_\-]+)[\s>]");
         if (firstTagMatch.Success)
         {
@@ -123,11 +129,9 @@ public static class XmlDocumentationFormatter
                 return $"<summary>{textBefore}</summary>\r\n{remainder}";
             }
 
-            // If there's no text before the first tag, wrap the first tag if it's not a known standard tag or wrap entire remainder
+            // If there's no text before the first tag, check if it's a known standard root tag
             var tagName = firstTagMatch.Groups[1].Value;
-            if (string.Equals(tagName, "remarks", StringComparison.OrdinalIgnoreCase) ||
-                string.Equals(tagName, "param", StringComparison.OrdinalIgnoreCase) ||
-                string.Equals(tagName, "returns", StringComparison.OrdinalIgnoreCase))
+            if (StandardRootTags.Contains(tagName))
             {
                 // Has standard tags but missing summary; don't break existing tags
                 return xmlContent;
@@ -178,6 +182,13 @@ public static class XmlDocumentationFormatter
             ? " " + string.Join(" ", attributes.Select(a => $"{a.Name.LocalName}=\"{a.Value}\""))
             : string.Empty;
 
+        // Render self-closing tags when empty (e.g. <inheritdoc /> or <seealso cref="..." />)
+        if (elem.IsEmpty)
+        {
+            resultLines.Add($"/// <{tagName}{attrString} />");
+            return;
+        }
+
         var openTag = $"<{tagName}{attrString}>";
         var closeTag = $"</{tagName}>";
 
@@ -212,6 +223,11 @@ public static class XmlDocumentationFormatter
             var lineTrimmed = rawLine.Trim();
             if (string.IsNullOrEmpty(lineTrimmed))
             {
+                // Preserve paragraph break if preceded by non-empty content
+                if (resultLines.Count > 0 && resultLines[^1] != $"/// {openTag}" && resultLines[^1] != "///")
+                {
+                    resultLines.Add("///");
+                }
                 continue;
             }
 

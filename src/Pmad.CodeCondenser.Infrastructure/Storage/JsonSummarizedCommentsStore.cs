@@ -104,9 +104,9 @@ public sealed class JsonSummarizedCommentsStore : ISummarizedCommentsStore
             }
 
             // Order entries deterministically by hash for clean git diffs
-            var sortedComments = new SortedDictionary<string, string>(
-                summarizedComments.ToDictionary(k => k.Key, v => v.Value),
-                StringComparer.Ordinal);
+            var sortedComments = summarizedComments is IDictionary<string, string> dict
+                ? new SortedDictionary<string, string>(dict, StringComparer.Ordinal)
+                : new SortedDictionary<string, string>(summarizedComments.ToDictionary(k => k.Key, v => v.Value), StringComparer.Ordinal);
 
             var model = new SummarizedCommentsDocument
             {

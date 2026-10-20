@@ -16,11 +16,11 @@ public sealed class MethodHasher : IMethodHasher
         ArgumentNullException.ThrowIfNull(normalizedMethod);
 
         var normalizedString = normalizedMethod.NormalizeWhitespace("", "").ToFullString();
-        int byteCount = Encoding.UTF8.GetByteCount(normalizedString);
+        int maxByteCount = Encoding.UTF8.GetMaxByteCount(normalizedString.Length);
         byte[]? rented = null;
-        Span<byte> utf8Bytes = byteCount <= 1024
-            ? stackalloc byte[byteCount]
-            : (rented = System.Buffers.ArrayPool<byte>.Shared.Rent(byteCount));
+        Span<byte> utf8Bytes = maxByteCount <= 1024
+            ? stackalloc byte[maxByteCount]
+            : (rented = System.Buffers.ArrayPool<byte>.Shared.Rent(maxByteCount));
 
         try
         {

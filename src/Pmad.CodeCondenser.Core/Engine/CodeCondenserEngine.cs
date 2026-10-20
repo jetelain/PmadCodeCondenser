@@ -73,7 +73,7 @@ public sealed class CodeCondenserEngine : ICodeCondenserEngine
         CancellationToken cancellationToken = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(targetPath);
-        settings ??= new CodeCondenserSettings();
+        var effectiveSettings = (settings ?? new CodeCondenserSettings()).Clone();
 
         var (baseDirectory, discoveredFiles) = ResolveFiles(targetPath);
         _lastBaseDirectory = baseDirectory;
@@ -106,7 +106,7 @@ public sealed class CodeCondenserEngine : ICodeCondenserEngine
         }
 
         // 2. Load baseline snapshot if store is available
-        var snapshotPath = ResolveSnapshotPath(baseDirectory, settings.SnapshotFilePath);
+        var snapshotPath = ResolveSnapshotPath(baseDirectory, effectiveSettings.SnapshotFilePath);
         AnalysisSnapshot? baseline = null;
         if (_snapshotStore != null)
         {
@@ -117,13 +117,13 @@ public sealed class CodeCondenserEngine : ICodeCondenserEngine
         var cache = WysiwygCommentCache.FromSnapshot(baseline);
 
         // Load stored summarized comments from git file if store is available
-        var summarizedPath = ResolveSnapshotPath(baseDirectory, settings.SummarizedCommentsFilePath);
+        var summarizedPath = ResolveSnapshotPath(baseDirectory, effectiveSettings.SummarizedCommentsFilePath);
         if (_summarizedCommentsStore != null)
         {
             var storedSummaries = await _summarizedCommentsStore.LoadAsync(summarizedPath, cancellationToken).ConfigureAwait(false);
             foreach (var hash in storedSummaries.Keys)
             {
-                settings.IgnoredCommentHashes.Add(hash);
+                effectiveSettings.IgnoredCommentHashes.Add(hash);
             }
         }
 
@@ -132,7 +132,7 @@ public sealed class CodeCondenserEngine : ICodeCondenserEngine
             foreach (var summaryText in baseline.CommentCache.Values)
             {
                 var summaryHash = VerboseComment.ComputeSha256(summaryText.Trim());
-                settings.IgnoredCommentHashes.Add(summaryHash);
+                effectiveSettings.IgnoredCommentHashes.Add(summaryHash);
             }
         }
 
@@ -154,7 +154,7 @@ public sealed class CodeCondenserEngine : ICodeCondenserEngine
         // 5. Parse syntax trees and extract comments & methods in parallel (if features are enabled)
         var fileResults = new (List<VerboseComment> Comments, List<MethodCloneInfo> Methods)[filesToScan.Count];
 
-        if (settings.EnableCommentSummarization || settings.EnableDuplicationDetection)
+        if (effectiveSettings.EnableCommentSummarization || effectiveSettings.EnableDuplicationDetection)
         {
             await Parallel.ForEachAsync(
                 filesToScan.Select((f, idx) => (f, idx)),
@@ -166,12 +166,12 @@ public sealed class CodeCondenserEngine : ICodeCondenserEngine
                     var sourceText = await File.ReadAllTextAsync(file, ct).ConfigureAwait(false);
                     var syntaxTree = CSharpSyntaxTree.ParseText(sourceText, path: file, cancellationToken: ct);
 
-                    var comments = settings.EnableCommentSummarization
-                        ? _commentExtractor.Extract(syntaxTree, file, settings).ToList()
+                    var comments = effectiveSettings.EnableCommentSummarization
+                        ? _commentExtractor.Extract(syntaxTree, file, effectiveSettings).ToList()
                         : [];
 
-                    var methods = settings.EnableDuplicationDetection
-                        ? _cloneDetector.ExtractMethods(syntaxTree, normalizedRelPath, settings).ToList()
+                    var methods = effectiveSettings.EnableDuplicationDetection
+                        ? _cloneDetector.ExtractMethods(syntaxTree, normalizedRelPath, effectiveSettings).ToList()
                         : [];
 
                     fileResults[item.idx] = (comments, methods);
@@ -189,7 +189,7 @@ public sealed class CodeCondenserEngine : ICodeCondenserEngine
 
         // 6. Detect Clones
         IReadOnlyList<CodeCloneGroup> cloneGroups;
-        if (!settings.EnableDuplicationDetection)
+        if (!effectiveSettings.EnableDuplicationDetection)
         {
             cloneGroups = [];
         }
@@ -225,7 +225,7 @@ public sealed class CodeCondenserEngine : ICodeCondenserEngine
         }
 
         // 7. Filter & Summarize comments via LLM
-        if (settings.EnableCommentSummarization && _commentSummarizer != null)
+        if (effectiveSettings.EnableCommentSummarization && _commentSummarizer != null)
         {
             var commentsToSummarize = (incremental && baseline != null)
                 ? _snapshotDiffer.FilterNewComments(allExtractedComments, baseline)
@@ -242,7 +242,7 @@ public sealed class CodeCondenserEngine : ICodeCondenserEngine
                 var summaries = await _commentSummarizer.SummarizeAsync(
                     commentsToSummarize,
                     cache.ToDictionary(),
-                    settings,
+                    effectiveSettings,
                     progress: progressHandler,
                     cancellationToken: cancellationToken).ConfigureAwait(false);
 
@@ -254,12 +254,12 @@ public sealed class CodeCondenserEngine : ICodeCondenserEngine
         if (_snapshotStore != null)
         {
             // When duplication detection is disabled, preserve baseline methods instead of clearing them
-            var methodsForSnapshot = settings.EnableDuplicationDetection
+            var methodsForSnapshot = effectiveSettings.EnableDuplicationDetection
                 ? allAnalyzedMethods
                 : (baseline != null ? [] : allAnalyzedMethods);
 
             // When comment summarization is disabled, preserve baseline comment cache
-            var cacheForSnapshot = settings.EnableCommentSummarization
+            var cacheForSnapshot = effectiveSettings.EnableCommentSummarization
                 ? cache.ToDictionary()
                 : (baseline?.CommentCache ?? cache.ToDictionary());
 
@@ -270,7 +270,7 @@ public sealed class CodeCondenserEngine : ICodeCondenserEngine
                 cacheForSnapshot);
 
             // If duplication detection was disabled, restore baseline method hashes
-            if (!settings.EnableDuplicationDetection && baseline?.MethodHashes != null)
+            if (!effectiveSettings.EnableDuplicationDetection && baseline?.MethodHashes != null)
             {
                 foreach (var (k, v) in baseline.MethodHashes)
                 {
@@ -447,21 +447,6 @@ public sealed class CodeCondenserEngine : ICodeCondenserEngine
         }
 
         await _snapshotStore.SaveAsync(snapshotPath, newSnapshot, cancellationToken).ConfigureAwait(false);
-
-        if (_summarizedCommentsStore != null && commentCache.Count > 0)
-        {
-            var summarizedPath = ResolveSnapshotPath(baseDirectory, settings.SummarizedCommentsFilePath);
-            var existingSummaries = await _summarizedCommentsStore.LoadAsync(summarizedPath, cancellationToken).ConfigureAwait(false);
-            var merged = new Dictionary<string, string>(existingSummaries, StringComparer.Ordinal);
-
-            foreach (var summaryText in commentCache.Values)
-            {
-                var appliedHash = VerboseComment.ComputeSha256(summaryText.Trim());
-                merged[appliedHash] = summaryText.Trim();
-            }
-
-            await _summarizedCommentsStore.SaveAsync(summarizedPath, merged, cancellationToken).ConfigureAwait(false);
-        }
 
         return newSnapshot;
     }

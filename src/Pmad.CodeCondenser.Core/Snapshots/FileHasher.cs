@@ -12,11 +12,11 @@ public sealed class FileHasher : IFileHasher
     public string ComputeHash(string content)
     {
         ArgumentNullException.ThrowIfNull(content);
-        int byteCount = Encoding.UTF8.GetByteCount(content);
+        int maxByteCount = Encoding.UTF8.GetMaxByteCount(content.Length);
         byte[]? rented = null;
-        Span<byte> utf8Bytes = byteCount <= 1024
-            ? stackalloc byte[byteCount]
-            : (rented = System.Buffers.ArrayPool<byte>.Shared.Rent(byteCount));
+        Span<byte> utf8Bytes = maxByteCount <= 1024
+            ? stackalloc byte[maxByteCount]
+            : (rented = System.Buffers.ArrayPool<byte>.Shared.Rent(maxByteCount));
 
         try
         {

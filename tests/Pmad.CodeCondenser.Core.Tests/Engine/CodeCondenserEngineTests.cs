@@ -377,6 +377,76 @@ public class CodeCondenserEngineTests : IDisposable
         analysis.VerboseComments.Should().BeEmpty();
     }
 
+    [Fact]
+    public async Task AnalyzeAsync_DoesNotMutateCallerSettingsIgnoredCommentHashes()
+    {
+        var file = Path.Combine(_testDir, "SettingsMutationTest.cs");
+        var comment = "// This is an already summarized comment that happens to still exceed fifty characters in total length";
+        var code = $$"""
+        namespace MyTest;
+        public class SettingsMutationTest
+        {
+            {{comment}}
+            public void TestMethod() {}
+        }
+        """;
+        await File.WriteAllTextAsync(file, code);
+
+        var hash = VerboseComment.ComputeSha256(comment.Trim());
+        var summarizedStore = new InMemorySummarizedCommentsStore();
+        summarizedStore.Stored[hash] = comment.Trim();
+
+        var engine = new CodeCondenserEngine(
+            snapshotStore: _snapshotStore,
+            commentSummarizer: _commentSummarizer,
+            summarizedCommentsStore: summarizedStore);
+
+        var settings = new CodeCondenserSettings { CommentLengthThreshold = 50 };
+        settings.IgnoredCommentHashes.Should().BeEmpty();
+
+        await engine.AnalyzeAsync(_testDir, settings);
+
+        // Caller's settings.IgnoredCommentHashes must remain empty and not be mutated by AnalyzeAsync
+        settings.IgnoredCommentHashes.Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task UpdateSnapshotBaselineAsync_DoesNotSaveUnappliedCandidateCommentsToSummarizedStore()
+    {
+        var file = Path.Combine(_testDir, "BaselineCandidateTest.cs");
+        var code = """
+        namespace MyTest;
+        public class BaselineCandidateTest
+        {
+            public void TestMethod() {}
+        }
+        """;
+        await File.WriteAllTextAsync(file, code);
+
+        // Preload snapshot with a candidate summary in CommentCache
+        var existingSnapshot = new AnalysisSnapshot
+        {
+            Version = 1,
+            CommentCache = new Dictionary<string, string>
+            {
+                ["candidate-hash"] = "// [Summarized] This candidate has NOT been applied to source files yet"
+            }
+        };
+        await _snapshotStore.SaveAsync("snapshot.json", existingSnapshot);
+
+        var summarizedStore = new InMemorySummarizedCommentsStore();
+        var engine = new CodeCondenserEngine(
+            snapshotStore: _snapshotStore,
+            commentSummarizer: _commentSummarizer,
+            summarizedCommentsStore: summarizedStore);
+
+        var settings = new CodeCondenserSettings();
+        await engine.UpdateSnapshotBaselineAsync(_testDir, settings);
+
+        // Unapplied candidate summaries in snapshot CommentCache must NOT be exported to summarized-comments.json
+        summarizedStore.Stored.Should().BeEmpty();
+    }
+
     private sealed class InMemorySummarizedCommentsStore : ISummarizedCommentsStore
     {
         public Dictionary<string, string> Stored { get; } = new(StringComparer.Ordinal);
