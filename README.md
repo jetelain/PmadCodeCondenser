@@ -73,6 +73,8 @@ pmad-codecondenser snapshot ./src
 | `-u, --update-snapshot` | `-u` | Refresh the snapshot baseline | `false` |
 | `--threshold-statements <n>` | `-ts` | Minimum statement count to analyze a method for clones | `8` |
 | `--threshold-comments <n>` | `-tc` | Minimum comment character length to flag as verbose | `100` |
+| `--threshold-xml-summary <n>` | `-txs` | Minimum content length for XML `<summary>` / `<remarks>` tags | `100` |
+| `--threshold-xml-param <n>` | `-txp` | Minimum content length for XML `<param>` tags | `50` |
 | `--model <name>` | `-m` | LLM model tag for comment summarization | `llama3.2:3b` |
 | `--endpoint <url>` | `-e` | Ollama endpoint URL | `http://localhost:11434` |
 | `--config <path>` | `-c` | Path to custom `codecondenser.json` configuration file | Auto-detected |
@@ -89,6 +91,8 @@ Pmad.CodeCondenser automatically searches for a `codecondenser.json` configurati
 ```json
 {
   "commentLengthThreshold": 100,
+  "xmlSummaryLengthThreshold": 100,
+  "xmlParamLengthThreshold": 50,
   "duplicationStatementThreshold": 8,
   "includeXmlDocumentation": true,
   "maxParallelLlmRequests": 4,

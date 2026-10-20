@@ -46,6 +46,16 @@ public sealed class CliOptions
     public int? ThresholdComments { get; set; }
 
     /// <summary>
+    /// Override minimum character length for XML &lt;summary&gt; and &lt;remarks&gt; tags.
+    /// </summary>
+    public int? ThresholdXmlSummary { get; set; }
+
+    /// <summary>
+    /// Override minimum character length for XML &lt;param&gt; tags.
+    /// </summary>
+    public int? ThresholdXmlParam { get; set; }
+
+    /// <summary>
     /// LLM model name override (e.g. "llama3.2:3b").
     /// </summary>
     public string? Model { get; set; }

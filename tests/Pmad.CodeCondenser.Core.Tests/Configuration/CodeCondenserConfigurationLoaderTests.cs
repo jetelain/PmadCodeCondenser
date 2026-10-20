@@ -68,6 +68,43 @@ public class CodeCondenserConfigurationLoaderTests : IDisposable
     }
 
     [Fact]
+    public void LoadFromString_ParsesXmlThresholdsCorrectly()
+    {
+        var json = """
+        {
+            "commentLengthThreshold": 90,
+            "xmlSummaryLengthThreshold": 70,
+            "xmlParamLengthThreshold": 35
+        }
+        """;
+
+        var settings = CodeCondenserConfigurationLoader.LoadFromString(json);
+
+        settings.CommentLengthThreshold.Should().Be(90);
+        settings.XmlSummaryLengthThreshold.Should().Be(70);
+        settings.XmlParamLengthThreshold.Should().Be(35);
+        settings.GetEffectiveXmlSummaryThreshold().Should().Be(70);
+        settings.GetEffectiveXmlRemarksThreshold().Should().Be(70);
+        settings.GetEffectiveXmlParamThreshold().Should().Be(35);
+    }
+
+    [Fact]
+    public void LoadFromString_ParsesXmlSummaryRemarksAliasCorrectly()
+    {
+        var json = """
+        {
+            "xmlSummaryRemarksLengthThreshold": 85
+        }
+        """;
+
+        var settings = CodeCondenserConfigurationLoader.LoadFromString(json);
+
+        settings.XmlSummaryLengthThreshold.Should().Be(85);
+        settings.GetEffectiveXmlSummaryThreshold().Should().Be(85);
+        settings.GetEffectiveXmlRemarksThreshold().Should().Be(85);
+    }
+
+    [Fact]
     public void Load_FindsDefaultFileInTargetDirectory()
     {
         var configPath = Path.Combine(_tempDirectory, CodeCondenserConfigurationLoader.DefaultConfigFileName);

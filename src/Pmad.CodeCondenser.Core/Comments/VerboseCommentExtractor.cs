@@ -87,7 +87,11 @@ public sealed class VerboseCommentExtractor : CSharpSyntaxWalker, ICommentExtrac
                 }
 
                 var text = trivia.ToString();
-                if (text.Length >= _settings.CommentLengthThreshold)
+                bool isVerbose = kind == CommentKind.XmlDocumentation
+                    ? XmlDocumentationParser.IsVerbose(trivia, text, _settings)
+                    : text.Length >= _settings.CommentLengthThreshold;
+
+                if (isVerbose)
                 {
                     string leadingWhitespace = string.Empty;
                     if (i > 0 && triviaList[i - 1].IsKind(SyntaxKind.WhitespaceTrivia))

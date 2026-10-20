@@ -86,6 +86,30 @@ public static class CliArgumentParser
                 continue;
             }
 
+            if (TryExtractOptionValue(args, ref i, "--threshold-xml-summary", "-txs", out var txsVal, out errorMessage))
+            {
+                if (errorMessage != null) return false;
+                if (!int.TryParse(txsVal, out var txs) || txs < 1)
+                {
+                    errorMessage = $"Invalid value for --threshold-xml-summary: '{txsVal}'. Must be a positive integer.";
+                    return false;
+                }
+                options.ThresholdXmlSummary = txs;
+                continue;
+            }
+
+            if (TryExtractOptionValue(args, ref i, "--threshold-xml-param", "-txp", out var txpVal, out errorMessage))
+            {
+                if (errorMessage != null) return false;
+                if (!int.TryParse(txpVal, out var txp) || txp < 1)
+                {
+                    errorMessage = $"Invalid value for --threshold-xml-param: '{txpVal}'. Must be a positive integer.";
+                    return false;
+                }
+                options.ThresholdXmlParam = txp;
+                continue;
+            }
+
             if (TryExtractOptionValue(args, ref i, "--model", "-m", out var modelVal, out errorMessage))
             {
                 if (errorMessage != null) return false;
@@ -211,6 +235,8 @@ public static class CliArgumentParser
           -u, --update-snapshot       Refresh the snapshot baseline
           -ts, --threshold-statements <n>  Minimum statements for clone detection (default: 8)
           -tc, --threshold-comments <n>    Minimum character length for verbose comments (default: 100)
+          -txs, --threshold-xml-summary <n> Minimum content length for XML summary/remarks (default: threshold-comments)
+          -txp, --threshold-xml-param <n>   Minimum content length for XML param (default: threshold-comments / 2)
           -m, --model <name>          Specify LLM model name (default: llama3.2:3b)
           -e, --endpoint <url>        Specify Ollama endpoint URL (default: http://localhost:11434)
           -c, --config <path>         Path to custom codecondenser.json configuration file

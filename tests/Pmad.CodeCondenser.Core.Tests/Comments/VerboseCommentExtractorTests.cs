@@ -1,4 +1,5 @@
 using FluentAssertions;
+using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Pmad.CodeCondenser.Core.Comments;
 using Pmad.CodeCondenser.Core.Configuration;
@@ -202,5 +203,120 @@ public class VerboseCommentExtractorTests
 
         act1.Should().Throw<ArgumentNullException>();
         act2.Should().Throw<ArgumentNullException>();
+    }
+
+    [Fact]
+    public void Extract_XmlComment_WithMultipleShortTags_TotalLengthOver100_IsNotExtracted()
+    {
+        var code = """
+            public class TestClass
+            {
+                /// <summary>
+                /// Gets or sets user identifier.
+                /// </summary>
+                /// <param name="id">The user ID.</param>
+                /// <param name="name">The name.</param>
+                /// <returns>True if created.</returns>
+                public void Execute(int id, string name) {}
+            }
+            """;
+
+        var tree = CSharpSyntaxTree.ParseText(code);
+        var settings = new CodeCondenserSettings { CommentLengthThreshold = 100 };
+
+        var comments = _extractor.Extract(tree, "TestClass.cs", settings);
+
+        // Even though total raw text of comment is well over 100 characters,
+        // none of the root tags exceed their threshold (summary < 100, param < 50, returns < 100).
+        comments.Should().BeEmpty();
+    }
+
+    [Fact]
+    public void Extract_XmlComment_WithVerboseParam_IsExtracted()
+    {
+        var longParamText = "This parameter represents the user ID that was generated during initial registration and must be positive.";
+        var code = $$"""
+            public class TestClass
+            {
+                /// <summary>
+                /// Short summary.
+                /// </summary>
+                /// <param name="id">{{longParamText}}</param>
+                public void Execute(int id) {}
+            }
+            """;
+
+        var tree = CSharpSyntaxTree.ParseText(code);
+        var settings = new CodeCondenserSettings { CommentLengthThreshold = 100 };
+
+        var comments = _extractor.Extract(tree, "TestClass.cs", settings);
+
+        // Summary is short (< 100), but param is 107 characters (>= default 50 threshold for param)
+        comments.Should().HaveCount(1);
+        comments[0].Kind.Should().Be(CommentKind.XmlDocumentation);
+        comments[0].OriginalText.Should().Contain(longParamText);
+    }
+
+    [Fact]
+    public void Extract_XmlComment_WithVerboseRemarks_IsExtracted()
+    {
+        var longRemarksText = new string('m', 120);
+        var code = $$"""
+            public class TestClass
+            {
+                /// <summary>
+                /// Short summary.
+                /// </summary>
+                /// <remarks>
+                /// {{longRemarksText}}
+                /// </remarks>
+                public void Execute() {}
+            }
+            """;
+
+        var tree = CSharpSyntaxTree.ParseText(code);
+        var settings = new CodeCondenserSettings { CommentLengthThreshold = 100 };
+
+        var comments = _extractor.Extract(tree, "TestClass.cs", settings);
+
+        comments.Should().HaveCount(1);
+        comments[0].Kind.Should().Be(CommentKind.XmlDocumentation);
+    }
+
+    [Fact]
+    public void Extract_XmlComment_WithCustomThresholds_RespectsXmlSettings()
+    {
+        var code = """
+            public class TestClass
+            {
+                /// <summary>
+                /// A medium length summary that has around sixty characters here.
+                /// </summary>
+                /// <param name="x">Param with thirty characters.</param>
+                public void Execute(int x) {}
+            }
+            """;
+
+        var tree = CSharpSyntaxTree.ParseText(code);
+
+        // Under default settings: summary (~65 chars < 100) and param (~30 chars < 50) are not verbose
+        var defaultSettings = new CodeCondenserSettings { CommentLengthThreshold = 100 };
+        _extractor.Extract(tree, "TestClass.cs", defaultSettings).Should().BeEmpty();
+
+        // Under custom settings with XmlSummaryLengthThreshold = 50: summary is verbose (65 >= 50)
+        var summarySettings = new CodeCondenserSettings
+        {
+            CommentLengthThreshold = 100,
+            XmlSummaryLengthThreshold = 50
+        };
+        _extractor.Extract(tree, "TestClass.cs", summarySettings).Should().HaveCount(1);
+
+        // Under custom settings with XmlParamLengthThreshold = 25: param is verbose (30 >= 25)
+        var paramSettings = new CodeCondenserSettings
+        {
+            CommentLengthThreshold = 100,
+            XmlParamLengthThreshold = 25
+        };
+        _extractor.Extract(tree, "TestClass.cs", paramSettings).Should().HaveCount(1);
     }
 }

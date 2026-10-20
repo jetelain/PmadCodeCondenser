@@ -60,6 +60,16 @@ public static class Program
             settings.CommentLengthThreshold = options.ThresholdComments.Value;
         }
 
+        if (options.ThresholdXmlSummary.HasValue)
+        {
+            settings.XmlSummaryLengthThreshold = options.ThresholdXmlSummary.Value;
+        }
+
+        if (options.ThresholdXmlParam.HasValue)
+        {
+            settings.XmlParamLengthThreshold = options.ThresholdXmlParam.Value;
+        }
+
         if (!string.IsNullOrWhiteSpace(options.Model))
         {
             settings.Ollama.Model = options.Model;

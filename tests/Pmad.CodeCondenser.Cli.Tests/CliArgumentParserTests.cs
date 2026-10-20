@@ -91,6 +91,46 @@ public class CliArgumentParserTests
     }
 
     [Fact]
+    public void TryParse_XmlThresholdOptions_ParsesIntegerValues()
+    {
+        var success = CliArgumentParser.TryParse(
+            ["--threshold-xml-summary", "80", "-txp", "35"],
+            out var options,
+            out var error);
+
+        success.Should().BeTrue();
+        error.Should().BeNull();
+        options.ThresholdXmlSummary.Should().Be(80);
+        options.ThresholdXmlParam.Should().Be(35);
+    }
+
+    [Fact]
+    public void TryParse_XmlThresholdOptionsWithEquals_ParsesIntegerValues()
+    {
+        var success = CliArgumentParser.TryParse(
+            ["-txs=75", "--threshold-xml-param=25"],
+            out var options,
+            out var error);
+
+        success.Should().BeTrue();
+        error.Should().BeNull();
+        options.ThresholdXmlSummary.Should().Be(75);
+        options.ThresholdXmlParam.Should().Be(25);
+    }
+
+    [Fact]
+    public void TryParse_InvalidXmlThreshold_ReturnsError()
+    {
+        var success1 = CliArgumentParser.TryParse(["--threshold-xml-summary", "invalid"], out _, out var error1);
+        success1.Should().BeFalse();
+        error1.Should().Contain("Invalid value for --threshold-xml-summary");
+
+        var success2 = CliArgumentParser.TryParse(["--threshold-xml-param", "0"], out _, out var error2);
+        success2.Should().BeFalse();
+        error2.Should().Contain("Invalid value for --threshold-xml-param");
+    }
+
+    [Fact]
     public void TryParse_EqualsSyntax_ParsesCorrectly()
     {
         var success = CliArgumentParser.TryParse(
