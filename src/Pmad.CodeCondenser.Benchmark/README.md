@@ -187,6 +187,9 @@ The benchmark produces multi-dimensional metrics for each model:
 | **`nemotron-3-nano:30b-cloud`** | Cloud | **9.68** | 9.44 | 9.88 | **10.00** | ⚡ **Fastest & Lightest Cloud** (sub-second 424 ms, free tier) |
 | **`qwen3.5:2b`** | Local | **9.54** | 9.40 | 9.72 | **10.00** | ⚡ **Fastest Local** (lowest VRAM footprint) |
 
+> [!TIP]
+> **Free Cloud Usage**: The proposed cloud models (`gpt-oss:20b-cloud`, `nemotron-3-nano:30b-cloud`, `nemotron-3-super:cloud`) are hosted via Ollama Cloud. The included free tier quota typically allows summarizing up to **50,000 comments**. To use them, create a free account at [ollama.com](https://ollama.com) and log in with `ollama login`.
+
 ---
 
 ## Output Files
