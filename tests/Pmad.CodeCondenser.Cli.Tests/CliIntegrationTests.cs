@@ -313,6 +313,60 @@ public class CliIntegrationTests : IDisposable
         output.ToString().Should().Contain("No structural code duplication detected.");
     }
 
+    [Fact]
+    public async Task RunAsync_ContextSizeOverride_AppliesToSettings()
+    {
+        CodeCondenserSettings? capturedSettings = null;
+        var summarizer = new SettingsCapturingSummarizer(s => capturedSettings = s);
+        var engine = new CodeCondenserEngine(
+            snapshotStore: new JsonSnapshotStore(),
+            commentSummarizer: summarizer);
+
+        var file = Path.Combine(_testDirectory, "ContextSizeTest.cs");
+        await File.WriteAllTextAsync(file, """
+        namespace MyCompany;
+        public class ContextSizeTest
+        {
+            // This is a very long comment that exceeds the default threshold of one hundred characters to trigger summarizer invocation.
+            public void SmallMethod() { }
+        }
+        """);
+
+        using var output = new StringWriter();
+        using var error = new StringWriter();
+
+        var exitCode = await Program.RunAsync(
+            [_testDirectory, "--apply", "--context-size", "16384", "--no-color"],
+            output,
+            error,
+            customEngine: engine);
+
+        exitCode.Should().Be(0);
+        capturedSettings.Should().NotBeNull();
+        capturedSettings!.Ollama.ContextSize.Should().Be(16384);
+    }
+
+    private sealed class SettingsCapturingSummarizer : ICommentSummarizer
+    {
+        private readonly Action<CodeCondenserSettings> _onSummarize;
+        public SettingsCapturingSummarizer(Action<CodeCondenserSettings> onSummarize) => _onSummarize = onSummarize;
+
+        public Task<IReadOnlyDictionary<string, string>> SummarizeAsync(
+            IReadOnlyList<VerboseComment> comments,
+            IReadOnlyDictionary<string, string> existingCache,
+            CodeCondenserSettings settings,
+            CancellationToken cancellationToken = default)
+        {
+            _onSummarize(settings);
+            var results = new Dictionary<string, string>(existingCache);
+            foreach (var comment in comments)
+            {
+                results[comment.ContentHash] = "// Condensed comment";
+            }
+            return Task.FromResult<IReadOnlyDictionary<string, string>>(results);
+        }
+    }
+
     private sealed class MockSummarizer : ICommentSummarizer
     {
         public Task<IReadOnlyDictionary<string, string>> SummarizeAsync(

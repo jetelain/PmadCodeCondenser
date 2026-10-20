@@ -80,6 +80,11 @@ public static class Program
             settings.Ollama.Endpoint = options.Endpoint;
         }
 
+        if (options.ContextSize.HasValue)
+        {
+            settings.Ollama.ContextSize = options.ContextSize.Value;
+        }
+
         var engine = customEngine ?? new CodeCondenserEngine(
             snapshotStore: new JsonSnapshotStore(),
             commentSummarizer: new CommentSummarizer(new OllamaClientFactory()));

@@ -21,6 +21,7 @@ internal sealed class TestChatClient : IChatClient
 
     public int MaxObservedConcurrency => _maxObservedConcurrency;
     public int TotalCalls => _totalCalls;
+    public ChatOptions? LastOptions { get; private set; }
 
     public ChatClientMetadata Metadata => new("TestChatClient");
 
@@ -29,6 +30,7 @@ internal sealed class TestChatClient : IChatClient
         ChatOptions? options = null,
         CancellationToken cancellationToken = default)
     {
+        LastOptions = options;
         Interlocked.Increment(ref _totalCalls);
         int current = Interlocked.Increment(ref _concurrentCalls);
 

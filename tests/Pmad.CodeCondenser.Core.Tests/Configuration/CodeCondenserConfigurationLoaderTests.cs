@@ -33,7 +33,7 @@ public class CodeCondenserConfigurationLoaderTests : IDisposable
         settings.MaxParallelLlmRequests.Should().Be(4);
         settings.Provider.Should().Be("Ollama");
         settings.Ollama.Endpoint.Should().Be("http://localhost:11434");
-        settings.Ollama.Model.Should().Be("llama3.2:3b");
+        settings.Ollama.Model.Should().Be("gemma4:e4b");
         settings.SnapshotFilePath.Should().Be(".codecondenser/snapshot.json");
     }
 
@@ -49,7 +49,8 @@ public class CodeCondenserConfigurationLoaderTests : IDisposable
             "provider": "CustomLlm",
             "ollama": {
                 "endpoint": "http://remote:11434",
-                "model": "deepseek-coder:6.7b"
+                "model": "deepseek-coder:6.7b",
+                "contextSize": 16384
             },
             "snapshotFilePath": "custom-snapshot.json"
         }
@@ -64,6 +65,7 @@ public class CodeCondenserConfigurationLoaderTests : IDisposable
         settings.Provider.Should().Be("CustomLlm");
         settings.Ollama.Endpoint.Should().Be("http://remote:11434");
         settings.Ollama.Model.Should().Be("deepseek-coder:6.7b");
+        settings.Ollama.ContextSize.Should().Be(16384);
         settings.SnapshotFilePath.Should().Be("custom-snapshot.json");
     }
 

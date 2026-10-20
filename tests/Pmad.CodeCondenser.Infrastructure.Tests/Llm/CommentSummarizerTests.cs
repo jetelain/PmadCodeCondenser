@@ -169,4 +169,82 @@ public class CommentSummarizerTests
         await act2.Should().ThrowAsync<ArgumentNullException>();
         await act3.Should().ThrowAsync<ArgumentNullException>();
     }
+
+    [Fact]
+    public async Task SummarizeAsync_DefaultSettings_PassesContextSize24576AndDisablesThinking()
+    {
+        var client = new TestChatClient(_ => "Summary");
+        var summarizer = new CommentSummarizer(client);
+        var comments = new[] { CreateComment("// " + new string('d', 120)) };
+        var settings = new CodeCondenserSettings();
+
+        await summarizer.SummarizeAsync(comments, new Dictionary<string, string>(), settings);
+
+        client.LastOptions.Should().NotBeNull();
+        client.LastOptions!.AdditionalProperties.Should().NotBeNull();
+        client.LastOptions.AdditionalProperties!["think"].Should().Be(false);
+        client.LastOptions.AdditionalProperties["num_ctx"].Should().Be(24576);
+    }
+
+    [Fact]
+    public async Task SummarizeAsync_CustomContextSize_PassesCustomContextSizeToChatOptions()
+    {
+        var client = new TestChatClient(_ => "Summary");
+        var summarizer = new CommentSummarizer(client);
+        var comments = new[] { CreateComment("// " + new string('e', 120)) };
+        var settings = new CodeCondenserSettings
+        {
+            Ollama = { ContextSize = 16384 }
+        };
+
+        await summarizer.SummarizeAsync(comments, new Dictionary<string, string>(), settings);
+
+        client.LastOptions.Should().NotBeNull();
+        client.LastOptions!.AdditionalProperties.Should().NotBeNull();
+        client.LastOptions.AdditionalProperties!["think"].Should().Be(false);
+        client.LastOptions.AdditionalProperties["num_ctx"].Should().Be(16384);
+    }
+
+    [Fact]
+    public async Task OllamaApiClient_ChatOptionsMapping_IncludesNumCtxAndDisablesThinkingInJsonPayload()
+    {
+        string capturedJson = "";
+        var handler = new DelegatingHandlerStub(async (request, ct) =>
+        {
+            if (request.Content != null)
+            {
+                capturedJson = await request.Content.ReadAsStringAsync(ct);
+            }
+            return new HttpResponseMessage(System.Net.HttpStatusCode.OK)
+            {
+                Content = new StringContent("{\"message\":{\"role\":\"assistant\",\"content\":\"hello\"},\"done\":true}")
+            };
+        });
+
+        using var http = new HttpClient(handler) { BaseAddress = new Uri("http://localhost:11434") };
+        var ollama = new OllamaSharp.OllamaApiClient(http, "qwen3.5:4b", (System.Text.Json.Serialization.JsonSerializerContext?)null);
+        var chatClient = (Microsoft.Extensions.AI.IChatClient)ollama;
+
+        var chatOptions = new ChatOptions
+        {
+            AdditionalProperties = new AdditionalPropertiesDictionary
+            {
+                ["think"] = false,
+                ["num_ctx"] = 24576
+            }
+        };
+
+        var response = await chatClient.GetResponseAsync(new[] { new ChatMessage(ChatRole.User, "hi") }, chatOptions);
+
+        response.Should().NotBeNull();
+        capturedJson.Should().Contain("\"num_ctx\":24576");
+        capturedJson.Should().Contain("\"think\":false");
+    }
+
+    private class DelegatingHandlerStub : HttpMessageHandler
+    {
+        private readonly Func<HttpRequestMessage, CancellationToken, Task<HttpResponseMessage>> _handler;
+        public DelegatingHandlerStub(Func<HttpRequestMessage, CancellationToken, Task<HttpResponseMessage>> handler) => _handler = handler;
+        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken) => _handler(request, cancellationToken);
+    }
 }

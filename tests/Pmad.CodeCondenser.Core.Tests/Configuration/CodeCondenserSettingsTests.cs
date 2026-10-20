@@ -23,7 +23,8 @@ public class CodeCondenserSettingsTests
         settings.Provider.Should().Be("Ollama");
         settings.Ollama.Should().NotBeNull();
         settings.Ollama.Endpoint.Should().Be("http://localhost:11434");
-        settings.Ollama.Model.Should().Be("llama3.2:3b");
+        settings.Ollama.Model.Should().Be("gemma4:e4b");
+        settings.Ollama.ContextSize.Should().Be(24576);
         settings.SnapshotFilePath.Should().Be(".codecondenser/snapshot.json");
     }
 

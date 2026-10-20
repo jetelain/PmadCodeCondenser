@@ -165,13 +165,36 @@ public class CliArgumentParserTests
     public void TryParse_OllamaSettings_ParsesModelAndEndpoint()
     {
         var success = CliArgumentParser.TryParse(
-            ["--model", "mistral:7b", "--endpoint", "http://ai.local:11434"],
+            ["--model", "mistral:7b", "--endpoint", "http://ai.local:11434", "--context-size", "16384"],
             out var options,
             out var error);
 
         success.Should().BeTrue();
         options.Model.Should().Be("mistral:7b");
         options.Endpoint.Should().Be("http://ai.local:11434");
+        options.ContextSize.Should().Be(16384);
+    }
+
+    [Fact]
+    public void TryParse_ContextSizeShortOption_ParsesCorrectly()
+    {
+        var success = CliArgumentParser.TryParse(["-cs=32768"], out var options, out var error);
+
+        success.Should().BeTrue();
+        error.Should().BeNull();
+        options.ContextSize.Should().Be(32768);
+    }
+
+    [Theory]
+    [InlineData("not-a-number")]
+    [InlineData("256")] // < 512
+    [InlineData("-1")]
+    public void TryParse_InvalidContextSize_ReturnsError(string value)
+    {
+        var success = CliArgumentParser.TryParse(["--context-size", value], out _, out var error);
+
+        success.Should().BeFalse();
+        error.Should().Contain("Invalid value for --context-size");
     }
 
     [Fact]

@@ -56,7 +56,7 @@ public sealed class CliOptions
     public int? ThresholdXmlParam { get; set; }
 
     /// <summary>
-    /// LLM model name override (e.g. "llama3.2:3b").
+    /// LLM model name override (e.g. "gemma4:e4b").
     /// </summary>
     public string? Model { get; set; }
 
@@ -64,6 +64,11 @@ public sealed class CliOptions
     /// Ollama endpoint URL override (e.g. "http://localhost:11434").
     /// </summary>
     public string? Endpoint { get; set; }
+
+    /// <summary>
+    /// Context window size override for LLM requests (e.g. 24576).
+    /// </summary>
+    public int? ContextSize { get; set; }
 
     /// <summary>
     /// Optional explicit path to codecondenser.json configuration file.

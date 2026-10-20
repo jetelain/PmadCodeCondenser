@@ -13,7 +13,13 @@ public sealed class OllamaSettings
 
     /// <summary>
     /// Model tag to use for comment summarization.
-    /// Default is "llama3.2:3b".
+    /// Default is "gemma4:e4b".
     /// </summary>
-    public string Model { get; set; } = "llama3.2:3b";
+    public string Model { get; set; } = "gemma4:e4b";
+
+    /// <summary>
+    /// Context window size (num_ctx) for Ollama model requests.
+    /// Default is 24576 (24k tokens).
+    /// </summary>
+    public int ContextSize { get; set; } = 24576;
 }

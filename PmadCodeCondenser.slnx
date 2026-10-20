@@ -3,10 +3,12 @@
     <Project Path="src/Pmad.CodeCondenser.Cli/Pmad.CodeCondenser.Cli.csproj" />
     <Project Path="src/Pmad.CodeCondenser.Core/Pmad.CodeCondenser.Core.csproj" />
     <Project Path="src/Pmad.CodeCondenser.Infrastructure/Pmad.CodeCondenser.Infrastructure.csproj" />
+    <Project Path="src/Pmad.CodeCondenser.Benchmark/Pmad.CodeCondenser.Benchmark.csproj" />
   </Folder>
   <Folder Name="/tests/">
     <Project Path="tests/Pmad.CodeCondenser.Cli.Tests/Pmad.CodeCondenser.Cli.Tests.csproj" />
     <Project Path="tests/Pmad.CodeCondenser.Core.Tests/Pmad.CodeCondenser.Core.Tests.csproj" />
     <Project Path="tests/Pmad.CodeCondenser.Infrastructure.Tests/Pmad.CodeCondenser.Infrastructure.Tests.csproj" />
+    <Project Path="tests/Pmad.CodeCondenser.Benchmark.Tests/Pmad.CodeCondenser.Benchmark.Tests.csproj" />
   </Folder>
 </Solution>

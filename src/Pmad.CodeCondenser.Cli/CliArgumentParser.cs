@@ -124,6 +124,18 @@ public static class CliArgumentParser
                 continue;
             }
 
+            if (TryExtractOptionValue(args, ref i, "--context-size", "-cs", out var ctxVal, out errorMessage))
+            {
+                if (errorMessage != null) return false;
+                if (!int.TryParse(ctxVal, out var ctx) || ctx < 512)
+                {
+                    errorMessage = $"Invalid value for --context-size: '{ctxVal}'. Must be an integer >= 512.";
+                    return false;
+                }
+                options.ContextSize = ctx;
+                continue;
+            }
+
             if (TryExtractOptionValue(args, ref i, "--config", "-c", out var configVal, out errorMessage))
             {
                 if (errorMessage != null) return false;
@@ -198,7 +210,7 @@ public static class CliArgumentParser
         if (string.Equals(arg, longName, StringComparison.OrdinalIgnoreCase) ||
             string.Equals(arg, shortName, StringComparison.OrdinalIgnoreCase))
         {
-            if (index + 1 < args.Length && !args[index + 1].StartsWith('-'))
+            if (index + 1 < args.Length && (!args[index + 1].StartsWith('-') || int.TryParse(args[index + 1], out _)))
             {
                 index++;
                 value = args[index];
@@ -237,8 +249,9 @@ public static class CliArgumentParser
           -tc, --threshold-comments <n>    Minimum character length for verbose comments (default: 100)
           -txs, --threshold-xml-summary <n> Minimum content length for XML summary/remarks (default: threshold-comments)
           -txp, --threshold-xml-param <n>   Minimum content length for XML param (default: threshold-comments / 2)
-          -m, --model <name>          Specify LLM model name (default: llama3.2:3b)
+          -m, --model <name>          Specify LLM model name (default: gemma4:e4b)
           -e, --endpoint <url>        Specify Ollama endpoint URL (default: http://localhost:11434)
+          -cs, --context-size <n>     Specify context window size in tokens (default: 24576)
           -c, --config <path>         Path to custom codecondenser.json configuration file
           --no-color                  Disable ANSI color formatting
           -h, --help                  Show command line help and options

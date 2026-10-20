@@ -78,7 +78,7 @@ public sealed class CommentSummarizer : ICommentSummarizer
         {
             try
             {
-                var summary = await SummarizeCommentAsync(client, comment, ct).ConfigureAwait(false);
+                var summary = await SummarizeCommentAsync(client, comment, settings, ct).ConfigureAwait(false);
                 lock (results)
                 {
                     results[comment.ContentHash] = summary;
@@ -100,6 +100,7 @@ public sealed class CommentSummarizer : ICommentSummarizer
     private static async Task<string> SummarizeCommentAsync(
         IChatClient client,
         VerboseComment comment,
+        CodeCondenserSettings settings,
         CancellationToken cancellationToken)
     {
         string systemPrompt;
@@ -122,7 +123,16 @@ public sealed class CommentSummarizer : ICommentSummarizer
             new(ChatRole.User, userPrompt)
         };
 
-        var response = await client.GetResponseAsync(messages, cancellationToken: cancellationToken).ConfigureAwait(false);
+        var chatOptions = new ChatOptions
+        {
+            AdditionalProperties = new AdditionalPropertiesDictionary
+            {
+                ["think"] = false,
+                ["num_ctx"] = settings.Ollama.ContextSize > 0 ? settings.Ollama.ContextSize : 24576
+            }
+        };
+
+        var response = await client.GetResponseAsync(messages, chatOptions, cancellationToken: cancellationToken).ConfigureAwait(false);
         var rawText = response.Text ?? string.Empty;
         var cleaned = CommentPrompts.CleanModelResponse(rawText, comment.Kind);
 
