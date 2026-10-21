@@ -193,6 +193,68 @@ public sealed class CodeCondenserSettings
     public int MaxCommentLineLength { get; set; } = 120;
 
     /// <summary>
+    /// Glob patterns of files and directories to include in analysis.
+    /// If empty, all C# files under the target directory are considered.
+    /// Default is empty.
+    /// </summary>
+    public IList<string> Include { get; set; } = new List<string>();
+
+    /// <summary>
+    /// User-defined glob patterns of files and directories to exclude from analysis.
+    /// Default is empty.
+    /// </summary>
+    public IList<string> Exclude { get; set; } = new List<string>();
+
+    /// <summary>
+    /// When true, automatically ignores common build, tooling, and artifact directories (bin, obj, .git, .vs, .codecondenser, node_modules, testresults).
+    /// Default is true.
+    /// </summary>
+    public bool UseDefaultExcludes { get; set; } = true;
+
+    /// <summary>
+    /// When true, completely skips scanning and reporting test files.
+    /// Default is false.
+    /// </summary>
+    public bool ExcludeTests { get; set; } = false;
+
+    /// <summary>
+    /// When false (default), test clones are reported for review but do not count toward CI tolerance failure.
+    /// When true, test clones count toward CI gate failure.
+    /// </summary>
+    public bool EnforceTestDuplication { get; set; } = false;
+
+    /// <summary>
+    /// Glob patterns used to categorize files as unit/integration tests for isolated reporting and guidance.
+    /// </summary>
+    public IList<string> TestPaths { get; set; } = new List<string>
+    {
+        "tests/**",
+        "test/**",
+        "**/*.Tests/**",
+        "**/*.Test/**",
+        "**/*Test.cs",
+        "**/*Tests.cs"
+    };
+
+    /// <summary>
+    /// When true, automatically ignores auto-generated files and types.
+    /// Default is true.
+    /// </summary>
+    public bool ExcludeGeneratedCode { get; set; } = true;
+
+    /// <summary>
+    /// Glob patterns matching compiler or tooling generated code.
+    /// </summary>
+    public IList<string> GeneratedCodePatterns { get; set; } = new List<string>
+    {
+        "**/*.Designer.cs",
+        "**/*.g.cs",
+        "**/*.generated.cs",
+        "**/*ModelSnapshot.cs",
+        "**/Migrations/**"
+    };
+
+    /// <summary>
     /// Set of comment content hashes that have already been summarized or marked to ignore.
     /// </summary>
     public ISet<string> IgnoredCommentHashes { get; set; } = new HashSet<string>(StringComparer.Ordinal);
@@ -225,6 +287,14 @@ public sealed class CodeCondenserSettings
             SnapshotFilePath = SnapshotFilePath,
             SummarizedCommentsFilePath = SummarizedCommentsFilePath,
             MaxCommentLineLength = MaxCommentLineLength,
+            Include = new List<string>(Include),
+            Exclude = new List<string>(Exclude),
+            UseDefaultExcludes = UseDefaultExcludes,
+            ExcludeTests = ExcludeTests,
+            EnforceTestDuplication = EnforceTestDuplication,
+            TestPaths = new List<string>(TestPaths),
+            ExcludeGeneratedCode = ExcludeGeneratedCode,
+            GeneratedCodePatterns = new List<string>(GeneratedCodePatterns),
             IgnoredCommentHashes = new HashSet<string>(IgnoredCommentHashes, StringComparer.Ordinal)
         };
     }

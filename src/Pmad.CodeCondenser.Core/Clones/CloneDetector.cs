@@ -68,15 +68,69 @@ public sealed class CloneDetector : ICloneDetector
     /// <inheritdoc />
     public IReadOnlyList<CodeCloneGroup> GroupClones(IEnumerable<MethodCloneInfo> methods)
     {
+        return GroupClones(methods, fileClassifier: null);
+    }
+
+    /// <inheritdoc />
+    public IReadOnlyList<CodeCloneGroup> GroupClones(
+        IEnumerable<MethodCloneInfo> methods,
+        Func<string, FileCategory>? fileClassifier)
+    {
         ArgumentNullException.ThrowIfNull(methods);
 
         return methods
             .GroupBy(m => m.NormalizedHash)
             .Where(g => g.Count() > 1)
-            .OrderByDescending(g => g.Count())
-            .ThenBy(g => g.Key)
-            .Select(g => new CodeCloneGroup(g.Key, g.ToList()))
+            .Select(g =>
+            {
+                var methodList = g.ToList();
+                var statementCount = methodList.Count > 0 ? methodList.Max(m => m.StatementCount) : 0;
+                var impactScore = statementCount * Math.Max(0, methodList.Count - 1);
+                var category = DetermineCategory(methodList, fileClassifier);
+                return new CodeCloneGroup(g.Key, methodList, category, impactScore);
+            })
+            .OrderByDescending(g => g.ImpactScore)
+            .ThenByDescending(g => g.StatementCount)
+            .ThenBy(g => g.NormalizedHash, StringComparer.Ordinal)
             .ToList();
+    }
+
+    private static CloneCategory DetermineCategory(
+        IReadOnlyList<MethodCloneInfo> methods,
+        Func<string, FileCategory>? fileClassifier)
+    {
+        if (fileClassifier == null || methods.Count == 0)
+        {
+            return CloneCategory.Production;
+        }
+
+        bool hasProduction = false;
+        bool hasTest = false;
+
+        foreach (var method in methods)
+        {
+            var cat = fileClassifier(method.FilePath);
+            if (cat == FileCategory.Test)
+            {
+                hasTest = true;
+            }
+            else
+            {
+                hasProduction = true;
+            }
+        }
+
+        if (hasProduction && hasTest)
+        {
+            return CloneCategory.CrossBoundary;
+        }
+
+        if (hasTest)
+        {
+            return CloneCategory.Test;
+        }
+
+        return CloneCategory.Production;
     }
 
     /// <inheritdoc />

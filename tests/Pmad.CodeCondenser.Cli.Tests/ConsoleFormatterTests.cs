@@ -46,11 +46,33 @@ public class ConsoleFormatterTests
         formatter.PrintCloneGroups(writer, [group], ".");
 
         var output = writer.ToString();
-        output.Should().Contain("Found 1 code duplication cluster(s):");
-        output.Should().Contain("[DUPLICATION CLUSTER #1]");
+        output.Should().Contain("Found 1 Production Duplication Cluster(s) (Highest Impact):");
+        output.Should().Contain("[PRODUCTION CLUSTER #1]");
         output.Should().Contain("src/Service1.cs:10-20 in Process (8 statements)");
         output.Should().Contain("src/Service2.cs:15-25 in Execute (8 statements)");
         output.Should().Contain("Recommendation: Extract duplicate structural logic");
+        output.Should().Contain("To suppress: Add '// [codecondenser:ignore-duplicate]'");
+    }
+
+    [Fact]
+    public void PrintCloneGroups_WithTestClones_PrintsTestClusterDetails()
+    {
+        var formatter = new ConsoleFormatter(enableColor: false);
+        using var writer = new StringWriter();
+
+        var methods = new List<MethodCloneInfo>
+        {
+            new("tests/Service1Tests.cs", "Test1", 10, 20, 8, "hashTest123", "void Test1()"),
+            new("tests/Service2Tests.cs", "Test2", 15, 25, 8, "hashTest123", "void Test2()")
+        };
+        var group = new CodeCloneGroup("hashTest123", methods, CloneCategory.Test, ImpactScore: 8);
+
+        formatter.PrintCloneGroups(writer, [group], ".");
+
+        var output = writer.ToString();
+        output.Should().Contain("Found 1 Test Duplication Cluster(s) (Review for DAMP vs DRY):");
+        output.Should().Contain("[TEST CLUSTER #1]");
+        output.Should().Contain("Recommendation: Consider parameterized tests ([Theory] + [InlineData])");
     }
 
     [Fact]

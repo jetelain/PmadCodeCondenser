@@ -204,6 +204,11 @@ jobs:
 | `-i, --incremental` | `-i` | Use snapshot baseline to analyze only new/modified files | `false` |
 | `-u, --update-snapshot` | `-u` | Refresh the snapshot baseline | `false` |
 | `-dt, --duplication-tolerance <n>` | `-dt` | Maximum new clone clusters tolerated in incremental mode | `0` |
+| `--include <pattern>` | | Add glob pattern of files/directories to include (multi-value) | `[]` *(all .cs files)* |
+| `--exclude <pattern>` | | Add glob pattern of files/directories to exclude (multi-value) | `[]` |
+| `--exclude-tests` | `--production-only` | Completely exclude unit and integration test files | `false` |
+| `--enforce-test-duplication` | | Treat test clones as CI policy violation in tolerance gate | `false` |
+| `--include-generated` | | Disable automatic exclusion of generated files | `false` |
 | `--no-comments` | | Disable comment extraction and LLM summarization | `false` |
 | `--enable-comments` | | Explicitly enable comment extraction and summarization | `true` |
 | `--no-duplication` | | Disable structural code clone detection | `false` |
@@ -218,7 +223,7 @@ jobs:
 | `-e, --endpoint <url>` | `-e` | Ollama endpoint URL | `http://localhost:11434` |
 | `-cs, --context-size <n>` | `-cs` | Ollama context window size (`num_ctx`) | `24576` |
 | `-c, --config <path>` | `-c` | Explicit path to `codecondenser.json` configuration file | Auto-detected |
-| `--no-color` | | Disable ANSI color formatting in console output | `false` |
+| `--no-color` | | Disable ANSI color formatting in console output (auto-disabled if redirected or `NO_COLOR` is set) | `false` |
 | `-h, --help` | | Show usage instructions and command help | |
 | `-v, --version` | | Show tool version information | |
 
@@ -264,6 +269,8 @@ Even summarized comments might exceed the character threshold (e.g. 110 characte
 - **Ignore Code Duplication on a Method**:
   - Comment above or inside method: `// codecondenser:ignore-duplicate` or `// codecondenser:ignore`
   - Attribute on method: `[SuppressMessage("CodeCondenser", "Duplication")]` or `[CodeCondenserIgnore]`
+- **Standalone Ignore File (`.codecondenserignore`)**:
+  Add glob patterns (like `.gitignore`) to a `.codecondenserignore` file in the repository root to exclude directories or files without modifying `codecondenser.json`.
 
 ---
 
@@ -273,6 +280,33 @@ Even summarized comments might exceed the character threshold (e.g. 110 characte
 
 ```json
 {
+  "include": [
+    "src/**"
+  ],
+  "exclude": [
+    "**/Migrations/**",
+    "**/bin/**",
+    "**/obj/**"
+  ],
+  "useDefaultExcludes": true,
+  "excludeTests": false,
+  "enforceTestDuplication": false,
+  "testPaths": [
+    "tests/**",
+    "test/**",
+    "**/*.Tests/**",
+    "**/*.Test/**",
+    "**/*Test.cs",
+    "**/*Tests.cs"
+  ],
+  "excludeGeneratedCode": true,
+  "generatedCodePatterns": [
+    "**/*.Designer.cs",
+    "**/*.g.cs",
+    "**/*.generated.cs",
+    "**/*ModelSnapshot.cs",
+    "**/Migrations/**"
+  ],
   "enableCommentSummarization": true,
   "enableDuplicationDetection": true,
   "duplicationTolerance": 0,

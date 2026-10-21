@@ -15,6 +15,22 @@ public interface IConsoleFormatter
 
     void PrintSummary(TextWriter writer, int filesAnalyzed, int methodsScanned, int cloneGroupsCount, int verboseCommentsCount, string mode);
 
+    void PrintSummary(
+        TextWriter writer,
+        int filesAnalyzed,
+        int methodsScanned,
+        int cloneGroupsCount,
+        int verboseCommentsCount,
+        string mode,
+        int productionFiles,
+        int testFiles,
+        int skippedGenerated,
+        int productionClones,
+        int testClones)
+    {
+        PrintSummary(writer, filesAnalyzed, methodsScanned, cloneGroupsCount, verboseCommentsCount, mode);
+    }
+
     void PrintFileApplied(TextWriter writer, string filePath, string baseDirectory);
 
     void PrintSnapshotSaved(TextWriter writer, string snapshotPath);

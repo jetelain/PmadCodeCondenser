@@ -374,4 +374,55 @@ public class CliArgumentParserTests
         success.Should().BeFalse();
         error.Should().Contain("Invalid value for --max-line-length");
     }
+
+    [Fact]
+    public void TryParse_IncludeAndExcludeFlags_CollectMultiplePatterns()
+    {
+        var args = new[]
+        {
+            "--include", "src/**",
+            "-inc", "app/**",
+            "--exclude", "**/Migrations/**",
+            "-exc", "**/bin/**"
+        };
+
+        var success = CliArgumentParser.TryParse(args, out var options, out var error);
+
+        success.Should().BeTrue();
+        error.Should().BeNull();
+        options.Include.Should().ContainInOrder("src/**", "app/**");
+        options.Exclude.Should().ContainInOrder("**/Migrations/**", "**/bin/**");
+    }
+
+    [Theory]
+    [InlineData("--exclude-tests")]
+    [InlineData("--production-only")]
+    public void TryParse_ExcludeTestsFlags_SetsExcludeTests(string flag)
+    {
+        var success = CliArgumentParser.TryParse([flag], out var options, out var error);
+
+        success.Should().BeTrue();
+        error.Should().BeNull();
+        options.ExcludeTests.Should().BeTrue();
+    }
+
+    [Fact]
+    public void TryParse_EnforceTestDuplicationFlag_SetsProperty()
+    {
+        var success = CliArgumentParser.TryParse(["--enforce-test-duplication"], out var options, out var error);
+
+        success.Should().BeTrue();
+        error.Should().BeNull();
+        options.EnforceTestDuplication.Should().BeTrue();
+    }
+
+    [Fact]
+    public void TryParse_IncludeGeneratedFlag_SetsProperty()
+    {
+        var success = CliArgumentParser.TryParse(["--include-generated"], out var options, out var error);
+
+        success.Should().BeTrue();
+        error.Should().BeNull();
+        options.IncludeGenerated.Should().BeTrue();
+    }
 }

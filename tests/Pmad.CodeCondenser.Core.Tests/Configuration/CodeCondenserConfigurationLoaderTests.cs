@@ -186,4 +186,59 @@ public class CodeCondenserConfigurationLoaderTests : IDisposable
         settings.EnableDuplicationDetection.Should().BeFalse();
         settings.DuplicationTolerance.Should().Be(5);
     }
+
+    [Fact]
+    public void LoadFromString_ParsesPathFilteringAndTestIsolationSettings()
+    {
+        var json = """
+        {
+            "include": ["src/**", "lib/**"],
+            "exclude": ["**/Migrations/**", "**/bin/**"],
+            "useDefaultExcludes": false,
+            "excludeTests": true,
+            "enforceTestDuplication": true,
+            "testPaths": ["specs/**", "**/*Spec.cs"],
+            "excludeGeneratedCode": false,
+            "generatedCodePatterns": ["**/*.designer.cs"]
+        }
+        """;
+
+        var settings = CodeCondenserConfigurationLoader.LoadFromString(json);
+
+        settings.Include.Should().ContainInOrder("src/**", "lib/**");
+        settings.Exclude.Should().ContainInOrder("**/Migrations/**", "**/bin/**");
+        settings.UseDefaultExcludes.Should().BeFalse();
+        settings.ExcludeTests.Should().BeTrue();
+        settings.EnforceTestDuplication.Should().BeTrue();
+        settings.TestPaths.Should().ContainInOrder("specs/**", "**/*Spec.cs");
+        settings.ExcludeGeneratedCode.Should().BeFalse();
+        settings.GeneratedCodePatterns.Should().ContainInOrder("**/*.designer.cs");
+    }
+
+    [Fact]
+    public void Load_MergesCodeCondenserIgnoreFile()
+    {
+        var ignorePath = Path.Combine(_tempDirectory, CodeCondenserConfigurationLoader.DefaultIgnoreFileName);
+        File.WriteAllText(ignorePath, """
+        # Comment line to ignore
+        
+        **/Generated/**
+        # Another comment
+        src/Legacy/**
+        """);
+
+        var configPath = Path.Combine(_tempDirectory, CodeCondenserConfigurationLoader.DefaultConfigFileName);
+        File.WriteAllText(configPath, """
+        {
+            "exclude": ["**/CustomExclude/**"]
+        }
+        """);
+
+        var settings = CodeCondenserConfigurationLoader.Load(_tempDirectory);
+
+        settings.Exclude.Should().Contain("**/CustomExclude/**");
+        settings.Exclude.Should().Contain("**/Generated/**");
+        settings.Exclude.Should().Contain("src/Legacy/**");
+        settings.Exclude.Should().NotContain(x => x.StartsWith("#"));
+    }
 }

@@ -20,6 +20,12 @@ public interface ICloneDetector
     IReadOnlyList<CodeCloneGroup> GroupClones(IEnumerable<MethodCloneInfo> methods);
 
     /// <summary>
+    /// Groups extracted methods by normalized hash with optional file classification into categories.
+    /// </summary>
+    IReadOnlyList<CodeCloneGroup> GroupClones(IEnumerable<MethodCloneInfo> methods, Func<string, FileCategory>? fileClassifier)
+        => GroupClones(methods);
+
+    /// <summary>
     /// Scans multiple syntax trees and groups duplicates across the entire set.
     /// </summary>
     IReadOnlyList<CodeCloneGroup> DetectClones(IEnumerable<(SyntaxTree Tree, string FilePath)> syntaxTrees, CodeCondenserSettings settings)

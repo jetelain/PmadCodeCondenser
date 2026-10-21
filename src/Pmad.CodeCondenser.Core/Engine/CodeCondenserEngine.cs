@@ -2,6 +2,7 @@ using Microsoft.CodeAnalysis.CSharp;
 using Pmad.CodeCondenser.Core.Clones;
 using Pmad.CodeCondenser.Core.Comments;
 using Pmad.CodeCondenser.Core.Configuration;
+using Pmad.CodeCondenser.Core.Filtering;
 using Pmad.CodeCondenser.Core.Models;
 using Pmad.CodeCondenser.Core.Snapshots;
 
@@ -75,7 +76,7 @@ public sealed class CodeCondenserEngine : ICodeCondenserEngine
         ArgumentException.ThrowIfNullOrWhiteSpace(targetPath);
         var effectiveSettings = (settings ?? new CodeCondenserSettings()).Clone();
 
-        var (baseDirectory, discoveredFiles) = ResolveFiles(targetPath);
+        var (baseDirectory, discoveredFiles, fileCategories, skippedGeneratedCount) = ResolveFiles(targetPath, effectiveSettings);
         _lastBaseDirectory = baseDirectory;
 
         // 1. Compute file hashes for all discovered files in parallel
@@ -189,6 +190,22 @@ public sealed class CodeCondenserEngine : ICodeCondenserEngine
 
         // 6. Detect Clones
         IReadOnlyList<CodeCloneGroup> cloneGroups;
+        PathFilter? fallbackFilter = null;
+        Func<string, FileCategory> fileClassifier = path =>
+        {
+            if (fileCategories.TryGetValue(path, out var cat))
+            {
+                return cat;
+            }
+            var rel = path.Replace('\\', '/');
+            if (fileCategories.TryGetValue(rel, out cat))
+            {
+                return cat;
+            }
+            fallbackFilter ??= new PathFilter(effectiveSettings, targetPath);
+            return fallbackFilter.ClassifyFile(rel, path);
+        };
+
         if (!effectiveSettings.EnableDuplicationDetection)
         {
             cloneGroups = [];
@@ -216,12 +233,12 @@ public sealed class CodeCondenserEngine : ICodeCondenserEngine
                 }
             }
 
-            var allGroups = _cloneDetector.GroupClones(combinedMethods);
+            var allGroups = _cloneDetector.GroupClones(combinedMethods, fileClassifier);
             cloneGroups = _snapshotDiffer.FilterNewCloneGroups(allGroups, baseline, fileDiff);
         }
         else
         {
-            cloneGroups = _cloneDetector.GroupClones(allAnalyzedMethods);
+            cloneGroups = _cloneDetector.GroupClones(allAnalyzedMethods, fileClassifier);
         }
 
         // 7. Filter & Summarize comments via LLM
@@ -287,7 +304,10 @@ public sealed class CodeCondenserEngine : ICodeCondenserEngine
             CloneGroups = cloneGroups,
             SummarizedComments = cache.ToDictionary(),
             AnalyzedFilesCount = filesToScan.Count,
-            TotalMethodsScanned = allAnalyzedMethods.Count
+            TotalMethodsScanned = allAnalyzedMethods.Count,
+            ProductionFilesCount = filesToScan.Count(f => fileToNormalizedPath.TryGetValue(f, out var norm) && fileCategories.TryGetValue(norm, out var c) && c == FileCategory.Production),
+            TestFilesCount = filesToScan.Count(f => fileToNormalizedPath.TryGetValue(f, out var norm) && fileCategories.TryGetValue(norm, out var c) && c == FileCategory.Test),
+            SkippedGeneratedFilesCount = skippedGeneratedCount
         };
     }
 
@@ -386,7 +406,7 @@ public sealed class CodeCondenserEngine : ICodeCondenserEngine
             return null;
         }
 
-        var (baseDirectory, discoveredFiles) = ResolveFiles(targetPath);
+        var (baseDirectory, discoveredFiles, _, _) = ResolveFiles(targetPath, settings);
         var parallelOptions = new ParallelOptions
         {
             MaxDegreeOfParallelism = Math.Max(1, Environment.ProcessorCount),
@@ -451,60 +471,74 @@ public sealed class CodeCondenserEngine : ICodeCondenserEngine
         return newSnapshot;
     }
 
-    private static (string BaseDirectory, List<string> Files) ResolveFiles(string targetPath)
+    private static (string BaseDirectory, List<string> Files, Dictionary<string, FileCategory> Categories, int SkippedGeneratedCount) ResolveFiles(
+        string targetPath,
+        CodeCondenserSettings settings)
     {
+        var pathFilter = new PathFilter(settings, targetPath);
+        var baseDirectory = pathFilter.BaseDirectory;
         var fullPath = Path.GetFullPath(targetPath);
+
+        var files = new List<string>();
+        var categories = new Dictionary<string, FileCategory>(StringComparer.OrdinalIgnoreCase);
+        int skippedGeneratedCount = 0;
 
         if (File.Exists(fullPath))
         {
-            var dir = Path.GetDirectoryName(fullPath) ?? Directory.GetCurrentDirectory();
-            return (dir, new List<string> { fullPath });
+            var relPath = pathFilter.NormalizeRelativePath(fullPath);
+            if (pathFilter.ShouldAnalyzeFile(relPath, fullPath, out var category, out var isSkippedGenerated))
+            {
+                files.Add(fullPath);
+                categories[relPath] = category;
+            }
+            else if (isSkippedGenerated)
+            {
+                skippedGeneratedCount++;
+            }
+            return (baseDirectory, files, categories, skippedGeneratedCount);
         }
 
         if (Directory.Exists(fullPath))
         {
-            var files = DiscoverCSharpFiles(fullPath);
-            return (fullPath, files);
+            void Traverse(string currentDir)
+            {
+                if (pathFilter.ShouldPruneDirectory(currentDir, isTargetRoot: string.Equals(currentDir, fullPath, StringComparison.OrdinalIgnoreCase)))
+                {
+                    return;
+                }
+
+                try
+                {
+                    foreach (var file in Directory.EnumerateFiles(currentDir, "*.cs"))
+                    {
+                        var filePath = Path.GetFullPath(file);
+                        var relPath = pathFilter.NormalizeRelativePath(filePath);
+                        if (pathFilter.ShouldAnalyzeFile(relPath, filePath, out var cat, out var isSkippedGen))
+                        {
+                            files.Add(filePath);
+                            categories[relPath] = cat;
+                        }
+                        else if (isSkippedGen)
+                        {
+                            skippedGeneratedCount++;
+                        }
+                    }
+
+                    foreach (var subDir in Directory.EnumerateDirectories(currentDir))
+                    {
+                        Traverse(subDir);
+                    }
+                }
+                catch (UnauthorizedAccessException) { }
+                catch (IOException) { }
+            }
+
+            Traverse(fullPath);
+            files.Sort(StringComparer.OrdinalIgnoreCase);
+            return (baseDirectory, files, categories, skippedGeneratedCount);
         }
 
         throw new DirectoryNotFoundException($"Target path '{targetPath}' was not found.");
-    }
-
-    private static List<string> DiscoverCSharpFiles(string directory)
-    {
-        var results = new List<string>();
-        var ignoredDirs = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
-        {
-            "bin", "obj", ".git", ".vs", ".codecondenser", "node_modules", "testresults"
-        };
-
-        void Traverse(string currentDir)
-        {
-            var dirInfo = new DirectoryInfo(currentDir);
-            if (ignoredDirs.Contains(dirInfo.Name) || (dirInfo.Name.StartsWith('.') && dirInfo.Name.Length > 1))
-            {
-                return;
-            }
-
-            try
-            {
-                foreach (var file in Directory.EnumerateFiles(currentDir, "*.cs"))
-                {
-                    results.Add(Path.GetFullPath(file));
-                }
-
-                foreach (var subDir in Directory.EnumerateDirectories(currentDir))
-                {
-                    Traverse(subDir);
-                }
-            }
-            catch (UnauthorizedAccessException) { }
-            catch (IOException) { }
-        }
-
-        Traverse(directory);
-        results.Sort(StringComparer.OrdinalIgnoreCase);
-        return results;
     }
 
     private static string ResolveSnapshotPath(string baseDirectory, string snapshotFilePath)

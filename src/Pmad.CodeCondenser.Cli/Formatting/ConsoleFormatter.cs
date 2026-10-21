@@ -42,29 +42,72 @@ public sealed class ConsoleFormatter : IConsoleFormatter
             return;
         }
 
-        writer.WriteLine(Yellow(Bold($"Found {cloneGroups.Count} code duplication cluster(s):")));
-        writer.WriteLine();
+        var prodAndCrossGroups = cloneGroups.Where(g => g.Category != CloneCategory.Test).ToList();
+        var testGroups = cloneGroups.Where(g => g.Category == CloneCategory.Test).ToList();
 
-        for (int i = 0; i < cloneGroups.Count; i++)
+        if (prodAndCrossGroups.Count > 0)
         {
-            var group = cloneGroups[i];
-            var shortHash = group.NormalizedHash.Length > 12 ? group.NormalizedHash[..12] : group.NormalizedHash;
+            writer.WriteLine(Yellow(Bold($"Found {prodAndCrossGroups.Count} Production Duplication Cluster(s) (Highest Impact):")));
+            writer.WriteLine();
 
-            writer.WriteLine(Yellow($"[DUPLICATION CLUSTER #{i + 1}] (AST Hash: {shortHash}...)"));
-            writer.WriteLine($"  Methods ({group.Methods.Count}):");
-
-            foreach (var method in group.Methods)
+            for (int i = 0; i < prodAndCrossGroups.Count; i++)
             {
-                var relPath = FormatPath(method.FilePath, baseDirectory);
-                writer.WriteLine($"    • {Cyan(relPath)}:{method.StartLine}-{method.EndLine} in {Bold(method.MethodName)} ({method.StatementCount} statements)");
-                if (!string.IsNullOrWhiteSpace(method.Signature) && !string.Equals(method.Signature, method.MethodName, StringComparison.Ordinal))
+                var group = prodAndCrossGroups[i];
+                var shortHash = group.NormalizedHash.Length > 12 ? group.NormalizedHash[..12] : group.NormalizedHash;
+                var prefix = group.Category == CloneCategory.CrossBoundary ? "CROSS-BOUNDARY" : "PRODUCTION";
+
+                writer.WriteLine(Yellow($"[{prefix} CLUSTER #{i + 1}] (Impact: {group.ImpactScore}, AST Hash: {shortHash}...)"));
+                writer.WriteLine($"  Methods ({group.Methods.Count}):");
+
+                foreach (var method in group.Methods)
                 {
-                    writer.WriteLine($"      {Dim("Signature:")} {method.Signature}");
+                    var relPath = FormatPath(method.FilePath, baseDirectory);
+                    writer.WriteLine($"    • {Cyan(relPath)}:{method.StartLine}-{method.EndLine} in {Bold(method.MethodName)} ({method.StatementCount} statements)");
+                    if (!string.IsNullOrWhiteSpace(method.Signature) && !string.Equals(method.Signature, method.MethodName, StringComparison.Ordinal))
+                    {
+                        writer.WriteLine($"      {Dim("Signature:")} {method.Signature}");
+                    }
                 }
+
+                writer.WriteLine(Dim("  Recommendation: Extract duplicate structural logic into a shared helper method or service."));
+                writer.WriteLine(Dim("  To suppress: Add '// [codecondenser:ignore-duplicate]' above method or run 'pmad-codecondenser snapshot'."));
+                writer.WriteLine();
+            }
+        }
+
+        if (testGroups.Count > 0)
+        {
+            if (prodAndCrossGroups.Count > 0)
+            {
+                writer.WriteLine(Dim("------------------------------------------------------------------------"));
+                writer.WriteLine();
             }
 
-            writer.WriteLine(Dim("  Recommendation: Extract duplicate structural logic into a shared helper method."));
+            writer.WriteLine(Yellow(Bold($"Found {testGroups.Count} Test Duplication Cluster(s) (Review for DAMP vs DRY):")));
             writer.WriteLine();
+
+            for (int i = 0; i < testGroups.Count; i++)
+            {
+                var group = testGroups[i];
+                var shortHash = group.NormalizedHash.Length > 12 ? group.NormalizedHash[..12] : group.NormalizedHash;
+
+                writer.WriteLine(Yellow($"[TEST CLUSTER #{i + 1}] (Impact: {group.ImpactScore}, AST Hash: {shortHash}...)"));
+                writer.WriteLine($"  Methods ({group.Methods.Count}):");
+
+                foreach (var method in group.Methods)
+                {
+                    var relPath = FormatPath(method.FilePath, baseDirectory);
+                    writer.WriteLine($"    • {Cyan(relPath)}:{method.StartLine}-{method.EndLine} in {Bold(method.MethodName)} ({method.StatementCount} statements)");
+                    if (!string.IsNullOrWhiteSpace(method.Signature) && !string.Equals(method.Signature, method.MethodName, StringComparison.Ordinal))
+                    {
+                        writer.WriteLine($"      {Dim("Signature:")} {method.Signature}");
+                    }
+                }
+
+                writer.WriteLine(Dim("  Recommendation: Consider parameterized tests ([Theory] + [InlineData]) or test builder fixtures instead of production helpers."));
+                writer.WriteLine(Dim("  To suppress: Add '// [codecondenser:ignore-duplicate]' above method or run 'pmad-codecondenser snapshot'."));
+                writer.WriteLine();
+            }
         }
     }
 
@@ -125,14 +168,54 @@ public sealed class ConsoleFormatter : IConsoleFormatter
         int verboseCommentsCount,
         string mode)
     {
+        PrintSummary(writer, filesAnalyzed, methodsScanned, cloneGroupsCount, verboseCommentsCount, mode, 0, 0, 0, 0, 0);
+    }
+
+    public void PrintSummary(
+        TextWriter writer,
+        int filesAnalyzed,
+        int methodsScanned,
+        int cloneGroupsCount,
+        int verboseCommentsCount,
+        string mode,
+        int productionFiles,
+        int testFiles,
+        int skippedGenerated,
+        int productionClones,
+        int testClones)
+    {
         ArgumentNullException.ThrowIfNull(writer);
 
         writer.WriteLine(Dim("------------------------------------------------------------------------"));
         writer.WriteLine(Bold("Analysis Summary:"));
         writer.WriteLine($"  Mode:              {mode}");
-        writer.WriteLine($"  Files Analyzed:    {filesAnalyzed}");
+
+        if (productionFiles > 0 || testFiles > 0 || skippedGenerated > 0)
+        {
+            var details = new List<string>();
+            if (productionFiles > 0) details.Add($"Production: {productionFiles}");
+            if (testFiles > 0) details.Add($"Tests: {testFiles}");
+            if (skippedGenerated > 0) details.Add($"Skipped Generated: {skippedGenerated}");
+            var breakdown = details.Count > 0 ? $" ({string.Join(", ", details)})" : string.Empty;
+            writer.WriteLine($"  Files Analyzed:    {filesAnalyzed}{breakdown}");
+        }
+        else
+        {
+            writer.WriteLine($"  Files Analyzed:    {filesAnalyzed}");
+        }
+
         writer.WriteLine($"  Methods Scanned:   {methodsScanned}");
-        writer.WriteLine($"  Clone Clusters:    {(cloneGroupsCount > 0 ? Yellow(cloneGroupsCount.ToString()) : Green("0"))}");
+
+        if (productionClones > 0 || testClones > 0)
+        {
+            writer.WriteLine($"  Production Clones: {(productionClones > 0 ? Yellow(productionClones.ToString()) : Green("0"))}");
+            writer.WriteLine($"  Test Clones:       {(testClones > 0 ? Yellow(testClones.ToString()) : Green("0"))}");
+        }
+        else
+        {
+            writer.WriteLine($"  Clone Clusters:    {(cloneGroupsCount > 0 ? Yellow(cloneGroupsCount.ToString()) : Green("0"))}");
+        }
+
         writer.WriteLine($"  Verbose Comments:  {(verboseCommentsCount > 0 ? Cyan(verboseCommentsCount.ToString()) : Green("0"))}");
         writer.WriteLine(Dim("------------------------------------------------------------------------"));
     }

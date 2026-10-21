@@ -43,7 +43,12 @@ public static class Program
             return 0;
         }
 
-        var formatter = customFormatter ?? new ConsoleFormatter(enableColor: !options.NoColor);
+        bool disableAnsi = options.NoColor
+            || !string.IsNullOrEmpty(Environment.GetEnvironmentVariable("NO_COLOR"))
+            || (output == Console.Out && Console.IsOutputRedirected)
+            || (error == Console.Error && Console.IsErrorRedirected);
+
+        var formatter = customFormatter ?? new ConsoleFormatter(enableColor: !disableAnsi);
         formatter.PrintBanner(output);
 
         // Load configuration from codecondenser.json if present
@@ -108,6 +113,43 @@ public static class Program
         if (options.MaxLineLength.HasValue)
         {
             settings.MaxCommentLineLength = options.MaxLineLength.Value;
+        }
+
+        if (options.Include.Count > 0)
+        {
+            foreach (var inc in options.Include)
+            {
+                if (!settings.Include.Contains(inc, StringComparer.Ordinal))
+                {
+                    settings.Include.Add(inc);
+                }
+            }
+        }
+
+        if (options.Exclude.Count > 0)
+        {
+            foreach (var exc in options.Exclude)
+            {
+                if (!settings.Exclude.Contains(exc, StringComparer.Ordinal))
+                {
+                    settings.Exclude.Add(exc);
+                }
+            }
+        }
+
+        if (options.ExcludeTests)
+        {
+            settings.ExcludeTests = true;
+        }
+
+        if (options.EnforceTestDuplication)
+        {
+            settings.EnforceTestDuplication = true;
+        }
+
+        if (options.IncludeGenerated)
+        {
+            settings.ExcludeGeneratedCode = false;
         }
 
         var engine = customEngine ?? new CodeCondenserEngine(

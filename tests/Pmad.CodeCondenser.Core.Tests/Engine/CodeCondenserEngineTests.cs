@@ -183,6 +183,8 @@ public class CodeCondenserEngineTests : IDisposable
         // Baseline analysis (populates snapshot in store)
         var baselineResult = await engine.AnalyzeAsync(_testDir, settings, incremental: false);
         baselineResult.AnalyzedFilesCount.Should().Be(2);
+        baselineResult.ProductionFilesCount.Should().Be(2);
+        baselineResult.TestFilesCount.Should().Be(0);
 
         // Modify only File2
         await File.AppendAllTextAsync(file2, "\n// added line");
@@ -192,6 +194,8 @@ public class CodeCondenserEngineTests : IDisposable
 
         // Assert: Only File2 should be scanned
         incrementalResult.AnalyzedFilesCount.Should().Be(1);
+        incrementalResult.ProductionFilesCount.Should().Be(1);
+        incrementalResult.TestFilesCount.Should().Be(0);
     }
 
     [Fact]

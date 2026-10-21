@@ -1,6 +1,7 @@
 using Pmad.CodeCondenser.Cli.Formatting;
 using Pmad.CodeCondenser.Core.Configuration;
 using Pmad.CodeCondenser.Core.Engine;
+using Pmad.CodeCondenser.Core.Models;
 
 namespace Pmad.CodeCondenser.Cli.Commands;
 
@@ -39,22 +40,43 @@ public sealed class AnalyzeCommand : ICommand
             progress: progress,
             cancellationToken: cancellationToken).ConfigureAwait(false);
 
+        if (result.SkippedGeneratedFilesCount > 0)
+        {
+            formatter.PrintInfo(output, $"Skipped {result.SkippedGeneratedFilesCount} auto-generated file(s).");
+            output.WriteLine();
+        }
+
         formatter.PrintCloneGroups(output, result.CloneGroups, options.TargetPath);
         formatter.PrintVerboseComments(output, result.VerboseComments, result.SummarizedComments, options.TargetPath);
 
         var mode = options.Incremental ? "Dry-Run (Incremental)" : "Dry-Run";
+        int prodClones = result.CloneGroups.Count(g => g.Category != CloneCategory.Test);
+        int testClones = result.CloneGroups.Count(g => g.Category == CloneCategory.Test);
+
         formatter.PrintSummary(
             output,
             result.AnalyzedFilesCount,
             result.TotalMethodsScanned,
             result.CloneGroups.Count,
             result.VerboseComments.Count,
-            mode);
+            mode,
+            result.ProductionFilesCount,
+            result.TestFilesCount,
+            result.SkippedGeneratedFilesCount,
+            prodClones,
+            testClones);
 
-        if (options.Incremental && settings.EnableDuplicationDetection && result.CloneGroups.Count > settings.DuplicationTolerance)
+        if (options.Incremental && settings.EnableDuplicationDetection)
         {
-            formatter.PrintAiActionableDuplicationFeedback(output, result.CloneGroups, options.TargetPath, settings.DuplicationTolerance);
-            return settings.DuplicationExitCode;
+            var gatedClones = result.CloneGroups
+                .Where(g => g.Category != CloneCategory.Test || settings.EnforceTestDuplication)
+                .ToList();
+
+            if (gatedClones.Count > settings.DuplicationTolerance)
+            {
+                formatter.PrintAiActionableDuplicationFeedback(output, gatedClones, options.TargetPath, settings.DuplicationTolerance);
+                return settings.DuplicationExitCode;
+            }
         }
 
         if (options.UpdateSnapshot && engine is CodeCondenserEngine cce)

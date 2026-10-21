@@ -91,6 +91,25 @@ public static class CliArgumentParser
                 continue;
             }
 
+            if (string.Equals(arg, "--exclude-tests", StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(arg, "--production-only", StringComparison.OrdinalIgnoreCase))
+            {
+                options.ExcludeTests = true;
+                continue;
+            }
+
+            if (string.Equals(arg, "--enforce-test-duplication", StringComparison.OrdinalIgnoreCase))
+            {
+                options.EnforceTestDuplication = true;
+                continue;
+            }
+
+            if (string.Equals(arg, "--include-generated", StringComparison.OrdinalIgnoreCase))
+            {
+                options.IncludeGenerated = true;
+                continue;
+            }
+
             // Options with values: check both "--option value" and "--option=value"
             if (TryExtractOptionValue(args, ref i, "--duplication-tolerance", "-dt", out var dtVal, out errorMessage))
             {
@@ -201,6 +220,30 @@ public static class CliArgumentParser
                     return false;
                 }
                 options.MaxLineLength = mll;
+                continue;
+            }
+
+            if (TryExtractOptionValue(args, ref i, "--include", "-inc", out var incVal, out errorMessage))
+            {
+                if (errorMessage != null) return false;
+                if (string.IsNullOrWhiteSpace(incVal))
+                {
+                    errorMessage = "Missing pattern value for --include.";
+                    return false;
+                }
+                options.Include.Add(incVal);
+                continue;
+            }
+
+            if (TryExtractOptionValue(args, ref i, "--exclude", "-exc", out var excVal, out errorMessage))
+            {
+                if (errorMessage != null) return false;
+                if (string.IsNullOrWhiteSpace(excVal))
+                {
+                    errorMessage = "Missing pattern value for --exclude.";
+                    return false;
+                }
+                options.Exclude.Add(excVal);
                 continue;
             }
 
@@ -321,6 +364,11 @@ public static class CliArgumentParser
           -e, --endpoint <url>        Specify Ollama endpoint URL (default: http://localhost:11434)
           -cs, --context-size <n>     Specify context window size in tokens (default: 24576)
           -c, --config <path>         Path to custom codecondenser.json configuration file
+          --include <pattern>         Add glob pattern of files/directories to include
+          --exclude <pattern>         Add glob pattern of files/directories to exclude
+          --exclude-tests             Completely exclude test files (alias: --production-only)
+          --enforce-test-duplication  Treat test clones as CI policy violation in gate check
+          --include-generated         Disable automatic exclusion of generated files
           --no-color                  Disable ANSI color formatting
           -h, --help                  Show command line help and options
           -v, --version               Show application version

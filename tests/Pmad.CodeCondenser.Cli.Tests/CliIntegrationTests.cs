@@ -135,7 +135,7 @@ public class CliIntegrationTests : IDisposable
         exitCode.Should().Be(0);
         var outputText = output.ToString();
 
-        outputText.Should().Contain("Found 1 code duplication cluster(s):");
+        outputText.Should().Contain("Found 1 Production Duplication Cluster(s)");
         outputText.Should().Contain("Found 1 verbose comment(s) exceeding threshold:");
         outputText.Should().Contain("BillingService.cs");
         outputText.Should().Contain("InvoiceService.cs");

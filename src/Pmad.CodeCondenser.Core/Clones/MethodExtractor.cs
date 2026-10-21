@@ -1,6 +1,7 @@
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
+using Pmad.CodeCondenser.Core.Filtering;
 
 namespace Pmad.CodeCondenser.Core.Clones;
 
@@ -67,7 +68,7 @@ public sealed class MethodExtractor : CSharpSyntaxWalker, IMethodExtractor
     {
         ArgumentNullException.ThrowIfNull(node);
 
-        if (!DuplicationIgnoreMarker.IsIgnored(node))
+        if (!DuplicationIgnoreMarker.IsIgnored(node) && !GeneratedCodeDetector.HasGeneratedCodeAttribute(node))
         {
             var count = GetStatementCount(node);
             if (count >= _minStatements)

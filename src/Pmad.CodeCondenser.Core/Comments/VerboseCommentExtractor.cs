@@ -1,6 +1,7 @@
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Pmad.CodeCondenser.Core.Configuration;
+using Pmad.CodeCondenser.Core.Filtering;
 using Pmad.CodeCondenser.Core.Models;
 
 namespace Pmad.CodeCondenser.Core.Comments;
@@ -59,6 +60,18 @@ public sealed class VerboseCommentExtractor : CSharpSyntaxWalker, ICommentExtrac
     /// <inheritdoc />
     public override void VisitToken(SyntaxToken token)
     {
+        if (!token.HasLeadingTrivia && !token.HasTrailingTrivia)
+        {
+            base.VisitToken(token);
+            return;
+        }
+
+        if (_settings.ExcludeGeneratedCode && GeneratedCodeDetector.HasGeneratedCodeAttribute(token.Parent))
+        {
+            base.VisitToken(token);
+            return;
+        }
+
         if (token.HasLeadingTrivia)
         {
             ProcessTriviaList(token.LeadingTrivia, token.SyntaxTree);

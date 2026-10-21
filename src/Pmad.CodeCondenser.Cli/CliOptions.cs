@@ -106,6 +106,31 @@ public sealed class CliOptions
     public int? MaxLineLength { get; set; }
 
     /// <summary>
+    /// Glob patterns of files/directories to include in analysis.
+    /// </summary>
+    public List<string> Include { get; set; } = new();
+
+    /// <summary>
+    /// Glob patterns of files/directories to exclude from analysis.
+    /// </summary>
+    public List<string> Exclude { get; set; } = new();
+
+    /// <summary>
+    /// When true, completely excludes unit and integration test files from analysis.
+    /// </summary>
+    public bool ExcludeTests { get; set; }
+
+    /// <summary>
+    /// When true, treats test code clones as CI policy violations (included in CI tolerance gate).
+    /// </summary>
+    public bool EnforceTestDuplication { get; set; }
+
+    /// <summary>
+    /// When true, disables automatic exclusion of generated files.
+    /// </summary>
+    public bool IncludeGenerated { get; set; }
+
+    /// <summary>
     /// When true, shows help and usage information.
     /// </summary>
     public bool Help { get; set; }
