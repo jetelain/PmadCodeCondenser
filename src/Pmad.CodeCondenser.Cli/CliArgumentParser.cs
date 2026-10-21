@@ -127,6 +127,25 @@ public static class CliArgumentParser
                 continue;
             }
 
+            if (string.Equals(arg, "--dry-run", StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(arg, "-n", StringComparison.OrdinalIgnoreCase))
+            {
+                options.DryRun = true;
+                continue;
+            }
+
+            if (string.Equals(arg, "--force", StringComparison.OrdinalIgnoreCase))
+            {
+                options.Force = true;
+                continue;
+            }
+
+            if (string.Equals(arg, "--clean", StringComparison.OrdinalIgnoreCase))
+            {
+                options.Clean = true;
+                continue;
+            }
+
             // Options with values: check both "--option value" and "--option=value"
             if (TryExtractOptionValue(args, ref i, "--threshold-submethod-statements", "--submethod-threshold", out var tsmVal, out errorMessage))
             {
@@ -370,6 +389,20 @@ public static class CliArgumentParser
                 continue;
             }
 
+            if (TryExtractOptionValue(args, ref i, "--skill", "--skill-name", out var skillVal, out errorMessage))
+            {
+                if (errorMessage != null) return false;
+                options.SkillName = skillVal;
+                continue;
+            }
+
+            if (TryExtractOptionValue(args, ref i, "--skills-dir", "--skills-directory", out var skillsDirVal, out errorMessage))
+            {
+                if (errorMessage != null) return false;
+                options.SkillsDirectory = skillsDirVal;
+                continue;
+            }
+
             if (arg.StartsWith('-'))
             {
                 errorMessage = $"Unrecognized option: '{arg}'. Use --help to view available options.";
@@ -385,11 +418,20 @@ public static class CliArgumentParser
         if (positionalArgs.Count > 0)
         {
             var first = positionalArgs[0].ToLowerInvariant();
-            if (first is CliOptions.CommandAnalyze or CliOptions.CommandApply or CliOptions.CommandSnapshot)
+            if (first is CliOptions.CommandAnalyze or CliOptions.CommandApply or CliOptions.CommandSnapshot or CliOptions.CommandSkills or "skill" or "install-skills" or "install-skill")
             {
-                options.Command = first;
+                options.Command = first is "skill" or "install-skills" or "install-skill" ? CliOptions.CommandSkills : first;
                 explicitCommand = true;
                 positionalIdx = 1;
+            }
+        }
+
+        if (options.Command == CliOptions.CommandSkills && positionalIdx < positionalArgs.Count)
+        {
+            var subVerb = positionalArgs[positionalIdx].ToLowerInvariant();
+            if (subVerb is "install" or "update")
+            {
+                positionalIdx++;
             }
         }
 
@@ -479,6 +521,7 @@ public static class CliArgumentParser
           analyze [path]              Analyze C# codebase in dry-run mode (default)
           apply [path]                Apply summarized comments directly to source files on disk
           snapshot [path]             Create or refresh the snapshot baseline
+          skills [path]               Install or update AI agent skills in the workspace (.agents/skills)
 
         Arguments:
           [path]                      Target directory or C# file to analyze (default: current directory)
@@ -512,6 +555,11 @@ public static class CliArgumentParser
           --exclude-tests             Completely exclude test files (alias: --production-only)
           --enforce-test-duplication  Treat test clones as CI policy violation in gate check
           --include-generated         Disable automatic exclusion of generated files
+          -n, --dry-run               Preview actions without modifying files on disk
+          --force                     Force overwrite skill files even if up to date
+          --clean                     Remove obsolete files from skill directories
+          --skill <name>              Specify a specific skill to install/update (default: all bundled skills)
+          --skills-dir <path>         Override target skills directory (default: <workspace>/.agents/skills)
           -f, --format <type>          Output format: console, sarif, json (default: console)
           -o, --output <path>          Output file path (default: stdout)
           --no-color                  Disable ANSI color formatting

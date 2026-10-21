@@ -651,4 +651,67 @@ public class CliArgumentParserTests
         error.Should().BeNull();
         options.NoGlobalConfig.Should().BeTrue();
     }
+
+    [Theory]
+    [InlineData("skills", "./workspace", CliOptions.CommandSkills, "./workspace")]
+    [InlineData("skill", "./workspace", CliOptions.CommandSkills, "./workspace")]
+    [InlineData("install-skills", "./workspace", CliOptions.CommandSkills, "./workspace")]
+    [InlineData("install-skill", "./workspace", CliOptions.CommandSkills, "./workspace")]
+    [InlineData("skills", null, CliOptions.CommandSkills, ".")]
+    public void TryParse_SkillsVerbs_SetsSkillsCommand(string verb, string? path, string expectedCommand, string expectedPath)
+    {
+        string[] args = path != null ? [verb, path] : [verb];
+        var success = CliArgumentParser.TryParse(args, out var options, out var error);
+
+        success.Should().BeTrue();
+        error.Should().BeNull();
+        options.Command.Should().Be(expectedCommand);
+        options.TargetPath.Should().Be(expectedPath);
+    }
+
+    [Theory]
+    [InlineData("install")]
+    [InlineData("update")]
+    public void TryParse_SkillsSubVerbs_SetsCommandAndPathCorrectly(string subVerb)
+    {
+        var success = CliArgumentParser.TryParse(["skills", subVerb, "my-repo"], out var options, out var error);
+
+        success.Should().BeTrue();
+        error.Should().BeNull();
+        options.Command.Should().Be(CliOptions.CommandSkills);
+        options.TargetPath.Should().Be("my-repo");
+    }
+
+    [Fact]
+    public void TryParse_SkillsFlags_SetsProperties()
+    {
+        var success = CliArgumentParser.TryParse([
+            "skills",
+            "--dry-run",
+            "--force",
+            "--clean",
+            "--skill", "codecondenser",
+            "--skills-dir", ".agents/custom-skills"
+        ], out var options, out var error);
+
+        success.Should().BeTrue();
+        error.Should().BeNull();
+        options.Command.Should().Be(CliOptions.CommandSkills);
+        options.DryRun.Should().BeTrue();
+        options.Force.Should().BeTrue();
+        options.Clean.Should().BeTrue();
+        options.SkillName.Should().Be("codecondenser");
+        options.SkillsDirectory.Should().Be(".agents/custom-skills");
+    }
+
+    [Fact]
+    public void TryParse_SkillsShortDryRun_SetsDryRun()
+    {
+        var success = CliArgumentParser.TryParse(["skills", "-n"], out var options, out var error);
+
+        success.Should().BeTrue();
+        error.Should().BeNull();
+        options.DryRun.Should().BeTrue();
+    }
 }
+

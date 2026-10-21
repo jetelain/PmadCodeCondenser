@@ -165,6 +165,21 @@ pmad-codecondenser snapshot ./src
 pmad-codecondenser ./src --update-snapshot
 ```
 
+### Scenario G: Install or Update Workspace AI Agent Skills
+
+Install or synchronize the bundled AI agent skills into a workspace's `.agents/skills` directory so AI coding agents understand how to use `Pmad.CodeCondenser`:
+
+```bash
+# Install or update skills in the current workspace:
+pmad-codecondenser skills
+
+# Target a specific workspace:
+pmad-codecondenser skills ./my-project
+
+# Preview what files would be created or updated without modifying disk:
+pmad-codecondenser skills --dry-run
+```
+
 ---
 
 ## CI/CD & Agent Guardrail Integration
@@ -239,6 +254,7 @@ jobs:
 | `analyze [path]` | Analyze C# codebase in dry-run mode *(default)* |
 | `apply [path]` | Write summarized comments directly to source files on disk |
 | `snapshot [path]` | Create or refresh the baseline snapshot |
+| `skills [path]` | Install or update bundled AI agent skills in the workspace (`.agents/skills`) |
 
 ### Options & Flags
 
@@ -273,6 +289,11 @@ jobs:
 | `-c, --config <path>` | `-c` | Explicit path to `codecondenser.json` configuration file | Auto-detected |
 | `-gc, --global-config <path>` | `-gc` | Explicit path to custom global user profile configuration file | Auto-detected (`~/.codecondenser/codecondenser.json`) |
 | `--no-global-config` | | Disable loading of global user profile configuration file | `false` |
+| `-n, --dry-run` | `-n` | Preview actions without writing changes to disk | `false` |
+| `--force` | | Force overwrite skill files even if up to date | `false` |
+| `--clean` | | Remove obsolete files from skill directories | `false` |
+| `--skill <name>` | | Specify a single skill to install/update (default: all) | `null` |
+| `--skills-dir <path>` | | Override target skills directory (default: `<workspace>/.agents/skills`) | `null` |
 | `-f, --format <type>` | `-f` | Output report format: `console`, `sarif`, `json` | `console` |
 | `-o, --output <path>` | `-o` | File path to write report output to instead of stdout | `null` *(stdout)* |
 | `--no-color` | | Disable ANSI color formatting in console output (auto-disabled if redirected or `NO_COLOR` is set) | `false` |

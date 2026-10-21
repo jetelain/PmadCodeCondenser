@@ -31,6 +31,7 @@ The CLI can be invoked via the global tool `pmad-codecondenser`, local tool `dot
 | **Summarize comments using LLM** | `pmad-codecondenser ./src -m gemma4:e4b` | Yes (Ollama) |
 | **Apply summarized comments to disk** | `pmad-codecondenser ./src --apply` | No (uses cache) |
 | **Refresh baseline snapshot** | `pmad-codecondenser snapshot ./src` | No |
+| **Install/update workspace agent skills** | `pmad-codecondenser skills [path]` | No |
 
 > [!NOTE]
 > **Summary Modes**:

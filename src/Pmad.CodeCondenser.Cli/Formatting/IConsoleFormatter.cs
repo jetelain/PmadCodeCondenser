@@ -77,4 +77,13 @@ public interface IConsoleFormatter
             PrintAiActionableDuplicationFeedback(writer, cloneGroups, subMethodGroups, baseDirectory, duplicationTolerance);
         }
     }
+
+    void PrintSkillFile(TextWriter writer, Skills.SkillFileResult fileResult, string baseDirectory)
+    {
+    }
+
+    void PrintSkillsSummary(TextWriter writer, Skills.SkillInstallResult result, bool dryRun)
+    {
+    }
 }
+

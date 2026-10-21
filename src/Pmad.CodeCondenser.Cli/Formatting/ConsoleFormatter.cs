@@ -639,4 +639,51 @@ public sealed class ConsoleFormatter : IConsoleFormatter
 
         return singleLine[..(maxLength - 3)] + "...";
     }
+
+    public void PrintSkillFile(TextWriter writer, Skills.SkillFileResult fileResult, string baseDirectory)
+    {
+        ArgumentNullException.ThrowIfNull(writer);
+        ArgumentNullException.ThrowIfNull(fileResult);
+
+        var relPath = FormatPath(fileResult.FullPath, baseDirectory);
+        var statusTag = fileResult.Status switch
+        {
+            Skills.SkillFileStatus.Created => Green("[Created]   "),
+            Skills.SkillFileStatus.Updated => Cyan("[Updated]   "),
+            Skills.SkillFileStatus.UpToDate => Dim("[Up to date]"),
+            Skills.SkillFileStatus.Removed => Yellow("[Removed]   "),
+            _ => $"[{fileResult.Status}]"
+        };
+
+        writer.WriteLine($"  {statusTag} {relPath}");
+    }
+
+    public void PrintSkillsSummary(TextWriter writer, Skills.SkillInstallResult result, bool dryRun)
+    {
+        ArgumentNullException.ThrowIfNull(writer);
+        ArgumentNullException.ThrowIfNull(result);
+
+        writer.WriteLine();
+        if (dryRun)
+        {
+            writer.WriteLine(Yellow("(Dry run mode - no files were written to disk)"));
+        }
+
+        if (result.IsAllUpToDate)
+        {
+            writer.WriteLine(Green($"✓ Skills are already up to date ({result.UpToDateCount} file(s) checked)."));
+        }
+        else
+        {
+            var parts = new List<string>();
+            if (result.CreatedCount > 0) parts.Add($"{result.CreatedCount} created");
+            if (result.UpdatedCount > 0) parts.Add($"{result.UpdatedCount} updated");
+            if (result.UpToDateCount > 0) parts.Add($"{result.UpToDateCount} up to date");
+            if (result.RemovedCount > 0) parts.Add($"{result.RemovedCount} removed");
+
+            var summaryText = string.Join(", ", parts);
+            writer.WriteLine(Green($"✓ Skills successfully {(dryRun ? "evaluated" : "synchronized")} ({summaryText})."));
+        }
+    }
 }
+

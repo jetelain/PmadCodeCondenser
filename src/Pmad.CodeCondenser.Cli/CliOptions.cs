@@ -8,9 +8,10 @@ public sealed class CliOptions
     public const string CommandAnalyze = "analyze";
     public const string CommandApply = "apply";
     public const string CommandSnapshot = "snapshot";
+    public const string CommandSkills = "skills";
 
     /// <summary>
-    /// Active command verb: "analyze" (default), "apply", or "snapshot".
+    /// Active command verb: "analyze" (default), "apply", "snapshot", or "skills".
     /// </summary>
     public string Command { get; set; } = CommandAnalyze;
 
@@ -169,6 +170,31 @@ public sealed class CliOptions
     /// When true, disables automatic exclusion of generated files.
     /// </summary>
     public bool IncludeGenerated { get; set; }
+
+    /// <summary>
+    /// When true, simulates actions without writing changes to disk.
+    /// </summary>
+    public bool DryRun { get; set; }
+
+    /// <summary>
+    /// When true, forces overwriting of skill files even if content is identical.
+    /// </summary>
+    public bool Force { get; set; }
+
+    /// <summary>
+    /// When true, removes obsolete files from target skill directories that are not in the bundled skill.
+    /// </summary>
+    public bool Clean { get; set; }
+
+    /// <summary>
+    /// Optional specific skill name to install or update (e.g. "codecondenser").
+    /// </summary>
+    public string? SkillName { get; set; }
+
+    /// <summary>
+    /// Optional explicit path to the target skills directory. Default is &lt;workspace&gt;/.agents/skills.
+    /// </summary>
+    public string? SkillsDirectory { get; set; }
 
     /// <summary>
     /// When true, shows help and usage information.

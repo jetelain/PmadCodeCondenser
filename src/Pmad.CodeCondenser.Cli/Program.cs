@@ -220,6 +220,7 @@ public static class Program
         {
             CliOptions.CommandApply => new ApplyCommand(),
             CliOptions.CommandSnapshot => new SnapshotCommand(),
+            CliOptions.CommandSkills => new SkillsCommand(),
             _ => new AnalyzeCommand()
         };
 
