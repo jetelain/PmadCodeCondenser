@@ -45,6 +45,8 @@ pmad-codecondenser [command] [path] [options]
 | `--endpoint <url>` | `-e` | `string` | `http://localhost:11434` | Ollama service endpoint URL |
 | `--context-size <n>` | `-cs` | `int` | `24576` | Ollama context window size (`num_ctx`) |
 | `--config <path>` | `-c` | `string` | Auto | Path to custom `codecondenser.json` config file |
+| `--global-config <path>` | `-gc` | `string` | Auto (`~/.codecondenser/codecondenser.json`) | Path to custom global user profile configuration file |
+| `--no-global-config` | | `switch` | `false` | Disable loading of global user profile configuration file |
 | `--format <type>` | `-f` | `string` | `console` | Report format: `console`, `sarif`, `json` |
 | `--output <path>` | `-o` | `string` | `null` | Output file path to write report to (stdout if omitted) |
 | `--no-color` | | `switch` | `false` | Disable ANSI color sequences in output |
@@ -64,9 +66,22 @@ pmad-codecondenser [command] [path] [options]
 
 ---
 
-## 4. Configuration File (`codecondenser.json`)
+## 4. Configuration Files & Hierarchy
 
-`Pmad.CodeCondenser` automatically searches for `codecondenser.json` in the target directory or current working directory. CLI flags override options defined in this file.
+`Pmad.CodeCondenser` supports a multi-tier configuration hierarchy:
+1. **CLI Arguments** (highest precedence)
+2. **Project Configuration** (`codecondenser.json` in the target directory or specified via `--config`)
+3. **Global User Profile Configuration** (`~/.codecondenser/codecondenser.json` or `config.json`, or via `--global-config`)
+4. **Built-in Defaults** (lowest precedence)
+
+### Global User Profile Configuration
+
+To configure personal LLM defaults (Ollama endpoint, default model, context size, parallelism) without placing machine-specific endpoints in source control:
+- **Location**: `~/.codecondenser/codecondenser.json` or `~/.codecondenser/config.json` (on Windows `%USERPROFILE%\.codecondenser\codecondenser.json`).
+- **Environment Override**: `CODECONDENSER_GLOBAL_CONFIG` or `PMAD_CODECONDENSER_GLOBAL_CONFIG`.
+- **Mode Behavior**: Configuring LLM in your global profile does **not** change the default mode from `report` to `summarize`. It allows you to invoke `--summary summarize` or `-m` without specifying `--endpoint` every time.
+
+### Example Project / Global Configuration (`codecondenser.json`)
 
 ```json
 {

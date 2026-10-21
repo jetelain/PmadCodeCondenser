@@ -137,6 +137,12 @@ public sealed class CodeCondenserSettings
     /// </summary>
     public bool IsLlmConfigured { get; set; }
 
+    /// <summary>
+    /// When true, indicates that the LLM was configured specifically by the global user profile configuration,
+    /// rather than project-level configuration or command-line flags.
+    /// </summary>
+    public bool IsLlmConfiguredGlobally { get; set; }
+
     private SummaryMode? _summaryMode;
 
     /// <summary>
@@ -186,7 +192,12 @@ public sealed class CodeCondenserSettings
             return Configuration.SummaryMode.Disabled;
         }
 
-        return IsLlmConfigured ? Configuration.SummaryMode.Summarize : Configuration.SummaryMode.Report;
+        if (IsLlmConfigured && !IsLlmConfiguredGlobally)
+        {
+            return Configuration.SummaryMode.Summarize;
+        }
+
+        return Configuration.SummaryMode.Report;
     }
 
     /// <summary>
@@ -407,6 +418,7 @@ public sealed class CodeCondenserSettings
                 ContextSize = Ollama.ContextSize
             },
             IsLlmConfigured = IsLlmConfigured,
+            IsLlmConfiguredGlobally = IsLlmConfiguredGlobally,
             SummaryMode = SummaryMode,
             EnableCommentSummarization = EnableCommentSummarization,
             EnableDuplicationDetection = EnableDuplicationDetection,

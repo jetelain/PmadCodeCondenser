@@ -627,4 +627,28 @@ public class CliArgumentParserTests
         success.Should().BeFalse();
         error.Should().NotBeNull();
     }
+
+    [Theory]
+    [InlineData("--global-config", "custom/global.json")]
+    [InlineData("-gc", "custom/global.json")]
+    [InlineData("--global-config=custom/global.json", null)]
+    public void TryParse_GlobalConfigOption_SetsGlobalConfigPath(string arg1, string? arg2)
+    {
+        string[] args = arg2 != null ? [arg1, arg2] : [arg1];
+        var success = CliArgumentParser.TryParse(args, out var options, out var error);
+
+        success.Should().BeTrue();
+        error.Should().BeNull();
+        options.GlobalConfigPath.Should().Be("custom/global.json");
+    }
+
+    [Fact]
+    public void TryParse_NoGlobalConfigOption_SetsNoGlobalConfig()
+    {
+        var success = CliArgumentParser.TryParse(["--no-global-config"], out var options, out var error);
+
+        success.Should().BeTrue();
+        error.Should().BeNull();
+        options.NoGlobalConfig.Should().BeTrue();
+    }
 }

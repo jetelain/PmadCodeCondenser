@@ -271,6 +271,8 @@ jobs:
 | `-e, --endpoint <url>` | `-e` | Ollama endpoint URL | `http://localhost:11434` |
 | `-cs, --context-size <n>` | `-cs` | Ollama context window size (`num_ctx`) | `24576` |
 | `-c, --config <path>` | `-c` | Explicit path to `codecondenser.json` configuration file | Auto-detected |
+| `-gc, --global-config <path>` | `-gc` | Explicit path to custom global user profile configuration file | Auto-detected (`~/.codecondenser/codecondenser.json`) |
+| `--no-global-config` | | Disable loading of global user profile configuration file | `false` |
 | `-f, --format <type>` | `-f` | Output report format: `console`, `sarif`, `json` | `console` |
 | `-o, --output <path>` | `-o` | File path to write report output to instead of stdout | `null` *(stdout)* |
 | `--no-color` | | Disable ANSI color formatting in console output (auto-disabled if redirected or `NO_COLOR` is set) | `false` |
@@ -418,6 +420,43 @@ Even summarized comments might exceed the character threshold (e.g. 110 characte
 ```
 
 CLI options override settings from `codecondenser.json`.
+
+### Global User Profile Configuration (`~/.codecondenser/codecondenser.json`)
+
+To avoid committing personal LLM endpoints, local ports, or credentials into shared repository configuration files, `Pmad.CodeCondenser` supports a **global user profile configuration file**:
+
+- **Location**:
+  - **Linux / macOS**: `~/.codecondenser/codecondenser.json` or `~/.codecondenser/config.json`
+  - **Windows**: `%USERPROFILE%\.codecondenser\codecondenser.json` or `%USERPROFILE%\.codecondenser\config.json`
+  - Fallback: `~/.codecondenser.json`
+- **Environment Variable Override**: `CODECONDENSER_GLOBAL_CONFIG` or `PMAD_CODECONDENSER_GLOBAL_CONFIG`
+- **CLI Flags**: `--global-config <path>` to specify a custom path, or `--no-global-config` to bypass global profile loading entirely.
+
+#### Hierarchical Precedence
+Settings are resolved in the following priority order (highest to lowest):
+1. **CLI Arguments** (`--model`, `--endpoint`, `--summary`, etc.)
+2. **Project Configuration** (`codecondenser.json` in the target or repository root)
+3. **Global User Profile Configuration** (`~/.codecondenser/codecondenser.json`)
+4. **Built-in Defaults**
+
+#### Example Global Config (`~/.codecondenser/codecondenser.json`)
+```json
+{
+  "provider": "Ollama",
+  "ollama": {
+    "endpoint": "http://localhost:11434",
+    "model": "gemma4:e4b",
+    "contextSize": 24576
+  },
+  "maxParallelLlmRequests": 4
+}
+```
+
+> [!NOTE]
+> **Summary Mode Safety**:
+> When an LLM model or endpoint is configured in your **global user profile**, `pmad-codecondenser` continues to default to fast, dry-run **`report` mode**.
+> This prevents accidental, slow LLM calls on every execution across your repositories.
+> To run LLM summarization using your global configuration, explicitly pass `--summary summarize` (or `-m <model>`).
 
 ---
 

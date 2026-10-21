@@ -277,6 +277,19 @@ public static class CliArgumentParser
                 continue;
             }
 
+            if (TryExtractOptionValue(args, ref i, "--global-config", "-gc", out var gcVal, out errorMessage))
+            {
+                if (errorMessage != null) return false;
+                options.GlobalConfigPath = gcVal;
+                continue;
+            }
+
+            if (arg == "--no-global-config")
+            {
+                options.NoGlobalConfig = true;
+                continue;
+            }
+
             if (TryExtractOptionValue(args, ref i, "--summarized-comments", "-sc", out var scVal, out errorMessage) ||
                 TryExtractOptionValue(args, ref i, "--comments-file", "-cf", out scVal, out errorMessage))
             {
@@ -492,6 +505,8 @@ public static class CliArgumentParser
           -e, --endpoint <url>        Specify Ollama endpoint URL (default: http://localhost:11434)
           -cs, --context-size <n>     Specify context window size in tokens (default: 24576)
           -c, --config <path>         Path to custom codecondenser.json configuration file
+          -gc, --global-config <path> Path to custom global user profile configuration file
+          --no-global-config          Disable loading of global user profile configuration
           --include <pattern>         Add glob pattern of files/directories to include
           --exclude <pattern>         Add glob pattern of files/directories to exclude
           --exclude-tests             Completely exclude test files (alias: --production-only)

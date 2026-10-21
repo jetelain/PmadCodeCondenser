@@ -290,4 +290,241 @@ public class CodeCondenserConfigurationLoaderTests : IDisposable
         settingsWithoutLlm.IsLlmConfigured.Should().BeFalse();
         settingsWithoutLlm.GetEffectiveSummaryMode().Should().Be(SummaryMode.Report);
     }
+
+    [Fact]
+    public void ResolveUserProfileConfigFile_FindsDefaultCodeCondenserJson()
+    {
+        var userHome = Path.Combine(_tempDirectory, "UserHome1");
+        var configDir = Path.Combine(userHome, ".codecondenser");
+        Directory.CreateDirectory(configDir);
+        var configFile = Path.Combine(configDir, "codecondenser.json");
+        File.WriteAllText(configFile, "{}");
+
+        var resolved = CodeCondenserConfigurationLoader.ResolveUserProfileConfigFile(userHome);
+        resolved.Should().NotBeNull();
+        resolved.Should().Be(Path.GetFullPath(configFile));
+    }
+
+    [Fact]
+    public void ResolveUserProfileConfigFile_FindsConfigJson()
+    {
+        var userHome = Path.Combine(_tempDirectory, "UserHome2");
+        var configDir = Path.Combine(userHome, ".codecondenser");
+        Directory.CreateDirectory(configDir);
+        var configFile = Path.Combine(configDir, "config.json");
+        File.WriteAllText(configFile, "{}");
+
+        var resolved = CodeCondenserConfigurationLoader.ResolveUserProfileConfigFile(userHome);
+        resolved.Should().NotBeNull();
+        resolved.Should().Be(Path.GetFullPath(configFile));
+    }
+
+    [Fact]
+    public void ResolveUserProfileConfigFile_FindsDotCodeCondenserJson()
+    {
+        var userHome = Path.Combine(_tempDirectory, "UserHome3");
+        Directory.CreateDirectory(userHome);
+        var configFile = Path.Combine(userHome, ".codecondenser.json");
+        File.WriteAllText(configFile, "{}");
+
+        var resolved = CodeCondenserConfigurationLoader.ResolveUserProfileConfigFile(userHome);
+        resolved.Should().NotBeNull();
+        resolved.Should().Be(Path.GetFullPath(configFile));
+    }
+
+    [Fact]
+    public void ResolveUserProfileConfigFile_ReturnsNull_WhenDirectoryEmpty()
+    {
+        var userHome = Path.Combine(_tempDirectory, "EmptyUserHome");
+        Directory.CreateDirectory(userHome);
+
+        var resolved = CodeCondenserConfigurationLoader.ResolveUserProfileConfigFile(userHome);
+        resolved.Should().BeNull();
+    }
+
+    [Fact]
+    public void MergeJson_MergesNestedOllamaPropertiesCorrectly()
+    {
+        var globalJson = """
+        {
+            "maxParallelLlmRequests": 8,
+            "ollama": {
+                "endpoint": "http://user-server:11434",
+                "model": "gemma4:e4b",
+                "contextSize": 32768
+            },
+            "commentLengthThreshold": 120
+        }
+        """;
+
+        var projectJson = """
+        {
+            "duplicationStatementThreshold": 12,
+            "ollama": {
+                "model": "deepseek-coder:6.7b"
+            }
+        }
+        """;
+
+        var mergedJson = CodeCondenserConfigurationLoader.MergeJson(globalJson, projectJson);
+        var settings = CodeCondenserConfigurationLoader.LoadFromString(mergedJson);
+
+        settings.MaxParallelLlmRequests.Should().Be(8);
+        settings.CommentLengthThreshold.Should().Be(120);
+        settings.DuplicationStatementThreshold.Should().Be(12);
+        settings.Ollama.Endpoint.Should().Be("http://user-server:11434");
+        settings.Ollama.Model.Should().Be("deepseek-coder:6.7b");
+        settings.Ollama.ContextSize.Should().Be(32768);
+    }
+
+    [Fact]
+    public void MergeJson_HandlesCaseInsensitivity()
+    {
+        var globalJson = """
+        {
+            "Ollama": {
+                "Endpoint": "http://global:11434",
+                "Model": "global-model"
+            }
+        }
+        """;
+
+        var projectJson = """
+        {
+            "ollama": {
+                "model": "project-model"
+            }
+        }
+        """;
+
+        var mergedJson = CodeCondenserConfigurationLoader.MergeJson(globalJson, projectJson);
+        var settings = CodeCondenserConfigurationLoader.LoadFromString(mergedJson);
+
+        settings.Ollama.Endpoint.Should().Be("http://global:11434");
+        settings.Ollama.Model.Should().Be("project-model");
+    }
+
+    [Fact]
+    public void Load_WithGlobalConfigOnly_SetsIsLlmConfiguredGlobally_AndDefaultsToReport()
+    {
+        var userHome = Path.Combine(_tempDirectory, "UserHome4");
+        var configDir = Path.Combine(userHome, ".codecondenser");
+        Directory.CreateDirectory(configDir);
+        File.WriteAllText(Path.Combine(configDir, "codecondenser.json"), """
+        {
+            "ollama": {
+                "endpoint": "http://my-ollama:11434",
+                "model": "gemma4:e4b"
+            }
+        }
+        """);
+
+        var projectDir = Path.Combine(_tempDirectory, "EmptyProjectDir");
+        Directory.CreateDirectory(projectDir);
+
+        var settings = CodeCondenserConfigurationLoader.Load(
+            targetPathOrConfigFile: projectDir,
+            globalConfigFileOrDir: userHome);
+
+        settings.IsLlmConfigured.Should().BeTrue();
+        settings.IsLlmConfiguredGlobally.Should().BeTrue();
+        settings.Ollama.Endpoint.Should().Be("http://my-ollama:11434");
+        settings.Ollama.Model.Should().Be("gemma4:e4b");
+        // Effective summary mode must stay Report when LLM is only configured in user profile
+        settings.GetEffectiveSummaryMode().Should().Be(SummaryMode.Report);
+    }
+
+    [Fact]
+    public void Load_WithGlobalConfigExplicitSummary_PreservesSummaryMode()
+    {
+        var userHome = Path.Combine(_tempDirectory, "UserHome5");
+        var configDir = Path.Combine(userHome, ".codecondenser");
+        Directory.CreateDirectory(configDir);
+        File.WriteAllText(Path.Combine(configDir, "codecondenser.json"), """
+        {
+            "summaryMode": "Summarize",
+            "ollama": {
+                "endpoint": "http://my-ollama:11434",
+                "model": "gemma4:e4b"
+            }
+        }
+        """);
+
+        var projectDir = Path.Combine(_tempDirectory, "EmptyProjectDir2");
+        Directory.CreateDirectory(projectDir);
+
+        var settings = CodeCondenserConfigurationLoader.Load(
+            targetPathOrConfigFile: projectDir,
+            globalConfigFileOrDir: userHome);
+
+        settings.SummaryMode.Should().Be(SummaryMode.Summarize);
+        settings.GetEffectiveSummaryMode().Should().Be(SummaryMode.Summarize);
+    }
+
+    [Fact]
+    public void Load_WithGlobalAndProjectConfig_ProjectOverridesGlobal_SetsIsLlmConfiguredLocally()
+    {
+        var userHome = Path.Combine(_tempDirectory, "UserHome6");
+        var configDir = Path.Combine(userHome, ".codecondenser");
+        Directory.CreateDirectory(configDir);
+        File.WriteAllText(Path.Combine(configDir, "codecondenser.json"), """
+        {
+            "maxParallelLlmRequests": 8,
+            "ollama": {
+                "endpoint": "http://user-server:11434",
+                "model": "global-model"
+            }
+        }
+        """);
+
+        var projectDir = Path.Combine(_tempDirectory, "ProjectDirWithConfig");
+        Directory.CreateDirectory(projectDir);
+        File.WriteAllText(Path.Combine(projectDir, "codecondenser.json"), """
+        {
+            "duplicationStatementThreshold": 14,
+            "ollama": {
+                "model": "project-model"
+            }
+        }
+        """);
+
+        var settings = CodeCondenserConfigurationLoader.Load(
+            targetPathOrConfigFile: projectDir,
+            globalConfigFileOrDir: userHome);
+
+        settings.MaxParallelLlmRequests.Should().Be(8);
+        settings.DuplicationStatementThreshold.Should().Be(14);
+        settings.Ollama.Endpoint.Should().Be("http://user-server:11434");
+        settings.Ollama.Model.Should().Be("project-model");
+        settings.IsLlmConfigured.Should().BeTrue();
+        settings.IsLlmConfiguredGlobally.Should().BeFalse();
+        // Because project explicitly configured LLM model, effective mode is Summarize
+        settings.GetEffectiveSummaryMode().Should().Be(SummaryMode.Summarize);
+    }
+
+    [Fact]
+    public void Load_WithDisableGlobalConfig_IgnoresGlobalConfig()
+    {
+        var userHome = Path.Combine(_tempDirectory, "UserHome7");
+        var configDir = Path.Combine(userHome, ".codecondenser");
+        Directory.CreateDirectory(configDir);
+        File.WriteAllText(Path.Combine(configDir, "codecondenser.json"), """
+        {
+            "ollama": {
+                "model": "custom-model"
+            }
+        }
+        """);
+
+        var projectDir = Path.Combine(_tempDirectory, "EmptyProjectDir3");
+        Directory.CreateDirectory(projectDir);
+
+        var settings = CodeCondenserConfigurationLoader.Load(
+            targetPathOrConfigFile: projectDir,
+            globalConfigFileOrDir: userHome,
+            disableGlobalConfig: true);
+
+        settings.IsLlmConfigured.Should().BeFalse();
+        settings.Ollama.Model.Should().Be("gemma4:e4b"); // default
+    }
 }

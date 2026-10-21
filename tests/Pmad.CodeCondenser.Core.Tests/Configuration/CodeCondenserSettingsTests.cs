@@ -127,4 +127,29 @@ public class CodeCondenserSettingsTests
         cloned.CommentTolerance.Should().Be(3);
         cloned.CommentExitCode.Should().Be(4);
     }
+
+    [Fact]
+    public void GetEffectiveSummaryMode_WhenIsLlmConfiguredGlobally_DefaultsToReport()
+    {
+        var settings = new CodeCondenserSettings
+        {
+            IsLlmConfigured = true,
+            IsLlmConfiguredGlobally = true
+        };
+
+        settings.GetEffectiveSummaryMode().Should().Be(SummaryMode.Report);
+    }
+
+    [Fact]
+    public void Clone_CopiesIsLlmConfiguredGlobally()
+    {
+        var original = new CodeCondenserSettings
+        {
+            IsLlmConfigured = true,
+            IsLlmConfiguredGlobally = true
+        };
+
+        var cloned = original.Clone();
+        cloned.IsLlmConfiguredGlobally.Should().BeTrue();
+    }
 }

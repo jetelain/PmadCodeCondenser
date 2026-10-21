@@ -733,6 +733,155 @@ public class CliIntegrationTests : IDisposable
         outputText.Should().Contain("To suppress: Add 'condense=\"no\"' attribute (XML doc) or '// codecondenser:ignore'");
     }
 
+    [Fact]
+    public async Task RunAsync_WithGlobalConfig_InheritsLlmSettingsAndDefaultsToReport()
+    {
+        var globalConfigFile = Path.Combine(_testDirectory, "global-codecondenser.json");
+        await File.WriteAllTextAsync(globalConfigFile, """
+        {
+            "ollama": {
+                "endpoint": "http://custom-ollama:11434",
+                "model": "gemma4:e4b"
+            }
+        }
+        """);
+
+        var sourceFile = Path.Combine(_testDirectory, "Verbose.cs");
+        await File.WriteAllTextAsync(sourceFile, """
+        public class Verbose
+        {
+            // This is a very verbose comment that exceeds the default threshold of one hundred characters to trigger comment extraction
+            public void Test() {}
+        }
+        """);
+
+        bool summarizerCalled = false;
+        var summarizer = new SettingsCapturingSummarizer(s =>
+        {
+            summarizerCalled = true;
+        });
+
+        var engine = new CodeCondenserEngine(commentSummarizer: summarizer);
+
+        using var output = new StringWriter();
+        using var error = new StringWriter();
+
+        var exitCode = await Program.RunAsync(
+            [_testDirectory, "--global-config", globalConfigFile, "--no-color"],
+            output,
+            error,
+            customEngine: engine);
+
+        exitCode.Should().Be(0);
+        // In default mode, global LLM config must NOT trigger summarizer; it must run in Report mode
+        summarizerCalled.Should().BeFalse();
+        output.ToString().Should().Contain("Found 1 verbose comment(s) exceeding threshold");
+        output.ToString().Should().Contain("Recommendation: Condense verbose comment");
+    }
+
+    [Fact]
+    public async Task RunAsync_WithGlobalConfigAndSummarySummarize_UsesGlobalLlmSettings()
+    {
+        var globalConfigFile = Path.Combine(_testDirectory, "global-codecondenser2.json");
+        await File.WriteAllTextAsync(globalConfigFile, """
+        {
+            "ollama": {
+                "endpoint": "http://custom-ollama:11434",
+                "model": "gemma4:e4b"
+            }
+        }
+        """);
+
+        var sourceFile = Path.Combine(_testDirectory, "Verbose2.cs");
+        await File.WriteAllTextAsync(sourceFile, """
+        public class Verbose2
+        {
+            // This is a very verbose comment that exceeds the default threshold of one hundred characters to trigger comment extraction
+            public void Test() {}
+        }
+        """);
+
+        CodeCondenserSettings? capturedSettings = null;
+        var summarizer = new SettingsCapturingSummarizer(s =>
+        {
+            capturedSettings = s;
+        });
+
+        var engine = new CodeCondenserEngine(commentSummarizer: summarizer);
+
+        using var output = new StringWriter();
+        using var error = new StringWriter();
+
+        var exitCode = await Program.RunAsync(
+            [_testDirectory, "--global-config", globalConfigFile, "--summary", "summarize", "--no-color"],
+            output,
+            error,
+            customEngine: engine);
+
+        exitCode.Should().Be(0);
+        capturedSettings.Should().NotBeNull();
+        capturedSettings!.Ollama.Endpoint.Should().Be("http://custom-ollama:11434");
+        capturedSettings.Ollama.Model.Should().Be("gemma4:e4b");
+    }
+
+    [Fact]
+    public async Task RunAsync_WithGlobalAndProjectConfig_ProjectOverridesGlobal()
+    {
+        var globalConfigFile = Path.Combine(_testDirectory, "global-codecondenser3.json");
+        await File.WriteAllTextAsync(globalConfigFile, """
+        {
+            "maxParallelLlmRequests": 8,
+            "ollama": {
+                "endpoint": "http://custom-ollama:11434",
+                "model": "global-model"
+            }
+        }
+        """);
+
+        var projectConfigFile = Path.Combine(_testDirectory, "codecondenser.json");
+        await File.WriteAllTextAsync(projectConfigFile, """
+        {
+            "ollama": {
+                "model": "project-model"
+            }
+        }
+        """);
+
+        var sourceFile = Path.Combine(_testDirectory, "Verbose3.cs");
+        await File.WriteAllTextAsync(sourceFile, """
+        public class Verbose3
+        {
+            // This is a very verbose comment that exceeds the default threshold of one hundred characters to trigger comment extraction
+            public void Test() {}
+        }
+        """);
+
+        CodeCondenserSettings? capturedSettings = null;
+        var summarizer = new SettingsCapturingSummarizer(s =>
+        {
+            capturedSettings = s;
+        });
+
+        var engine = new CodeCondenserEngine(commentSummarizer: summarizer);
+
+        using var output = new StringWriter();
+        using var error = new StringWriter();
+
+        var exitCode = await Program.RunAsync(
+            [_testDirectory, "--global-config", globalConfigFile, "--no-color"],
+            output,
+            error,
+            customEngine: engine);
+
+        exitCode.Should().Be(0);
+        capturedSettings.Should().NotBeNull();
+        // Endpoint inherited from global config
+        capturedSettings!.Ollama.Endpoint.Should().Be("http://custom-ollama:11434");
+        // Model overridden by project config
+        capturedSettings.Ollama.Model.Should().Be("project-model");
+        capturedSettings.MaxParallelLlmRequests.Should().Be(8);
+    }
+
     private sealed class SettingsCapturingSummarizer : ICommentSummarizer
     {
         private readonly Action<CodeCondenserSettings> _onSummarize;

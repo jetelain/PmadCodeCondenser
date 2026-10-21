@@ -96,6 +96,16 @@ public sealed class CliOptions
     public string? ConfigPath { get; set; }
 
     /// <summary>
+    /// Optional explicit path to custom global user profile configuration file.
+    /// </summary>
+    public string? GlobalConfigPath { get; set; }
+
+    /// <summary>
+    /// When true, disables loading of the global user profile configuration file.
+    /// </summary>
+    public bool NoGlobalConfig { get; set; }
+
+    /// <summary>
     /// When true, disables ANSI color output in the console.
     /// </summary>
     public bool NoColor { get; set; }

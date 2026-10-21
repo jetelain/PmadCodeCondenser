@@ -53,8 +53,11 @@ public static class Program
         var bannerWriter = isMachineReadableStdout ? error : output;
         formatter.PrintBanner(bannerWriter);
 
-        // Load configuration from codecondenser.json if present
-        var settings = CodeCondenserConfigurationLoader.Load(options.ConfigPath ?? options.TargetPath);
+        // Load configuration from global user profile and codecondenser.json if present
+        var settings = CodeCondenserConfigurationLoader.Load(
+            options.ConfigPath ?? options.TargetPath,
+            options.GlobalConfigPath,
+            options.NoGlobalConfig);
 
         // Apply CLI overrides
         if (options.ThresholdStatements.HasValue)
@@ -81,21 +84,29 @@ public static class Program
         {
             settings.Ollama.Model = options.Model;
             settings.IsLlmConfigured = true;
+            settings.IsLlmConfiguredGlobally = false;
         }
 
         if (!string.IsNullOrWhiteSpace(options.Endpoint))
         {
             settings.Ollama.Endpoint = options.Endpoint;
             settings.IsLlmConfigured = true;
+            settings.IsLlmConfiguredGlobally = false;
         }
 
         if (options.ContextSize.HasValue)
         {
             settings.Ollama.ContextSize = options.ContextSize.Value;
             settings.IsLlmConfigured = true;
+            settings.IsLlmConfiguredGlobally = false;
         }
 
-        if (customEngine != null || options.Apply || options.Command == CliOptions.CommandApply)
+        if (options.Apply || options.Command == CliOptions.CommandApply)
+        {
+            settings.IsLlmConfigured = true;
+            settings.IsLlmConfiguredGlobally = false;
+        }
+        else if (customEngine != null && !settings.IsLlmConfigured)
         {
             settings.IsLlmConfigured = true;
         }

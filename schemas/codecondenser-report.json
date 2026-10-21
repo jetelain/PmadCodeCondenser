@@ -1,0 +1,15 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "CodeCondenserReport",
+  "type": "object",
+  "properties": {
+    "$schema": { "type": "string" },
+    "schemaVersion": { "type": "string" },
+    "timestamp": { "type": "string" },
+    "summary": { "type": "object" },
+    "cloneClusters": { "type": "array" },
+    "subMethodClusters": { "type": "array" },
+    "verboseComments": { "type": "array" }
+  },
+  "required": ["$schema", "schemaVersion", "timestamp", "summary", "cloneClusters", "subMethodClusters", "verboseComments"]
+}

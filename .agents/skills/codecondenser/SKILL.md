@@ -76,6 +76,8 @@ When asked to condense or clean up verbose comments:
    pmad-codecondenser ./src -m gemma4:e4b
    # Or cloud model (zero local VRAM):
    pmad-codecondenser ./src -m gpt-oss:20b-cloud
+   # Or with global config (~/.codecondenser/codecondenser.json configured):
+   pmad-codecondenser ./src --summary summarize
    ```
 2. **Review proposed summaries**: The dry run saves proposed summaries to `.codecondenser/snapshot.json` without modifying files on disk.
 3. **Apply changes**:
