@@ -217,4 +217,41 @@ public class CommentVerbosityHelperTests
         pct.Should().Be(45);
         count.Should().Be(2);
     }
+
+    [Fact]
+    public void IsMoreVerbose_DifferentLineEndingsCrlfVsLf_NormalizesConsistently()
+    {
+        var crlfOriginal = "/* Line 1\r\nLine 2\r\nLine 3 */";
+        var lfSuggested = "/* Line 1\nLine 2\nLine 3 */";
+
+        var comment = CreateComment(crlfOriginal, CommentKind.MultiLine);
+
+        // Identical content with different line endings should NOT be considered more verbose
+        CommentVerbosityHelper.IsMoreVerbose(lfSuggested, comment).Should().BeFalse();
+    }
+
+    [Fact]
+    public void IsMoreVerbose_XmlDocumentation_DifferentLineEndingsAndWrapping_ComparesNormalizedPayload()
+    {
+        // Original has multiple wrapped lines and CRLF
+        var original = "/// <summary>\r\n/// Line one of summary.\r\n/// Line two of summary.\r\n/// </summary>";
+        // Suggested has a single unwrapped line and LF, but same semantic text
+        var suggested = "/// <summary>\n/// Line one of summary. Line two of summary.\n/// </summary>";
+
+        var comment = CreateComment(original, CommentKind.XmlDocumentation);
+
+        CommentVerbosityHelper.IsMoreVerbose(suggested, comment).Should().BeFalse();
+    }
+
+    [Fact]
+    public void CalculateGain_DifferentLineEndingsCrlfVsLf_CalculatesGainConsistently()
+    {
+        var crlfOriginal = "// A comment with extra text\r\n";
+        var lfSuggested = "// A comment\n";
+
+        var comment = CreateComment(crlfOriginal);
+        var gain = CommentVerbosityHelper.CalculateGain(comment, lfSuggested);
+
+        gain.Should().Be(16);
+    }
 }

@@ -36,36 +36,36 @@ public static class XmlDocumentationParser
             {
                 line = line[3..];
                 if (line.StartsWith(' ')) line = line[1..];
-                sb.AppendLine(line);
+                sb.Append(line).Append('\n');
             }
             else if (line.StartsWith("//!"))
             {
                 line = line[3..];
                 if (line.StartsWith(' ')) line = line[1..];
-                sb.AppendLine(line);
+                sb.Append(line).Append('\n');
             }
             else if (line.StartsWith("/**"))
             {
                 line = line[3..];
                 if (line.EndsWith("*/")) line = line[..^2];
                 line = line.Trim();
-                if (!string.IsNullOrEmpty(line)) sb.AppendLine(line);
+                if (!string.IsNullOrEmpty(line)) sb.Append(line).Append('\n');
             }
             else if (line.EndsWith("*/"))
             {
                 line = line[..^2].Trim();
                 if (line.StartsWith('*')) line = line[1..].Trim();
-                if (!string.IsNullOrEmpty(line)) sb.AppendLine(line);
+                if (!string.IsNullOrEmpty(line)) sb.Append(line).Append('\n');
             }
             else if (line.StartsWith('*'))
             {
                 line = line[1..];
                 if (line.StartsWith(' ')) line = line[1..];
-                sb.AppendLine(line);
+                sb.Append(line).Append('\n');
             }
             else
             {
-                sb.AppendLine(rawLine);
+                sb.Append(rawLine).Append('\n');
             }
         }
 

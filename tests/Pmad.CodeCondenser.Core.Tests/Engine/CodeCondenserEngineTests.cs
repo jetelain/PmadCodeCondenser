@@ -670,7 +670,7 @@ public class CodeCondenserEngineTests : IDisposable
             /// Draws images from a prompt artifact.
             /// </summary>
             /// <remarks>
-            /// File extension matches the model output format (e.g. .png for SD, .jpg for flux). For local GGUF SD models, use SDXL architecture with 1024x1024 resolution.
+            /// File extension matches the model output format (e.g. .png for SD, .jpg for flux).
             /// </remarks>
             """;
 

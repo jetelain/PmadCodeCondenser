@@ -34,13 +34,13 @@ public static class CommentVerbosityHelper
             return false;
         }
 
-        var trimmedSuggested = suggested.Trim();
-        var trimmedOriginal = (original ?? string.Empty).Trim();
+        var trimmedSuggested = suggested.Replace("\r\n", "\n").Trim();
+        var trimmedOriginal = (original ?? string.Empty).Replace("\r\n", "\n").Trim();
 
         if (kind == CommentKind.XmlDocumentation)
         {
-            var origXml = XmlDocumentationParser.ExtractXmlText(trimmedOriginal).Trim();
-            var suggXml = XmlDocumentationParser.ExtractXmlText(trimmedSuggested).Trim();
+            var origXml = XmlDocumentationParser.NormalizeXmlText(trimmedOriginal);
+            var suggXml = XmlDocumentationParser.NormalizeXmlText(trimmedSuggested);
 
             if (!string.IsNullOrEmpty(origXml) && !string.IsNullOrEmpty(suggXml))
             {
@@ -72,8 +72,8 @@ public static class CommentVerbosityHelper
             return 0;
         }
 
-        int originalLen = comment.OriginalText.Trim().Length;
-        int condensedLen = summary.Trim().Length;
+        int originalLen = comment.OriginalText.Replace("\r\n", "\n").Trim().Length;
+        int condensedLen = summary.Replace("\r\n", "\n").Trim().Length;
 
         return Math.Max(0, originalLen - condensedLen);
     }
@@ -105,10 +105,10 @@ public static class CommentVerbosityHelper
             if (summaries.TryGetValue(comment.ContentHash, out var summary) &&
                 !string.IsNullOrWhiteSpace(summary))
             {
-                int origLen = comment.OriginalText.Trim().Length;
+                int origLen = comment.OriginalText.Replace("\r\n", "\n").Trim().Length;
                 int condLen = IsMoreVerbose(summary, comment)
                     ? origLen
-                    : summary.Trim().Length;
+                    : summary.Replace("\r\n", "\n").Trim().Length;
 
                 totalOriginal += origLen;
                 totalCondensed += condLen;
