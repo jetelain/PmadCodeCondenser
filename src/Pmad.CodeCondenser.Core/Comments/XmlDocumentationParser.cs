@@ -1,4 +1,5 @@
 using System.Text;
+using System.Text.RegularExpressions;
 using System.Xml.Linq;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
@@ -69,6 +70,39 @@ public static class XmlDocumentationParser
         }
 
         return sb.ToString();
+    }
+
+    /// <summary>
+    /// Normalizes an XML documentation comment or XML text fragment by stripping comment delimiters
+    /// and collapsing all interior whitespace and line breaks, producing a canonical whitespace-invariant representation.
+    /// </summary>
+    /// <param name="commentText">The raw documentation comment text or XML fragment.</param>
+    /// <returns>A normalized XML string invariant to line wrapping and indentation.</returns>
+    public static string NormalizeXmlText(string commentText)
+    {
+        if (string.IsNullOrWhiteSpace(commentText))
+        {
+            return string.Empty;
+        }
+
+        var xml = ExtractXmlText(commentText).Trim();
+        if (string.IsNullOrWhiteSpace(xml))
+        {
+            return string.Empty;
+        }
+
+        // Collapse any sequence of whitespace characters (including newlines and tabs) to a single space
+        var collapsed = Regex.Replace(xml, @"\s+", " ").Trim();
+
+        // Normalize spacing around XML tags
+        // Remove spaces between tags: "> <" -> "><"
+        collapsed = Regex.Replace(collapsed, @">\s+<", "><");
+        // Remove spaces immediately after start tag: "<tag> " -> "<tag>"
+        collapsed = Regex.Replace(collapsed, @"<([a-zA-Z0-9_\-]+(?: [^>]*)?)>\s+", "<$1>");
+        // Remove spaces immediately before end tag: " </tag>" -> "</tag>"
+        collapsed = Regex.Replace(collapsed, @"\s+</([a-zA-Z0-9_\-]+)>", "</$1>");
+
+        return collapsed;
     }
 
     /// <summary>

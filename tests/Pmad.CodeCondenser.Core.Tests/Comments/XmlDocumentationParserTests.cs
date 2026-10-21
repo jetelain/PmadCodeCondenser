@@ -315,4 +315,51 @@ public class XmlDocumentationParserTests
 
         XmlDocumentationParser.IsVerbose(trivia, comment, settings).Should().BeFalse();
     }
+
+    [Fact]
+    public void NormalizeXmlText_WithIndentedAndWrappedComments_MatchesUnindentedComment()
+    {
+        var unindented = """
+            /// <summary>
+            /// Draws images from a prompt artifact.
+            /// </summary>
+            /// <remarks>
+            /// File extension matches the model output format (e.g. .png for SD, .jpg for flux). For local GGUF SD models, use SDXL architecture with 1024x1024 resolution.
+            /// </remarks>
+            """;
+
+        var indentedAndWrapped = """
+                /// <summary>
+                /// Draws images from a prompt artifact.
+                /// </summary>
+                /// <remarks>
+                /// File extension matches the model output format (e.g. .png for SD, .jpg
+                /// for flux). For local GGUF SD models, use SDXL architecture with
+                /// 1024x1024 resolution.
+                /// </remarks>
+            """;
+
+        var norm1 = XmlDocumentationParser.NormalizeXmlText(unindented);
+        var norm2 = XmlDocumentationParser.NormalizeXmlText(indentedAndWrapped);
+
+        norm1.Should().NotBeEmpty();
+        norm1.Should().Be(norm2);
+        norm1.Should().Be("<summary>Draws images from a prompt artifact.</summary><remarks>File extension matches the model output format (e.g. .png for SD, .jpg for flux). For local GGUF SD models, use SDXL architecture with 1024x1024 resolution.</remarks>");
+    }
+
+    [Fact]
+    public void NormalizeXmlText_WithParamAndCodeTags_NormalizesAccurately()
+    {
+        var comment = """
+            /// <summary>
+            /// Returns local file path ( <c> mmproj-*.gguf </c> ) in cache.
+            /// </summary>
+            /// <param name="preset"> The preset model configuration. </param>
+            """;
+
+        var normalized = XmlDocumentationParser.NormalizeXmlText(comment);
+
+        normalized.Should().Be("<summary>Returns local file path ( <c>mmproj-*.gguf</c> ) in cache.</summary><param name=\"preset\">The preset model configuration.</param>");
+    }
 }
+

@@ -176,4 +176,79 @@ public class XmlDocumentationFormatterTests
         lines.Should().Contain("///");
         formatted.Should().Contain("/// First paragraph of remarks text.\r\n///\r\n/// Second paragraph of remarks text.");
     }
+
+    [Fact]
+    public void Format_LooseTextAndInlineTagsAfterSummary_WrapsInRemarksWithoutMangledSummaryTags()
+    {
+        var input = """
+            /// <summary>
+            /// Implements <see cref="IAgentSurfaceService" /> using embedded resources.
+            /// </summary>
+            /// Every file is read once into immutable, process-wide state from the assembly's
+            /// embedded resources. This prevents divergence between hosts (CLI, GUI).
+            /// Canonical front-matter supplies
+            /// <see cref="SlashCommandPrompt.Name" />
+            /// /
+            /// <see cref="SlashCommandPrompt.Description" />
+            /// ;
+            /// skill front-matter supplies the same for
+            /// <see cref="AgentSkill" />
+            /// .
+            """;
+
+        var formatted = XmlDocumentationFormatter.Format(input, indentation: "", maxLineLength: 120);
+
+        formatted.Should().NotContain("<summary>/</summary>");
+        formatted.Should().NotContain("<summary>.</summary>");
+        formatted.Should().NotContain("<summary>;");
+        // Exactly one <summary> tag
+        formatted.Split("<summary>").Length.Should().Be(2);
+        formatted.Should().Contain("<remarks>");
+        formatted.Should().Contain("</remarks>");
+        formatted.Should().Contain("<see cref=\"SlashCommandPrompt.Name\"");
+        formatted.Should().Contain("<see cref=\"SlashCommandPrompt.Description\"");
+        formatted.Should().Contain("<see cref=\"AgentSkill\"");
+    }
+
+    [Fact]
+    public void Format_MultipleSummaryTags_ConsolidatesIntoSingleSummaryTag()
+    {
+        var input = """
+            /// <summary>First paragraph of summary.</summary>
+            /// <summary>Second paragraph of summary with <see cref="System.String"/>.</summary>
+            """;
+
+        var formatted = XmlDocumentationFormatter.Format(input, indentation: "", maxLineLength: 120);
+
+        // Exactly one <summary> tag
+        formatted.Split("<summary>").Length.Should().Be(2);
+        formatted.Should().Contain("First paragraph of summary.");
+        formatted.Should().Contain("Second paragraph of summary with <see cref=\"System.String\"");
+    }
+
+    [Fact]
+    public void Format_PreviouslyMangledSummaryWithPunctuationTags_ConsolidatesCleanly()
+    {
+        var input = """
+            /// <summary>
+            /// Implements <see cref="IAgentSurfaceService" /> using embedded resources.
+            /// </summary>
+            /// <summary>
+            /// Every file is read once into immutable, process-wide state.
+            /// </summary>
+            /// <see cref="SlashCommandPrompt.Name" />
+            /// <summary>/</summary>
+            /// <see cref="SlashCommandPrompt.Description" />
+            /// <summary>.</summary>
+            """;
+
+        var formatted = XmlDocumentationFormatter.Format(input, indentation: "", maxLineLength: 120);
+
+        formatted.Should().NotContain("<summary>/</summary>");
+        formatted.Should().NotContain("<summary>.</summary>");
+        formatted.Split("<summary>").Length.Should().Be(2);
+        formatted.Should().Contain("<remarks>");
+        formatted.Should().Contain("</remarks>");
+    }
 }
+

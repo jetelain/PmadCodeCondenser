@@ -641,7 +641,196 @@ public class CodeCondenserEngineTests : IDisposable
         result.VerboseComments.Should().BeEmpty();
     }
 
+    [Fact]
+    public async Task ApplySummariesWithModifiedFilesAsync_WithIndentedXmlDocComment_WhitelistsOnDiskCommentInReportRun()
+    {
+        var file = Path.Combine(_testDir, "ImageDrawer.cs");
+        var originalDoc = """
+                /// <summary>
+                /// Draws images from a prompt artifact.
+                /// </summary>
+                /// <remarks>
+                /// The on-disk extension is derived from the model name in the artifact front matter.
+                /// For example, SD models produce PNG files, flux models produce JPG files.
+                /// </remarks>
+            """;
+        var code = $$"""
+        namespace MyTest;
+        public class ImageDrawer
+        {
+        {{originalDoc}}
+            public void Draw() {}
+        }
+        """;
+        await File.WriteAllTextAsync(file, code);
+
+        var summarizedStore = new InMemorySummarizedCommentsStore();
+        var unindentedSummary = """
+            /// <summary>
+            /// Draws images from a prompt artifact.
+            /// </summary>
+            /// <remarks>
+            /// File extension matches the model output format (e.g. .png for SD, .jpg for flux). For local GGUF SD models, use SDXL architecture with 1024x1024 resolution.
+            /// </remarks>
+            """;
+
+        var summarizer = new FuncCommentSummarizer((comments, cache) =>
+        {
+            var dict = new Dictionary<string, string>(cache);
+            foreach (var c in comments)
+            {
+                dict[c.ContentHash] = unindentedSummary;
+            }
+            return dict;
+        });
+
+        var engine = new CodeCondenserEngine(
+            snapshotStore: _snapshotStore,
+            commentSummarizer: summarizer,
+            summarizedCommentsStore: summarizedStore);
+
+        var settings = new CodeCondenserSettings
+        {
+            CommentLengthThreshold = 100,
+            SummaryMode = SummaryMode.Summarize
+        };
+
+        // 1. Analyze and summarize
+        var analyzeResult = await engine.AnalyzeAsync(_testDir, settings);
+        analyzeResult.VerboseComments.Should().HaveCount(1);
+
+        // 2. Apply
+        var modifiedFiles = await engine.ApplySummariesWithModifiedFilesAsync(analyzeResult, settings);
+        modifiedFiles.Should().ContainSingle();
+
+        // 3. Report run
+        var reportEngine = new CodeCondenserEngine(
+            snapshotStore: _snapshotStore,
+            commentSummarizer: null,
+            summarizedCommentsStore: summarizedStore);
+
+        var reportSettings = new CodeCondenserSettings
+        {
+            CommentLengthThreshold = 100,
+            SummaryMode = SummaryMode.Report
+        };
+
+        var reportResult = await reportEngine.AnalyzeAsync(_testDir, reportSettings);
+
+        // Even though on disk the XML comment is indented and > 100 characters, it must be whitelisted!
+        reportResult.VerboseComments.Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task ApplySummariesWithModifiedFilesAsync_WhenSummarizedCommentsHasNullValue_DoesNotThrowNre()
+    {
+        var file = Path.Combine(_testDir, "NreTest.cs");
+        var comment = "// " + new string('y', 120);
+        var code = $"namespace MyTest;\npublic class NreTest {{\n    {comment}\n    public void M() {{}}\n}}";
+        await File.WriteAllTextAsync(file, code);
+
+        var summarizedStore = new InMemorySummarizedCommentsStore();
+        var engine = new CodeCondenserEngine(
+            snapshotStore: _snapshotStore,
+            commentSummarizer: null,
+            summarizedCommentsStore: summarizedStore);
+
+        var settings = new CodeCondenserSettings
+        {
+            CommentLengthThreshold = 100,
+            SummaryMode = SummaryMode.Summarize
+        };
+
+        var hash = VerboseComment.ComputeSha256(comment);
+        var analysisResult = new AnalysisResult
+        {
+            VerboseComments = [new VerboseComment(file, 3, 3, 0, comment.Length, CommentKind.SingleLine, comment, "    ")],
+            CloneGroups = [],
+            SubMethodCloneGroups = [],
+            SummarizedComments = new Dictionary<string, string?> { [hash] = null }!,
+            AnalyzedFilesCount = 1,
+            TotalMethodsScanned = 1,
+            ProductionFilesCount = 1,
+            TestFilesCount = 0,
+            SkippedGeneratedFilesCount = 0
+        };
+
+        var act = async () => await engine.ApplySummariesWithModifiedFilesAsync(analysisResult, settings);
+        await act.Should().NotThrowAsync();
+    }
+
+    [Fact]
+    public async Task ApplySummariesWithModifiedFilesAsync_WhenFileContentUnchanged_StillWhitelistsSummaryAndAppliedComment()
+    {
+        var file = Path.Combine(_testDir, "UnchangedPreset.cs");
+        var existingDoc = """
+                /// <summary>
+                /// Returns the local multimodal projector file path ( <c> mmproj-*.gguf </c>) in the models cache, or default.
+                /// </summary>
+            """;
+        var code = $$"""
+        namespace MyTest;
+        public class UnchangedPreset
+        {
+        {{existingDoc}}
+            public void Load() {}
+        }
+        """;
+        await File.WriteAllTextAsync(file, code);
+
+        var summarizedStore = new InMemorySummarizedCommentsStore();
+        // The LLM returns virtually the same text (unindented)
+        var unindentedSummary = "/// <summary>\r\n/// Returns the local multimodal projector file path ( <c> mmproj-*.gguf </c>) in the models cache, or default.\r\n/// </summary>";
+
+        var summarizer = new FuncCommentSummarizer((comments, cache) =>
+        {
+            var dict = new Dictionary<string, string>(cache);
+            foreach (var c in comments)
+            {
+                dict[c.ContentHash] = unindentedSummary;
+            }
+            return dict;
+        });
+
+        var engine = new CodeCondenserEngine(
+            snapshotStore: _snapshotStore,
+            commentSummarizer: summarizer,
+            summarizedCommentsStore: summarizedStore);
+
+        var settings = new CodeCondenserSettings
+        {
+            CommentLengthThreshold = 100,
+            SummaryMode = SummaryMode.Summarize
+        };
+
+        var analyzeResult = await engine.AnalyzeAsync(_testDir, settings);
+        analyzeResult.VerboseComments.Should().HaveCount(1);
+
+        // Apply: file content won't change because formatted output matches existing text
+        var modified = await engine.ApplySummariesWithModifiedFilesAsync(analyzeResult, settings);
+        modified.Should().BeEmpty();
+
+        // But summarizedStore must still have saved whitelist hashes!
+        summarizedStore.Stored.Should().NotBeEmpty();
+
+        // Subsequent report run must whitelist the on-disk comment!
+        var reportEngine = new CodeCondenserEngine(
+            snapshotStore: _snapshotStore,
+            commentSummarizer: null,
+            summarizedCommentsStore: summarizedStore);
+
+        var reportSettings = new CodeCondenserSettings
+        {
+            CommentLengthThreshold = 100,
+            SummaryMode = SummaryMode.Report
+        };
+
+        var reportResult = await reportEngine.AnalyzeAsync(_testDir, reportSettings);
+        reportResult.VerboseComments.Should().BeEmpty();
+    }
+
     private sealed class InMemorySummarizedCommentsStore : ISummarizedCommentsStore
+
     {
         public Dictionary<string, string> Stored { get; } = new(StringComparer.Ordinal);
 

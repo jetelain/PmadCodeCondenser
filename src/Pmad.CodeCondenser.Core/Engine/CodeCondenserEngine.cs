@@ -572,6 +572,8 @@ public sealed class CodeCondenserEngine : ICodeCondenserEngine
         var commentsByFile = analysisResult.VerboseComments
             .GroupBy(c => c.FilePath, StringComparer.OrdinalIgnoreCase);
 
+        var appliedTriviaTexts = new List<string>();
+
         foreach (var group in commentsByFile)
         {
             cancellationToken.ThrowIfCancellationRequested();
@@ -589,7 +591,7 @@ public sealed class CodeCondenserEngine : ICodeCondenserEngine
             var originalText = await File.ReadAllTextAsync(fullPath, cancellationToken).ConfigureAwait(false);
             var tree = CSharpSyntaxTree.ParseText(originalText, path: fullPath, cancellationToken: cancellationToken);
 
-            var newTree = _commentRewriter.Rewrite(tree, analysisResult.SummarizedComments);
+            var newTree = _commentRewriter.Rewrite(tree, analysisResult.SummarizedComments, appliedTriviaTexts);
             var newText = newTree.GetText(cancellationToken).ToString();
 
             if (!string.Equals(originalText, newText, StringComparison.Ordinal))
@@ -600,7 +602,7 @@ public sealed class CodeCondenserEngine : ICodeCondenserEngine
             }
         }
 
-        if (_summarizedCommentsStore != null && modifiedFiles.Count > 0)
+        if (_summarizedCommentsStore != null && (modifiedFiles.Count > 0 || appliedTriviaTexts.Count > 0))
         {
             var baseDir = _lastBaseDirectory ?? Directory.GetCurrentDirectory();
             var summarizedPath = ResolveSnapshotPath(baseDir, settings.SummarizedCommentsFilePath);
@@ -611,13 +613,26 @@ public sealed class CodeCondenserEngine : ICodeCondenserEngine
             {
                 foreach (var comment in group)
                 {
-                    if (analysisResult.SummarizedComments.TryGetValue(comment.ContentHash, out var summaryText))
+                    if (analysisResult.SummarizedComments.TryGetValue(comment.ContentHash, out var summaryText) &&
+                        !string.IsNullOrWhiteSpace(summaryText))
                     {
                         var trimmedSummary = summaryText.Trim();
                         foreach (var hash in CommentHashHelper.GetSummaryHashes(trimmedSummary, comment.Kind))
                         {
                             merged[hash] = trimmedSummary;
                         }
+                    }
+                }
+            }
+
+            foreach (var appliedText in appliedTriviaTexts)
+            {
+                if (!string.IsNullOrWhiteSpace(appliedText))
+                {
+                    var trimmedApplied = appliedText.Trim();
+                    foreach (var hash in CommentHashHelper.GetSummaryHashes(trimmedApplied))
+                    {
+                        merged[hash] = trimmedApplied;
                     }
                 }
             }

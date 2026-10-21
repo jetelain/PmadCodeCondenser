@@ -148,4 +148,60 @@ public class CommentHashHelperTests
 
         isIgnored.Should().BeFalse();
     }
+
+    [Fact]
+    public void IsCommentIgnored_IndentedAndWrappedXmlDocComment_MatchesUnindentedSummaryVariation()
+    {
+        // Unindented summary text that was stored in .codecondenser/summarized-comments.json
+        var unindentedSummary = """
+            /// <summary>
+            /// Draws images from a prompt artifact.
+            /// </summary>
+            /// <remarks>
+            /// File extension matches the model output format (e.g. .png for SD, .jpg for flux). For local GGUF SD models, use SDXL architecture with 1024x1024 resolution.
+            /// </remarks>
+            """;
+
+        var ignoredHashes = new HashSet<string>(StringComparer.Ordinal);
+        CommentHashHelper.AddSummaryVariations(ignoredHashes, unindentedSummary, CommentKind.XmlDocumentation);
+
+        // On-disk indented and wrapped trivia (e.g. 4 spaces indentation, narrower wrapping)
+        var code = """
+            public class ImageDrawer
+            {
+                /// <summary>
+                /// Draws images from a prompt artifact.
+                /// </summary>
+                /// <remarks>
+                /// File extension matches the model output format (e.g. .png for SD, .jpg
+                /// for flux). For local GGUF SD models, use SDXL architecture with
+                /// 1024x1024 resolution.
+                /// </remarks>
+                public void Draw() {}
+            }
+            """;
+
+        var tree = CSharpSyntaxTree.ParseText(code);
+        var trivia = tree.GetRoot().DescendantTrivia().First(t => t.IsKind(SyntaxKind.SingleLineDocumentationCommentTrivia));
+
+        bool isIgnored = CommentHashHelper.IsCommentIgnored(trivia, trivia.ToString(), CommentKind.XmlDocumentation, ignoredHashes);
+
+        isIgnored.Should().BeTrue();
+    }
+
+    [Fact]
+    public void IsCommentIgnored_SingleLineComment_MatchesWhitespaceCollapsedVariation()
+    {
+        var summary = "// Summary with concise content.";
+        var ignoredHashes = new HashSet<string>(StringComparer.Ordinal);
+        CommentHashHelper.AddSummaryVariations(ignoredHashes, summary, CommentKind.SingleLine);
+
+        // Multiple spaces between words
+        var trivia = SyntaxFactory.Comment("//  Summary   with   concise   content. ");
+
+        bool isIgnored = CommentHashHelper.IsCommentIgnored(trivia, trivia.ToString(), CommentKind.SingleLine, ignoredHashes);
+
+        isIgnored.Should().BeTrue();
+    }
 }
+

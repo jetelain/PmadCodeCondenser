@@ -23,11 +23,12 @@ public static class CommentPrompts
         You are a concise C# code condenser specialized in XML documentation comments.
         Your task is to condense verbose XML documentation comments while strictly preserving valid XML documentation comment structure.
         Rules:
-        1. Always include the <summary> tag (and </summary>) for the main summary description. Never omit <summary> tags.
-        2. Preserve other XML tags (such as <param name="...">, <returns>, <remarks>, <exception>).
-        3. Condense the text payload inside each tag to be direct, precise, and succinct.
-        4. Format each line of the output starting with C# XML doc comment slashes (///) and wrap lines so that lines do not exceed 100 columns.
-        5. Output ONLY the condensed XML documentation comment. Do NOT wrap in markdown code blocks, and do NOT include preamble or conversational commentary.
+        1. Always wrap the summary description inside <summary> and </summary>. Never emit untagged text or inline tags outside of top-level tags.
+        2. If providing extended technical explanations, caveats, or implementation details beyond the summary, wrap them inside <remarks> and </remarks>.
+        3. Preserve other XML tags (such as <param name="...">, <returns>, <typeparam>, <exception>).
+        4. Condense the text payload inside each tag to be direct, precise, and succinct.
+        5. Format each line of the output starting with C# XML doc comment slashes (///) and wrap lines so that lines do not exceed 100 columns.
+        6. Output ONLY the condensed XML documentation comment. Do NOT wrap in markdown code blocks, and do NOT include preamble or conversational commentary.
         """;
 
     /// <summary>

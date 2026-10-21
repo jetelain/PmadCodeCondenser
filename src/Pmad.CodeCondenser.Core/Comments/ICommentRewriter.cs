@@ -8,4 +8,11 @@ namespace Pmad.CodeCondenser.Core.Comments;
 public interface ICommentRewriter
 {
     SyntaxTree Rewrite(SyntaxTree syntaxTree, IReadOnlyDictionary<string, string> commentReplacements);
+
+    SyntaxTree Rewrite(
+        SyntaxTree syntaxTree,
+        IReadOnlyDictionary<string, string> commentReplacements,
+        ICollection<string>? appliedTriviaTexts) =>
+        Rewrite(syntaxTree, commentReplacements);
 }
+

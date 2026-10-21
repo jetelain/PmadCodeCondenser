@@ -154,15 +154,96 @@ public static class XmlDocumentationFormatter
                 return false;
             }
 
+            XElement? summaryElement = null;
+            XElement? remarksElement = null;
+            XElement? currentTarget = null;
+
             foreach (var node in doc.Root.Nodes())
             {
-                if (node is XElement elem)
+                if (node is XElement elem && StandardRootTags.Contains(elem.Name.LocalName))
                 {
-                    elements.Add(elem);
+                    var tagName = elem.Name.LocalName;
+
+                    if (string.Equals(tagName, "summary", StringComparison.OrdinalIgnoreCase))
+                    {
+                        if (summaryElement == null)
+                        {
+                            summaryElement = elem;
+                            elements.Add(summaryElement);
+                            currentTarget = summaryElement;
+                        }
+                        else if (remarksElement != null)
+                        {
+                            // Remarks already started; any subsequent <summary> is fragmented or out-of-order
+                            if (remarksElement.Nodes().Any() && elem.Nodes().Any())
+                            {
+                                remarksElement.Add(new XText(" "));
+                            }
+                            remarksElement.Add(elem.Nodes());
+                            currentTarget = remarksElement;
+                        }
+                        else
+                        {
+                            // Merge subsequent <summary> into the existing summary
+                            if (summaryElement.Nodes().Any() && elem.Nodes().Any())
+                            {
+                                summaryElement.Add(new XText("\n"));
+                            }
+                            summaryElement.Add(elem.Nodes());
+                            currentTarget = summaryElement;
+                        }
+                    }
+                    else if (string.Equals(tagName, "remarks", StringComparison.OrdinalIgnoreCase))
+                    {
+                        if (remarksElement == null)
+                        {
+                            remarksElement = elem;
+                            elements.Add(remarksElement);
+                        }
+                        else
+                        {
+                            // Merge subsequent <remarks> into the existing remarks
+                            if (remarksElement.Nodes().Any() && elem.Nodes().Any())
+                            {
+                                remarksElement.Add(new XText("\n"));
+                            }
+                            remarksElement.Add(elem.Nodes());
+                        }
+                        currentTarget = remarksElement;
+                    }
+                    else
+                    {
+                        elements.Add(elem);
+                        currentTarget = elem;
+                    }
                 }
-                else if (node is XText text && !string.IsNullOrWhiteSpace(text.Value))
+                else
                 {
-                    elements.Add(new XElement("summary", text.Value.Trim()));
+                    // Node is loose text or an inline tag (e.g. <see>, <c>, <b>) outside of standard root tags
+                    if (node is XText text && string.IsNullOrWhiteSpace(text.Value))
+                    {
+                        continue;
+                    }
+
+                    if (summaryElement == null)
+                    {
+                        summaryElement = new XElement("summary");
+                        elements.Insert(0, summaryElement);
+                        summaryElement.Add(node);
+                        currentTarget = summaryElement;
+                    }
+                    else if (remarksElement == null)
+                    {
+                        remarksElement = new XElement("remarks");
+                        elements.Add(remarksElement);
+                        remarksElement.Add(node);
+                        currentTarget = remarksElement;
+                    }
+                    else
+                    {
+                        currentTarget ??= remarksElement;
+                        currentTarget.Add(node);
+                    }
                 }
             }
 
@@ -335,10 +416,10 @@ public static class XmlDocumentationFormatter
                 insideTag = false;
                 current.Append(c);
 
-                // Attach any immediate punctuation (.,;:!?) or closing quote/parenthesis to the tag token
+                // Attach any immediate punctuation (.,;:!?) or closing quote/parenthesis/slash to the tag token
                 while (i + 1 < innerXml.Length && (innerXml[i + 1] == '.' || innerXml[i + 1] == ',' ||
                        innerXml[i + 1] == ';' || innerXml[i + 1] == ':' || innerXml[i + 1] == ')' ||
-                       innerXml[i + 1] == '\'' || innerXml[i + 1] == '"'))
+                       innerXml[i + 1] == '\'' || innerXml[i + 1] == '"' || innerXml[i + 1] == '/'))
                 {
                     i++;
                     current.Append(innerXml[i]);

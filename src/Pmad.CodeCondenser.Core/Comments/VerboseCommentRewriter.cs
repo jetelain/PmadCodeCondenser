@@ -13,6 +13,12 @@ namespace Pmad.CodeCondenser.Core.Comments;
 public sealed class VerboseCommentRewriter : CSharpSyntaxRewriter, ICommentRewriter
 {
     private readonly IReadOnlyDictionary<string, string> _replacements;
+    private readonly List<string> _appliedTriviaTexts = new();
+
+    /// <summary>
+    /// Gets the list of rewritten trivia texts applied during syntax tree rewriting.
+    /// </summary>
+    public IReadOnlyList<string> AppliedTriviaTexts => _appliedTriviaTexts;
 
     /// <summary>
     /// Initializes a new instance of <see cref="VerboseCommentRewriter"/> with empty replacements.
@@ -34,6 +40,21 @@ public sealed class VerboseCommentRewriter : CSharpSyntaxRewriter, ICommentRewri
     /// <inheritdoc />
     public SyntaxTree Rewrite(SyntaxTree syntaxTree, IReadOnlyDictionary<string, string> commentReplacements)
     {
+        return Rewrite(syntaxTree, commentReplacements, appliedTriviaTexts: null);
+    }
+
+    /// <summary>
+    /// Rewrites a syntax tree replacing verbose comments, optionally recording the actual rewritten trivia texts.
+    /// </summary>
+    /// <param name="syntaxTree">The input syntax tree.</param>
+    /// <param name="commentReplacements">The comment replacements dictionary.</param>
+    /// <param name="appliedTriviaTexts">Optional collection to receive rewritten trivia texts.</param>
+    /// <returns>The rewritten syntax tree.</returns>
+    public SyntaxTree Rewrite(
+        SyntaxTree syntaxTree,
+        IReadOnlyDictionary<string, string> commentReplacements,
+        ICollection<string>? appliedTriviaTexts)
+    {
         ArgumentNullException.ThrowIfNull(syntaxTree);
         ArgumentNullException.ThrowIfNull(commentReplacements);
 
@@ -45,6 +66,14 @@ public sealed class VerboseCommentRewriter : CSharpSyntaxRewriter, ICommentRewri
         var rewriter = new VerboseCommentRewriter(commentReplacements);
         var root = syntaxTree.GetRoot();
         var newRoot = rewriter.Visit(root);
+
+        if (appliedTriviaTexts != null)
+        {
+            foreach (var text in rewriter._appliedTriviaTexts)
+            {
+                appliedTriviaTexts.Add(text);
+            }
+        }
 
         return CSharpSyntaxTree.Create(
             (CSharpSyntaxNode)newRoot,
@@ -72,11 +101,33 @@ public sealed class VerboseCommentRewriter : CSharpSyntaxRewriter, ICommentRewri
             return base.VisitTrivia(trivia);
         }
 
-        return CreateReplacementTrivia(trivia, replacement);
+        if (string.IsNullOrWhiteSpace(replacement))
+        {
+            return base.VisitTrivia(trivia);
+        }
+
+        var replacementTrivia = CreateReplacementTrivia(trivia, replacement);
+        var rewrittenText = replacementTrivia.ToString().Trim();
+        if (!string.IsNullOrWhiteSpace(rewrittenText))
+        {
+            _appliedTriviaTexts.Add(rewrittenText);
+        }
+        var fullRewrittenText = replacementTrivia.ToFullString().Trim();
+        if (!string.IsNullOrWhiteSpace(fullRewrittenText) && !string.Equals(rewrittenText, fullRewrittenText, StringComparison.Ordinal))
+        {
+            _appliedTriviaTexts.Add(fullRewrittenText);
+        }
+
+        return replacementTrivia;
     }
 
     private static SyntaxTrivia CreateReplacementTrivia(SyntaxTrivia originalTrivia, string replacementText)
     {
+        if (string.IsNullOrWhiteSpace(replacementText))
+        {
+            return originalTrivia;
+        }
+
         var kind = originalTrivia.Kind();
         var lineEnding = originalTrivia.ToFullString().Contains("\r\n") ? "\r\n" : "\n";
 
@@ -177,6 +228,25 @@ public sealed class VerboseCommentRewriter : CSharpSyntaxRewriter, ICommentRewri
             if (idx > 0 && leading[idx - 1].IsKind(SyntaxKind.WhitespaceTrivia))
             {
                 return leading[idx - 1].ToString();
+            }
+        }
+
+        // Fallback: check if original trivia text contains indentation on interior lines
+        var text = trivia.ToFullString();
+        var lines = text.Replace("\r\n", "\n").Split('\n');
+        foreach (var line in lines)
+        {
+            if (line.Contains("///"))
+            {
+                int slashIdx = line.IndexOf("///", StringComparison.Ordinal);
+                if (slashIdx > 0)
+                {
+                    var prefix = line[..slashIdx];
+                    if (string.IsNullOrWhiteSpace(prefix))
+                    {
+                        return prefix;
+                    }
+                }
             }
         }
 

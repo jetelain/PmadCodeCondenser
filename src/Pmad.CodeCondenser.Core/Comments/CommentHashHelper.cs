@@ -90,6 +90,29 @@ public static class CommentHashHelper
             }
         }
 
+        var collapsed = System.Text.RegularExpressions.Regex.Replace(trimmed, @"\s+", " ").Trim();
+        if (!string.Equals(collapsed, trimmed, StringComparison.Ordinal))
+        {
+            var collapsedHash = VerboseComment.ComputeSha256(collapsed);
+            if (seen.Add(collapsedHash))
+            {
+                yield return collapsedHash;
+            }
+        }
+
+        if (kind == CommentKind.XmlDocumentation || trimmed.Contains('<') || trimmed.StartsWith("///"))
+        {
+            var normalizedXml = XmlDocumentationParser.NormalizeXmlText(trimmed);
+            if (!string.IsNullOrWhiteSpace(normalizedXml))
+            {
+                var normHash = VerboseComment.ComputeSha256(normalizedXml);
+                if (seen.Add(normHash))
+                {
+                    yield return normHash;
+                }
+            }
+        }
+
         var xmlText = XmlDocumentationParser.ExtractXmlText(summaryText).Trim();
         if (!string.IsNullOrWhiteSpace(xmlText) && !string.Equals(xmlText, trimmed, StringComparison.Ordinal))
         {
@@ -183,14 +206,28 @@ public static class CommentHashHelper
                 }
             }
         }
-        else if (kind == CommentKind.XmlDocumentation)
+        if (kind == CommentKind.XmlDocumentation || text.Contains('<') || text.TrimStart().StartsWith("///"))
         {
+            var normalizedXml = XmlDocumentationParser.NormalizeXmlText(text);
+            if (!string.IsNullOrEmpty(normalizedXml) &&
+                ignoredHashes.Contains(VerboseComment.ComputeSha256(normalizedXml)))
+            {
+                return true;
+            }
+
             var xmlText = XmlDocumentationParser.ExtractXmlText(text).Trim();
             if (!string.IsNullOrEmpty(xmlText) &&
                 ignoredHashes.Contains(VerboseComment.ComputeSha256(xmlText)))
             {
                 return true;
             }
+        }
+
+        var collapsedText = System.Text.RegularExpressions.Regex.Replace(trimmed, @"\s+", " ").Trim();
+        if (!string.Equals(collapsedText, trimmed, StringComparison.Ordinal) &&
+            ignoredHashes.Contains(VerboseComment.ComputeSha256(collapsedText)))
+        {
+            return true;
         }
 
         return false;

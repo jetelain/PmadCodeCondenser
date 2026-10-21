@@ -204,4 +204,48 @@ public class VerboseCommentRewriterTests
         act1.Should().Throw<ArgumentNullException>();
         act2.Should().Throw<ArgumentNullException>();
     }
+
+    [Fact]
+    public void Rewrite_WithAppliedTriviaTexts_CapturesRewrittenTrivia()
+    {
+        var originalComment = "// " + new string('x', 120);
+        var code = $$"""
+            public class TestClass
+            {
+                {{originalComment}}
+                public void DoWork() {}
+            }
+            """;
+
+        var tree = CSharpSyntaxTree.ParseText(code);
+        var replacements = new Dictionary<string, string>
+        {
+            [Hash(originalComment)] = "Short explanation."
+        };
+
+        var appliedTrivia = new List<string>();
+        var rewritten = _rewriter.Rewrite(tree, replacements, appliedTrivia);
+
+        appliedTrivia.Should().NotBeEmpty();
+        appliedTrivia.Should().Contain("// Short explanation.");
+    }
+
+    [Fact]
+    public void Rewrite_WithNullOrWhitespaceReplacement_DoesNotThrowNreAndLeavesTriviaUnchanged()
+    {
+        var comment = "// Long comment text";
+        var code = $"public class C {{ {comment} public void M() {{}} }}";
+        var tree = CSharpSyntaxTree.ParseText(code);
+        var replacements = new Dictionary<string, string?>
+        {
+            [Hash(comment)] = null,
+            [comment] = "   "
+        }!;
+
+        var act = () => _rewriter.Rewrite(tree, replacements!);
+        act.Should().NotThrow();
+        var result = _rewriter.Rewrite(tree, replacements!);
+        result.ToString().Should().Be(code);
+    }
 }
+
