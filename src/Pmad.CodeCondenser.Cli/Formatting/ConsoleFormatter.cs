@@ -70,7 +70,7 @@ public sealed class ConsoleFormatter : IConsoleFormatter
                 }
 
                 writer.WriteLine(Dim("  Recommendation: Extract duplicate structural logic into a shared helper method or service."));
-                writer.WriteLine(Dim("  To suppress: Add '// [codecondenser:ignore-duplicate]' above method or run 'pmad-codecondenser snapshot'."));
+                writer.WriteLine(Dim("  To suppress: Add '[SuppressMessage(\"CodeCondenser\", \"Duplication\", Justification = \"<why>\")]' on method."));
                 writer.WriteLine();
             }
         }
@@ -105,7 +105,7 @@ public sealed class ConsoleFormatter : IConsoleFormatter
                 }
 
                 writer.WriteLine(Dim("  Recommendation: Consider parameterized tests ([Theory] + [InlineData]) or test builder fixtures instead of production helpers."));
-                writer.WriteLine(Dim("  To suppress: Add '// [codecondenser:ignore-duplicate]' above method or run 'pmad-codecondenser snapshot'."));
+                writer.WriteLine(Dim("  To suppress: Add '[SuppressMessage(\"CodeCondenser\", \"Duplication\", Justification = \"<why>\")]' on method."));
                 writer.WriteLine();
             }
         }

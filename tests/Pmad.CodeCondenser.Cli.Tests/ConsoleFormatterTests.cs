@@ -51,7 +51,7 @@ public class ConsoleFormatterTests
         output.Should().Contain("src/Service1.cs:10-20 in Process (8 statements)");
         output.Should().Contain("src/Service2.cs:15-25 in Execute (8 statements)");
         output.Should().Contain("Recommendation: Extract duplicate structural logic");
-        output.Should().Contain("To suppress: Add '// [codecondenser:ignore-duplicate]'");
+        output.Should().Contain("To suppress: Add '[SuppressMessage(\"CodeCondenser\", \"Duplication\", Justification = \"<why>\")]' on method.");
     }
 
     [Fact]
@@ -73,6 +73,7 @@ public class ConsoleFormatterTests
         output.Should().Contain("Found 1 Test Duplication Cluster(s) (Review for DAMP vs DRY):");
         output.Should().Contain("[TEST CLUSTER #1]");
         output.Should().Contain("Recommendation: Consider parameterized tests ([Theory] + [InlineData])");
+        output.Should().Contain("To suppress: Add '[SuppressMessage(\"CodeCondenser\", \"Duplication\", Justification = \"<why>\")]' on method.");
     }
 
     [Fact]
