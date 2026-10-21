@@ -222,40 +222,13 @@ public sealed class ConsoleFormatter : IConsoleFormatter
         int methodsScanned,
         int cloneGroupsCount,
         int verboseCommentsCount,
-        string mode)
-    {
-        PrintSummary(writer, filesAnalyzed, methodsScanned, cloneGroupsCount, verboseCommentsCount, mode, 0, 0, 0, 0, 0);
-    }
-
-    public void PrintSummary(
-        TextWriter writer,
-        int filesAnalyzed,
-        int methodsScanned,
-        int cloneGroupsCount,
-        int verboseCommentsCount,
         string mode,
-        int productionFiles,
-        int testFiles,
-        int skippedGenerated,
-        int productionClones,
-        int testClones)
-    {
-        PrintSummary(writer, filesAnalyzed, methodsScanned, cloneGroupsCount, verboseCommentsCount, mode, productionFiles, testFiles, skippedGenerated, productionClones, testClones, 0);
-    }
-
-    public void PrintSummary(
-        TextWriter writer,
-        int filesAnalyzed,
-        int methodsScanned,
-        int cloneGroupsCount,
-        int verboseCommentsCount,
-        string mode,
-        int productionFiles,
-        int testFiles,
-        int skippedGenerated,
-        int productionClones,
-        int testClones,
-        int subMethodClones)
+        int productionFiles = 0,
+        int testFiles = 0,
+        int skippedGenerated = 0,
+        int productionClones = 0,
+        int testClones = 0,
+        int subMethodClones = 0)
     {
         ArgumentNullException.ThrowIfNull(writer);
 
