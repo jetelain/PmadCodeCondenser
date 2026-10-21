@@ -451,4 +451,57 @@ public class VerboseCommentExtractorTests
 
         comments.Should().BeEmpty();
     }
+
+    [Fact]
+    public void Extract_SingleLineCommentInIgnoredCommentHashes_WithBareSummaryText_IsIgnored()
+    {
+        // Simulates an LLM summary output without '// ' that was applied to disk as '// Value is truncated...'
+        var bareSummary = "Value is truncated by AgentTranscript.MaxEntryChars; newlines are escaped for single-line readability.";
+        var code = $$"""
+            public class TestClass
+            {
+                // {{bareSummary}}
+                public void Method() {}
+            }
+            """;
+
+        var tree = CSharpSyntaxTree.ParseText(code);
+        var bareHash = VerboseComment.ComputeSha256(bareSummary);
+
+        var settings = new CodeCondenserSettings
+        {
+            CommentLengthThreshold = 50,
+            IgnoredCommentHashes = new HashSet<string> { bareHash }
+        };
+
+        var comments = _extractor.Extract(tree, "TestClass.cs", settings);
+
+        comments.Should().BeEmpty();
+    }
+
+    [Fact]
+    public void Extract_MultiLineCommentInIgnoredCommentHashes_WithBareSummaryText_IsIgnored()
+    {
+        var bareSummary = "Value is truncated by AgentTranscript.MaxEntryChars; newlines are escaped for single-line readability.";
+        var code = $$"""
+            public class TestClass
+            {
+                /* {{bareSummary}} */
+                public void Method() {}
+            }
+            """;
+
+        var tree = CSharpSyntaxTree.ParseText(code);
+        var bareHash = VerboseComment.ComputeSha256(bareSummary);
+
+        var settings = new CodeCondenserSettings
+        {
+            CommentLengthThreshold = 50,
+            IgnoredCommentHashes = new HashSet<string> { bareHash }
+        };
+
+        var comments = _extractor.Extract(tree, "TestClass.cs", settings);
+
+        comments.Should().BeEmpty();
+    }
 }

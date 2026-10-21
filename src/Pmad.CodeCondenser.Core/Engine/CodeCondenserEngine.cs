@@ -149,14 +149,7 @@ public sealed class CodeCondenserEngine : ICodeCondenserEngine
             foreach (var (hash, summaryText) in storedSummaries)
             {
                 effectiveSettings.IgnoredCommentHashes.Add(hash);
-                if (!string.IsNullOrWhiteSpace(summaryText))
-                {
-                    var xmlText = XmlDocumentationParser.ExtractXmlText(summaryText).Trim();
-                    if (!string.IsNullOrWhiteSpace(xmlText))
-                    {
-                        effectiveSettings.IgnoredCommentHashes.Add(VerboseComment.ComputeSha256(xmlText));
-                    }
-                }
+                CommentHashHelper.AddSummaryVariations(effectiveSettings.IgnoredCommentHashes, summaryText);
             }
         }
 
@@ -164,16 +157,7 @@ public sealed class CodeCondenserEngine : ICodeCondenserEngine
         {
             foreach (var summaryText in baseline.CommentCache.Values)
             {
-                var summaryHash = VerboseComment.ComputeSha256(summaryText.Trim());
-                effectiveSettings.IgnoredCommentHashes.Add(summaryHash);
-                if (!string.IsNullOrWhiteSpace(summaryText))
-                {
-                    var xmlText = XmlDocumentationParser.ExtractXmlText(summaryText).Trim();
-                    if (!string.IsNullOrWhiteSpace(xmlText))
-                    {
-                        effectiveSettings.IgnoredCommentHashes.Add(VerboseComment.ComputeSha256(xmlText));
-                    }
-                }
+                CommentHashHelper.AddSummaryVariations(effectiveSettings.IgnoredCommentHashes, summaryText);
             }
         }
 
@@ -629,17 +613,10 @@ public sealed class CodeCondenserEngine : ICodeCondenserEngine
                 {
                     if (analysisResult.SummarizedComments.TryGetValue(comment.ContentHash, out var summaryText))
                     {
-                        var appliedHash = VerboseComment.ComputeSha256(summaryText.Trim());
-                        merged[appliedHash] = summaryText.Trim();
-
-                        if (comment.Kind == CommentKind.XmlDocumentation)
+                        var trimmedSummary = summaryText.Trim();
+                        foreach (var hash in CommentHashHelper.GetSummaryHashes(trimmedSummary, comment.Kind))
                         {
-                            var xmlText = XmlDocumentationParser.ExtractXmlText(summaryText).Trim();
-                            if (!string.IsNullOrWhiteSpace(xmlText))
-                            {
-                                var xmlHash = VerboseComment.ComputeSha256(xmlText);
-                                merged[xmlHash] = summaryText.Trim();
-                            }
+                            merged[hash] = trimmedSummary;
                         }
                     }
                 }

@@ -538,6 +538,109 @@ public class CodeCondenserEngineTests : IDisposable
         summarizedStore.Stored.Should().BeEmpty();
     }
 
+    [Fact]
+    public async Task ApplySummariesAsync_WhenSummaryExceedsThreshold_WhitelistsCommentInSubsequentReportRun()
+    {
+        // Arrange
+        var file = Path.Combine(_testDir, "LiveLogChatClient.cs");
+        var originalComment = "// Full-fidelity argument rendering (the console truncates the whole line; the transcript keeps it, subject to AgentTranscript.MaxEntryChars).";
+        var bareSummary = "Value is truncated by AgentTranscript.MaxEntryChars; newlines are escaped for single-line readability."; // 105 chars
+        var code = $$"""
+        namespace MyTest;
+        public class LiveLogChatClient
+        {
+            {{originalComment}}
+            public void Log() {}
+        }
+        """;
+        await File.WriteAllTextAsync(file, code);
+
+        var customSummarizer = new FuncCommentSummarizer((comments, existing) =>
+        {
+            var dict = new Dictionary<string, string>(existing);
+            foreach (var c in comments)
+            {
+                dict[c.ContentHash] = bareSummary; // LLM output without '// '
+            }
+            return dict;
+        });
+
+        var summarizedStore = new InMemorySummarizedCommentsStore();
+        var engine = new CodeCondenserEngine(
+            snapshotStore: _snapshotStore,
+            commentSummarizer: customSummarizer,
+            summarizedCommentsStore: summarizedStore);
+
+        var settings = new CodeCondenserSettings { CommentLengthThreshold = 100 };
+
+        // 1. Analyze in summarize mode
+        var summarizeResult = await engine.AnalyzeAsync(_testDir, settings);
+        summarizeResult.VerboseComments.Should().HaveCount(1);
+        summarizeResult.SummarizedComments.Should().ContainValue(bareSummary);
+
+        // 2. Apply to disk
+        var appliedFiles = await engine.ApplySummariesWithModifiedFilesAsync(summarizeResult, settings);
+        appliedFiles.Should().HaveCount(1);
+
+        // Verify file on disk was updated with '// ' prefix
+        var diskContent = await File.ReadAllTextAsync(file);
+        diskContent.Should().Contain($"// {bareSummary}");
+
+        // 3. Launch subsequent report run (with a new engine instance, simulating `pmad-codecondenser --summary report`)
+        var reportEngine = new CodeCondenserEngine(
+            snapshotStore: _snapshotStore,
+            commentSummarizer: null,
+            summarizedCommentsStore: summarizedStore);
+
+        var reportSettings = new CodeCondenserSettings
+        {
+            CommentLengthThreshold = 100,
+            SummaryMode = SummaryMode.Report
+        };
+
+        var reportResult = await reportEngine.AnalyzeAsync(_testDir, reportSettings);
+
+        // The applied comment on disk is 105 chars (> 100 threshold), but it was whitelisted by apply!
+        reportResult.VerboseComments.Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task AnalyzeAsync_WhenSummarizedStoreHasOnlyBareHash_WhitelistsCommentInCodeWithSlashes()
+    {
+        // Simulates backwards compatibility with older .codecondenser/summarized-comments.json containing only the bare hash
+        var file = Path.Combine(_testDir, "LegacySummarizedTest.cs");
+        var bareSummary = "Value is truncated by AgentTranscript.MaxEntryChars; newlines are escaped for single-line readability.";
+        var code = $$"""
+        namespace MyTest;
+        public class LegacySummarizedTest
+        {
+            // {{bareSummary}}
+            public void Log() {}
+        }
+        """;
+        await File.WriteAllTextAsync(file, code);
+
+        var bareHash = VerboseComment.ComputeSha256(bareSummary);
+        var summarizedStore = new InMemorySummarizedCommentsStore();
+        // Only bare hash stored, without '// ' prefix
+        summarizedStore.Stored[bareHash] = bareSummary;
+
+        var engine = new CodeCondenserEngine(
+            snapshotStore: _snapshotStore,
+            commentSummarizer: null,
+            summarizedCommentsStore: summarizedStore);
+
+        var settings = new CodeCondenserSettings
+        {
+            CommentLengthThreshold = 100,
+            SummaryMode = SummaryMode.Report
+        };
+
+        var result = await engine.AnalyzeAsync(_testDir, settings);
+
+        result.VerboseComments.Should().BeEmpty();
+    }
+
     private sealed class InMemorySummarizedCommentsStore : ISummarizedCommentsStore
     {
         public Dictionary<string, string> Stored { get; } = new(StringComparer.Ordinal);
@@ -607,6 +710,28 @@ public class CodeCondenserEngineTests : IDisposable
             }
 
             return Task.FromResult<IReadOnlyDictionary<string, string>>(dict);
+        }
+    }
+
+    private sealed class FuncCommentSummarizer(Func<IReadOnlyList<VerboseComment>, IReadOnlyDictionary<string, string>, IReadOnlyDictionary<string, string>> handler) : ICommentSummarizer
+    {
+        public Task<IReadOnlyDictionary<string, string>> SummarizeAsync(
+            IReadOnlyList<VerboseComment> comments,
+            IReadOnlyDictionary<string, string> existingCache,
+            CodeCondenserSettings settings,
+            CancellationToken cancellationToken = default)
+        {
+            return Task.FromResult(handler(comments, existingCache));
+        }
+
+        public Task<IReadOnlyDictionary<string, string>> SummarizeAsync(
+            IReadOnlyList<VerboseComment> comments,
+            IReadOnlyDictionary<string, string> existingCache,
+            CodeCondenserSettings settings,
+            IProgress<CommentSummarizationProgress>? progress,
+            CancellationToken cancellationToken = default)
+        {
+            return Task.FromResult(handler(comments, existingCache));
         }
     }
 }

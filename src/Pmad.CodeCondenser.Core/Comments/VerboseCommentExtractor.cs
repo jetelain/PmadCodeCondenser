@@ -122,25 +122,9 @@ public sealed class VerboseCommentExtractor : CSharpSyntaxWalker, ICommentExtrac
                     continue;
                 }
 
-                var trimmed = text.Trim();
-                var hash = VerboseComment.ComputeSha256(trimmed);
-                var fullTrimmed = trivia.ToFullString().Trim();
-                var fullHash = VerboseComment.ComputeSha256(fullTrimmed);
-
-                if (_settings.IgnoredCommentHashes.Contains(hash) ||
-                    _settings.IgnoredCommentHashes.Contains(fullHash))
+                if (CommentHashHelper.IsCommentIgnored(trivia, text, kind, _settings.IgnoredCommentHashes))
                 {
                     continue;
-                }
-
-                if (kind == CommentKind.XmlDocumentation)
-                {
-                    var xmlText = XmlDocumentationParser.ExtractXmlText(text).Trim();
-                    var xmlHash = VerboseComment.ComputeSha256(xmlText);
-                    if (_settings.IgnoredCommentHashes.Contains(xmlHash))
-                    {
-                        continue;
-                    }
                 }
 
                 bool isVerbose = kind == CommentKind.XmlDocumentation
