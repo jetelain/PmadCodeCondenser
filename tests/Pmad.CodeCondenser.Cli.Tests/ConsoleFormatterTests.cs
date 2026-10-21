@@ -235,4 +235,38 @@ public class ConsoleFormatterTests
         output.Should().Contain("15 statements");
         output.Should().NotContain("0 statements");
     }
+
+    [Fact]
+    public void PrintSubMethodCloneGroups_WhenEmpty_PrintsNothing()
+    {
+        var formatter = new ConsoleFormatter(enableColor: false);
+        using var writer = new StringWriter();
+
+        formatter.PrintSubMethodCloneGroups(writer, [], ".");
+
+        writer.ToString().Should().BeEmpty();
+    }
+
+    [Fact]
+    public void PrintSubMethodCloneGroups_WithClones_PrintsClusterDetails()
+    {
+        var formatter = new ConsoleFormatter(enableColor: false);
+        using var writer = new StringWriter();
+
+        var occurrences = new List<SubMethodCloneOccurrence>
+        {
+            new("src/Service1.cs", "Process", 10, 20, 10, 0, "scope1", "Project1"),
+            new("src/Service2.cs", "Execute", 15, 25, 10, 0, "scope2", "Project1")
+        };
+        var group = new SubMethodCloneGroup("hash123", occurrences, 10, CloneCategory.Production, 10);
+
+        formatter.PrintSubMethodCloneGroups(writer, [group], ".");
+
+        var output = writer.ToString();
+        output.Should().Contain("Found 1 Sub-Method Duplication Cluster(s):");
+        output.Should().Contain("[SUB-METHOD DUPLICATION CLUSTER #1]");
+        output.Should().Contain("src/Service1.cs:10-20 in Process");
+        output.Should().Contain("src/Service2.cs:15-25 in Execute");
+        output.Should().Contain("Recommendation: Extract duplicate 10-statement block into a shared helper method.");
+    }
 }

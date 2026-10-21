@@ -41,6 +41,16 @@ public sealed class CliOptions
     public int? ThresholdStatements { get; set; }
 
     /// <summary>
+    /// When true, enables sliding-window sub-method clone detection across method bodies.
+    /// </summary>
+    public bool SubMethodClones { get; set; }
+
+    /// <summary>
+    /// Override minimum statement count for sub-method clone detection.
+    /// </summary>
+    public int? ThresholdSubMethodStatements { get; set; }
+
+    /// <summary>
     /// Override minimum comment character length for verbosity detection.
     /// </summary>
     public int? ThresholdComments { get; set; }

@@ -152,10 +152,21 @@ public static class Program
             settings.ExcludeGeneratedCode = false;
         }
 
+        if (options.SubMethodClones)
+        {
+            settings.EnableSubMethodCloneDetection = true;
+        }
+
+        if (options.ThresholdSubMethodStatements.HasValue)
+        {
+            settings.SubMethodStatementThreshold = options.ThresholdSubMethodStatements.Value;
+        }
+
         var engine = customEngine ?? new CodeCondenserEngine(
             snapshotStore: new JsonSnapshotStore(),
             summarizedCommentsStore: new JsonSummarizedCommentsStore(),
-            commentSummarizer: new CommentSummarizer(new OllamaClientFactory()));
+            commentSummarizer: new CommentSummarizer(new OllamaClientFactory()),
+            subMethodCacheStore: new JsonSubMethodCacheStore());
 
         ICommand command = options.Command switch
         {

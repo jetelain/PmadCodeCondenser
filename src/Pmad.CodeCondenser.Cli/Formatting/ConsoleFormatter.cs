@@ -125,6 +125,40 @@ public sealed class ConsoleFormatter : IConsoleFormatter
         }
     }
 
+    public void PrintSubMethodCloneGroups(TextWriter writer, IReadOnlyList<SubMethodCloneGroup> groups, string baseDirectory)
+    {
+        ArgumentNullException.ThrowIfNull(writer);
+        ArgumentNullException.ThrowIfNull(groups);
+
+        if (groups.Count == 0)
+        {
+            return;
+        }
+
+        writer.WriteLine(Yellow(Bold($"Found {groups.Count} Sub-Method Duplication Cluster(s):")));
+        writer.WriteLine();
+
+        for (int i = 0; i < groups.Count; i++)
+        {
+            var group = groups[i];
+            writer.WriteLine(Yellow($"[SUB-METHOD DUPLICATION CLUSTER #{i + 1}] ({group.StatementCount} consecutive statements, Impact: {group.ImpactScore})"));
+            writer.WriteLine($"  Occurrences ({group.Occurrences.Count}):");
+
+            foreach (var occ in group.Occurrences)
+            {
+                var relPath = FormatPath(occ.FilePath, baseDirectory);
+                writer.WriteLine($"    • {Cyan(relPath)}:{occ.StartLine}-{occ.EndLine} in {Bold(occ.MethodName)}");
+            }
+
+            var rec = !string.IsNullOrWhiteSpace(group.Recommendation)
+                ? group.Recommendation
+                : $"Extract duplicate {group.StatementCount}-statement block into a shared helper method.";
+            writer.WriteLine(Dim($"  Recommendation: {rec}"));
+            writer.WriteLine(Dim("  To suppress: Add '[SuppressMessage(\"CodeCondenser\", \"Duplication\", Justification = \"<why>\")]' or '// codecondenser:ignore-duplicate' on method."));
+            writer.WriteLine();
+        }
+    }
+
     public void PrintVerboseComments(
         TextWriter writer,
         IReadOnlyList<VerboseComment> comments,
@@ -198,6 +232,23 @@ public sealed class ConsoleFormatter : IConsoleFormatter
         int productionClones,
         int testClones)
     {
+        PrintSummary(writer, filesAnalyzed, methodsScanned, cloneGroupsCount, verboseCommentsCount, mode, productionFiles, testFiles, skippedGenerated, productionClones, testClones, 0);
+    }
+
+    public void PrintSummary(
+        TextWriter writer,
+        int filesAnalyzed,
+        int methodsScanned,
+        int cloneGroupsCount,
+        int verboseCommentsCount,
+        string mode,
+        int productionFiles,
+        int testFiles,
+        int skippedGenerated,
+        int productionClones,
+        int testClones,
+        int subMethodClones)
+    {
         ArgumentNullException.ThrowIfNull(writer);
 
         writer.WriteLine(Dim("------------------------------------------------------------------------"));
@@ -228,6 +279,11 @@ public sealed class ConsoleFormatter : IConsoleFormatter
         else
         {
             writer.WriteLine($"  Clone Clusters:    {(cloneGroupsCount > 0 ? Yellow(cloneGroupsCount.ToString()) : Green("0"))}");
+        }
+
+        if (subMethodClones > 0)
+        {
+            writer.WriteLine($"  Sub-Method Clones: {Yellow(subMethodClones.ToString())}");
         }
 
         writer.WriteLine($"  Verbose Comments:  {(verboseCommentsCount > 0 ? Cyan(verboseCommentsCount.ToString()) : Green("0"))}");
@@ -328,6 +384,73 @@ public sealed class ConsoleFormatter : IConsoleFormatter
         writer.WriteLine("  1. Inspect the duplicate methods listed in each cluster above.");
         writer.WriteLine("  2. Extract the identical structural logic into a shared helper method or service.");
         writer.WriteLine("  3. Replace the bodies of the duplicate methods with a call to the extracted helper.");
+        writer.WriteLine("  4. Re-run 'pmad-codecondenser --incremental' to confirm the violation is resolved.");
+        writer.WriteLine(Red(Bold("========================================================================")));
+        writer.WriteLine();
+    }
+
+    public void PrintAiActionableDuplicationFeedback(
+        TextWriter writer,
+        IReadOnlyList<CodeCloneGroup> cloneGroups,
+        IReadOnlyList<SubMethodCloneGroup> subMethodGroups,
+        string baseDirectory,
+        int tolerance)
+    {
+        ArgumentNullException.ThrowIfNull(writer);
+        cloneGroups ??= [];
+        subMethodGroups ??= [];
+
+        int totalCount = cloneGroups.Count + subMethodGroups.Count;
+
+        writer.WriteLine();
+        writer.WriteLine(Red(Bold("========================================================================")));
+        writer.WriteLine(Red(Bold("[AI AGENT ACTION REQUIRED] Code Duplication Policy Violation (Exit Code: 2)")));
+        writer.WriteLine(Red(Bold("========================================================================")));
+        writer.WriteLine($"Incremental analysis detected {Bold(totalCount.ToString())} new code duplication cluster(s) exceeding tolerance margin (allowed: {tolerance}).");
+        writer.WriteLine();
+
+        int clusterIdx = 1;
+
+        if (cloneGroups.Count > 0)
+        {
+            for (int i = 0; i < cloneGroups.Count; i++)
+            {
+                var group = cloneGroups[i];
+                var shortHash = group.NormalizedHash.Length > 12 ? group.NormalizedHash[..12] : group.NormalizedHash;
+                int statementCount = group.StatementCount;
+
+                writer.WriteLine(Yellow($"Cluster #{clusterIdx++} [Whole-Method, AST Hash: {shortHash}..., {statementCount} statements]:"));
+                foreach (var method in group.Methods)
+                {
+                    var relPath = FormatPath(method.FilePath, baseDirectory);
+                    var signature = !string.IsNullOrWhiteSpace(method.Signature) ? method.Signature : method.MethodName;
+                    writer.WriteLine($"  • {Cyan(relPath)}:{method.StartLine}-{method.EndLine} in {Bold(signature)}");
+                }
+                writer.WriteLine();
+            }
+        }
+
+        if (subMethodGroups.Count > 0)
+        {
+            for (int i = 0; i < subMethodGroups.Count; i++)
+            {
+                var group = subMethodGroups[i];
+                int statementCount = group.StatementCount;
+
+                writer.WriteLine(Yellow($"Cluster #{clusterIdx++} [Sub-Method, {statementCount} consecutive statements]:"));
+                foreach (var occ in group.Occurrences)
+                {
+                    var relPath = FormatPath(occ.FilePath, baseDirectory);
+                    writer.WriteLine($"  • {Cyan(relPath)}:{occ.StartLine}-{occ.EndLine} in {Bold(occ.MethodName)}");
+                }
+                writer.WriteLine();
+            }
+        }
+
+        writer.WriteLine(Bold("Actionable Instructions for AI Agent:"));
+        writer.WriteLine("  1. Inspect the duplicate methods / statement blocks listed in each cluster above.");
+        writer.WriteLine("  2. Extract the identical structural logic into a shared helper method or service.");
+        writer.WriteLine("  3. Replace the duplicate code with a call to the extracted helper.");
         writer.WriteLine("  4. Re-run 'pmad-codecondenser --incremental' to confirm the violation is resolved.");
         writer.WriteLine(Red(Bold("========================================================================")));
         writer.WriteLine();

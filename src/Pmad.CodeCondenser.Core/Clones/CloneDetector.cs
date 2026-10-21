@@ -14,6 +14,7 @@ public sealed class CloneDetector : ICloneDetector
     private readonly IMethodHasher _hasher;
     private readonly IMethodExtractor _extractor;
     private readonly IProjectLocator _projectLocator;
+    private readonly ISubMethodCloneDetector _subMethodDetector;
 
     /// <summary>
     /// Initializes a new instance of <see cref="CloneDetector"/>.
@@ -22,16 +23,19 @@ public sealed class CloneDetector : ICloneDetector
     /// <param name="hasher">Method hasher (defaults to <see cref="MethodHasher"/>).</param>
     /// <param name="extractor">Method extractor (defaults to <see cref="MethodExtractor"/>).</param>
     /// <param name="projectLocator">Project locator (defaults to <see cref="ProjectLocator"/>).</param>
+    /// <param name="subMethodDetector">Sub-method clone detector (defaults to <see cref="SubMethodCloneDetector"/>).</param>
     public CloneDetector(
         IAstNormalizer? normalizer = null,
         IMethodHasher? hasher = null,
         IMethodExtractor? extractor = null,
-        IProjectLocator? projectLocator = null)
+        IProjectLocator? projectLocator = null,
+        ISubMethodCloneDetector? subMethodDetector = null)
     {
         _normalizer = normalizer ?? new AstNormalizer();
         _hasher = hasher ?? new MethodHasher();
         _extractor = extractor ?? new MethodExtractor();
         _projectLocator = projectLocator ?? new ProjectLocator();
+        _subMethodDetector = subMethodDetector ?? new SubMethodCloneDetector(_normalizer, _projectLocator);
     }
 
     /// <inheritdoc />
@@ -299,6 +303,36 @@ public sealed class CloneDetector : ICloneDetector
         }
 
         return GroupClones(allMethods);
+    }
+
+    /// <inheritdoc />
+    public IReadOnlyList<SubMethodBlock> ExtractSubMethodBlocks(
+        SyntaxTree syntaxTree,
+        string filePath,
+        CodeCondenserSettings settings,
+        string? projectId = null)
+    {
+        return _subMethodDetector.ExtractBlocks(syntaxTree, filePath, settings, projectId);
+    }
+
+    /// <inheritdoc />
+    public IReadOnlyList<SubMethodCloneGroup> GroupSubMethodClones(
+        IEnumerable<SubMethodBlock> blocks,
+        int threshold,
+        IReadOnlyList<CodeCloneGroup>? wholeMethodClones = null,
+        Func<string, FileCategory>? fileClassifier = null)
+    {
+        return _subMethodDetector.DetectClones(blocks, threshold, wholeMethodClones, fileClassifier);
+    }
+
+    /// <inheritdoc />
+    public IReadOnlyList<SubMethodCloneGroup> DetectSubMethodClones(
+        IEnumerable<(SyntaxTree Tree, string FilePath)> syntaxTrees,
+        CodeCondenserSettings settings,
+        IReadOnlyList<CodeCloneGroup>? wholeMethodClones = null,
+        Func<string, FileCategory>? fileClassifier = null)
+    {
+        return _subMethodDetector.DetectClones(syntaxTrees, settings, wholeMethodClones, fileClassifier);
     }
 
     internal static string BuildSignature(MethodDeclarationSyntax method)

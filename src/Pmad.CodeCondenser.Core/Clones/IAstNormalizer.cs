@@ -8,4 +8,5 @@ namespace Pmad.CodeCondenser.Core.Clones;
 public interface IAstNormalizer
 {
     MethodDeclarationSyntax Normalize(MethodDeclarationSyntax method);
+    StatementSyntax NormalizeStatement(StatementSyntax statement);
 }

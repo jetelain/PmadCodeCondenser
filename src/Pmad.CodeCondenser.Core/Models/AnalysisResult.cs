@@ -13,4 +13,5 @@ public sealed class AnalysisResult
     public int ProductionFilesCount { get; init; }
     public int TestFilesCount { get; init; }
     public int SkippedGeneratedFilesCount { get; init; }
+    public IReadOnlyList<SubMethodCloneGroup> SubMethodCloneGroups { get; init; } = [];
 }

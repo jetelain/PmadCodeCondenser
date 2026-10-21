@@ -1,6 +1,7 @@
 using Pmad.CodeCondenser.Cli.Formatting;
 using Pmad.CodeCondenser.Core.Configuration;
 using Pmad.CodeCondenser.Core.Engine;
+using Pmad.CodeCondenser.Core.Models;
 
 namespace Pmad.CodeCondenser.Cli.Commands;
 
@@ -50,6 +51,10 @@ public sealed class ApplyCommand : ICommand
             cancellationToken: cancellationToken).ConfigureAwait(false);
 
         formatter.PrintCloneGroups(output, result.CloneGroups, options.TargetPath);
+        if (result.SubMethodCloneGroups.Count > 0)
+        {
+            formatter.PrintSubMethodCloneGroups(output, result.SubMethodCloneGroups, options.TargetPath);
+        }
 
         int modifiedCount = 0;
         if (engine is CodeCondenserEngine cce)
@@ -97,12 +102,35 @@ public sealed class ApplyCommand : ICommand
             result.TotalMethodsScanned,
             result.CloneGroups.Count,
             result.VerboseComments.Count,
-            mode);
+            mode,
+            result.ProductionFilesCount,
+            result.TestFilesCount,
+            result.SkippedGeneratedFilesCount,
+            result.CloneGroups.Count(g => g.Category != CloneCategory.Test),
+            result.CloneGroups.Count(g => g.Category == CloneCategory.Test),
+            result.SubMethodCloneGroups.Count);
 
-        if (options.Incremental && settings.EnableDuplicationDetection && result.CloneGroups.Count > settings.DuplicationTolerance)
+        if (options.Incremental && (settings.EnableDuplicationDetection || settings.EnableSubMethodCloneDetection))
         {
-            formatter.PrintAiActionableDuplicationFeedback(output, result.CloneGroups, options.TargetPath, settings.DuplicationTolerance);
-            return settings.DuplicationExitCode;
+            var gatedClones = settings.EnableDuplicationDetection
+                ? result.CloneGroups
+                    .Where(g => g.Category != CloneCategory.Test || settings.EnforceTestDuplication)
+                    .ToList()
+                : [];
+
+            var gatedSubMethodClones = settings.EnableSubMethodCloneDetection
+                ? result.SubMethodCloneGroups
+                    .Where(g => g.Category != CloneCategory.Test || settings.EnforceTestDuplication)
+                    .ToList()
+                : [];
+
+            int totalGated = gatedClones.Count + gatedSubMethodClones.Count;
+
+            if (totalGated > settings.DuplicationTolerance)
+            {
+                formatter.PrintAiActionableDuplicationFeedback(output, gatedClones, gatedSubMethodClones, options.TargetPath, settings.DuplicationTolerance);
+                return settings.DuplicationExitCode;
+            }
         }
 
         return ExitCodes.Success;

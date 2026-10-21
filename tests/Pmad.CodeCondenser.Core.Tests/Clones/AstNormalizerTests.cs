@@ -234,4 +234,23 @@ public int Multiply(int a, int b)
         Action act = () => _normalizer.Normalize(null!);
         act.Should().Throw<ArgumentNullException>();
     }
+
+    [Fact]
+    public void NormalizeStatement_NormalizesVariablesAndLiterals()
+    {
+        var stmt1 = SyntaxFactory.ParseStatement("int totalCount = Calculate(userId, 42);");
+        var stmt2 = SyntaxFactory.ParseStatement("int maxLimit = Calculate(customerId, 100);");
+
+        var norm1 = _normalizer.NormalizeStatement(stmt1).NormalizeWhitespace("", "").ToFullString();
+        var norm2 = _normalizer.NormalizeStatement(stmt2).NormalizeWhitespace("", "").ToFullString();
+
+        norm1.Should().Be(norm2);
+    }
+
+    [Fact]
+    public void NormalizeStatement_NullArgument_ThrowsArgumentNullException()
+    {
+        Action act = () => _normalizer.NormalizeStatement(null!);
+        act.Should().Throw<ArgumentNullException>();
+    }
 }

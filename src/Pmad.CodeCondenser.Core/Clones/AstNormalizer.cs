@@ -19,6 +19,14 @@ public sealed class AstNormalizer : IAstNormalizer
         return (MethodDeclarationSyntax)s_rewriter.Visit(method);
     }
 
+    /// <inheritdoc />
+    public StatementSyntax NormalizeStatement(StatementSyntax statement)
+    {
+        ArgumentNullException.ThrowIfNull(statement);
+
+        return (StatementSyntax)s_rewriter.Visit(statement);
+    }
+
     private sealed class NormalizerRewriter : CSharpSyntaxRewriter
     {
         public override SyntaxTrivia VisitTrivia(SyntaxTrivia trivia)

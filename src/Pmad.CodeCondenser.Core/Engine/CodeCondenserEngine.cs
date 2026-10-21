@@ -23,6 +23,7 @@ public sealed class CodeCondenserEngine : ICodeCondenserEngine
     private readonly ICommentSummarizer? _commentSummarizer;
     private readonly IFileHasher _fileHasher;
     private readonly IProjectLocator _projectLocator;
+    private readonly ISubMethodCacheStore? _subMethodCacheStore;
     private string? _lastBaseDirectory;
 
     /// <summary>
@@ -50,7 +51,8 @@ public sealed class CodeCondenserEngine : ICodeCondenserEngine
         ICommentSummarizer? commentSummarizer = null,
         IFileHasher? fileHasher = null,
         ISummarizedCommentsStore? summarizedCommentsStore = null,
-        IProjectLocator? projectLocator = null)
+        IProjectLocator? projectLocator = null,
+        ISubMethodCacheStore? subMethodCacheStore = null)
     {
         _cloneDetector = cloneDetector ?? new CloneDetector();
         _commentExtractor = commentExtractor ?? new VerboseCommentExtractor();
@@ -61,6 +63,7 @@ public sealed class CodeCondenserEngine : ICodeCondenserEngine
         _commentSummarizer = commentSummarizer;
         _fileHasher = fileHasher ?? new FileHasher();
         _projectLocator = projectLocator ?? new ProjectLocator();
+        _subMethodCacheStore = subMethodCacheStore;
     }
 
     /// <inheritdoc />
@@ -196,9 +199,9 @@ public sealed class CodeCondenserEngine : ICodeCondenserEngine
         }
 
         // 5. Parse syntax trees and extract comments & methods in parallel (if features are enabled)
-        var fileResults = new (List<VerboseComment> Comments, List<MethodCloneInfo> Methods)[filesToScan.Count];
+        var fileResults = new (List<VerboseComment> Comments, List<MethodCloneInfo> Methods, List<SubMethodBlock> SubMethodBlocks)[filesToScan.Count];
 
-        if (effectiveSettings.EnableCommentSummarization || effectiveSettings.EnableDuplicationDetection)
+        if (effectiveSettings.EnableCommentSummarization || effectiveSettings.EnableDuplicationDetection || effectiveSettings.EnableSubMethodCloneDetection)
         {
             await Parallel.ForEachAsync(
                 filesToScan.Select((f, idx) => (f, idx)),
@@ -219,14 +222,18 @@ public sealed class CodeCondenserEngine : ICodeCondenserEngine
                         ? _cloneDetector.ExtractMethods(syntaxTree, normalizedRelPath, effectiveSettings, projectId).ToList()
                         : [];
 
-                    fileResults[item.idx] = (comments, methods);
+                    var subMethodBlocks = effectiveSettings.EnableSubMethodCloneDetection
+                        ? _cloneDetector.ExtractSubMethodBlocks(syntaxTree, normalizedRelPath, effectiveSettings, projectId).ToList()
+                        : [];
+
+                    fileResults[item.idx] = (comments, methods, subMethodBlocks);
                 }).ConfigureAwait(false);
         }
 
         var allExtractedComments = new List<VerboseComment>();
         var allAnalyzedMethods = new List<MethodCloneInfo>();
 
-        foreach (var (comments, methods) in fileResults)
+        foreach (var (comments, methods, _) in fileResults)
         {
             if (comments != null) allExtractedComments.AddRange(comments);
             if (methods != null) allAnalyzedMethods.AddRange(methods);
@@ -286,6 +293,171 @@ public sealed class CodeCondenserEngine : ICodeCondenserEngine
         else
         {
             cloneGroups = _cloneDetector.GroupClones(allAnalyzedMethods, fileClassifier);
+        }
+
+        // Sub-method sliding-window clone detection
+        IReadOnlyList<SubMethodCloneGroup> subMethodGroups = [];
+
+        if (effectiveSettings.EnableSubMethodCloneDetection)
+        {
+            var allSubMethodBlocks = new List<SubMethodBlock>();
+            foreach (var item in fileResults)
+            {
+                if (item.SubMethodBlocks != null)
+                {
+                    allSubMethodBlocks.AddRange(item.SubMethodBlocks);
+                }
+            }
+
+            var cachePath = ResolveSnapshotPath(baseDirectory, effectiveSettings.SubMethodCacheFilePath);
+            SubMethodCacheModel? subMethodCache = null;
+            if (_subMethodCacheStore != null)
+            {
+                subMethodCache = await _subMethodCacheStore.LoadAsync(cachePath, cancellationToken).ConfigureAwait(false);
+            }
+
+            if (subMethodCache == null || subMethodCache.NormalizerVersion < AnalysisSnapshot.CurrentNormalizerVersion)
+            {
+                subMethodCache = new SubMethodCacheModel
+                {
+                    Version = SubMethodCacheModel.CurrentVersion,
+                    NormalizerVersion = AnalysisSnapshot.CurrentNormalizerVersion
+                };
+            }
+
+            // In incremental mode with baseline, retrieve blocks for unchanged files from cache
+            if (incremental && baseline != null && fileDiff != null)
+            {
+                var unchangedFilesToParse = new List<string>();
+
+                foreach (var unchangedRel in fileDiff.UnchangedFiles)
+                {
+                    if (currentFileHashes.TryGetValue(unchangedRel, out var currentHash) &&
+                        subMethodCache.Files.TryGetValue(unchangedRel, out var cacheEntry) &&
+                        string.Equals(cacheEntry.FileHash, currentHash, StringComparison.OrdinalIgnoreCase) &&
+                        cacheEntry.NormalizerVersion >= AnalysisSnapshot.CurrentNormalizerVersion)
+                    {
+                        foreach (var dto in cacheEntry.Blocks)
+                        {
+                            allSubMethodBlocks.Add(new SubMethodBlock
+                            {
+                                FilePath = unchangedRel,
+                                MethodName = dto.MethodName,
+                                BlockScopeId = dto.BlockScopeId,
+                                ProjectId = dto.ProjectId,
+                                MethodStartLine = dto.MethodStartLine,
+                                StatementHashes = dto.StatementHashes,
+                                StatementStartLines = dto.StatementStartLines,
+                                StatementEndLines = dto.StatementEndLines
+                            });
+                        }
+                    }
+                    else
+                    {
+                        var fullPath = Path.Combine(baseDirectory, unchangedRel);
+                        if (File.Exists(fullPath))
+                        {
+                            unchangedFilesToParse.Add(fullPath);
+                        }
+                    }
+                }
+
+                if (unchangedFilesToParse.Count > 0)
+                {
+                    await Parallel.ForEachAsync(
+                        unchangedFilesToParse,
+                        parallelOptions,
+                        async (file, ct) =>
+                        {
+                            var relPath = fileToNormalizedPath.TryGetValue(file, out var r) ? r : _fileHasher.NormalizeRelativePath(baseDirectory, file);
+                            var sourceText = await File.ReadAllTextAsync(file, ct).ConfigureAwait(false);
+                            var syntaxTree = CSharpSyntaxTree.ParseText(sourceText, path: file, cancellationToken: ct);
+                            var projectId = _projectLocator.LocateProjectId(file, baseDirectory);
+                            var blocks = _cloneDetector.ExtractSubMethodBlocks(syntaxTree, relPath, effectiveSettings, projectId);
+
+                            lock (allSubMethodBlocks)
+                            {
+                                allSubMethodBlocks.AddRange(blocks);
+                            }
+
+                            if (currentFileHashes.TryGetValue(relPath, out var hash))
+                            {
+                                lock (subMethodCache.Files)
+                                {
+                                    subMethodCache.Files[relPath] = new FileSubMethodCacheEntry
+                                    {
+                                        FileHash = hash,
+                                        NormalizerVersion = AnalysisSnapshot.CurrentNormalizerVersion,
+                                        Blocks = blocks.Select(b => new SubMethodBlockCacheDto
+                                        {
+                                            MethodName = b.MethodName,
+                                            BlockScopeId = b.BlockScopeId,
+                                            ProjectId = b.ProjectId,
+                                            MethodStartLine = b.MethodStartLine,
+                                            StatementHashes = b.StatementHashes,
+                                            StatementStartLines = b.StatementStartLines,
+                                            StatementEndLines = b.StatementEndLines
+                                        }).ToList()
+                                    };
+                                }
+                            }
+                        }).ConfigureAwait(false);
+                }
+
+                // Evict deleted files from cache
+                foreach (var deletedRel in fileDiff.DeletedFiles)
+                {
+                    subMethodCache.Files.Remove(deletedRel);
+                }
+            }
+
+            // Update cache entries for all analyzed files (including files with 0 blocks)
+            for (int i = 0; i < filesToScan.Count; i++)
+            {
+                var file = filesToScan[i];
+                var relPath = fileToNormalizedPath[file];
+                var (_, _, blocks) = fileResults[i];
+
+                if (currentFileHashes.TryGetValue(relPath, out var hash))
+                {
+                    subMethodCache.Files[relPath] = new FileSubMethodCacheEntry
+                    {
+                        FileHash = hash,
+                        NormalizerVersion = AnalysisSnapshot.CurrentNormalizerVersion,
+                        Blocks = blocks?.Select(b => new SubMethodBlockCacheDto
+                        {
+                            MethodName = b.MethodName,
+                            BlockScopeId = b.BlockScopeId,
+                            ProjectId = b.ProjectId,
+                            MethodStartLine = b.MethodStartLine,
+                            StatementHashes = b.StatementHashes,
+                            StatementStartLines = b.StatementStartLines,
+                            StatementEndLines = b.StatementEndLines
+                        }).ToList() ?? []
+                    };
+                }
+            }
+
+            var allSubGroups = _cloneDetector.GroupSubMethodClones(
+                allSubMethodBlocks,
+                effectiveSettings.SubMethodStatementThreshold,
+                cloneGroups,
+                fileClassifier);
+
+            if (incremental && baseline != null && fileDiff != null)
+            {
+                var changedSet = new HashSet<string>(fileDiff.AddedFiles.Concat(fileDiff.ModifiedFiles), StringComparer.OrdinalIgnoreCase);
+                subMethodGroups = allSubGroups.Where(g => g.Occurrences.Any(o => changedSet.Contains(o.FilePath.Replace('\\', '/')))).ToList();
+            }
+            else
+            {
+                subMethodGroups = allSubGroups;
+            }
+
+            if (_subMethodCacheStore != null)
+            {
+                await _subMethodCacheStore.SaveAsync(cachePath, subMethodCache, cancellationToken).ConfigureAwait(false);
+            }
         }
 
         // 7. Filter & Summarize comments via LLM
@@ -349,6 +521,7 @@ public sealed class CodeCondenserEngine : ICodeCondenserEngine
         {
             VerboseComments = allExtractedComments,
             CloneGroups = cloneGroups,
+            SubMethodCloneGroups = subMethodGroups,
             SummarizedComments = cache.ToDictionary(),
             AnalyzedFilesCount = filesToScan.Count,
             TotalMethodsScanned = allAnalyzedMethods.Count,
@@ -460,7 +633,7 @@ public sealed class CodeCondenserEngine : ICodeCondenserEngine
             CancellationToken = cancellationToken
         };
 
-        var baselineResults = new (string RelPath, string Hash, List<MethodCloneInfo> Methods)[discoveredFiles.Count];
+        var baselineResults = new (string RelPath, string Hash, List<MethodCloneInfo> Methods, List<SubMethodBlock> SubMethodBlocks)[discoveredFiles.Count];
 
         await Parallel.ForEachAsync(
             discoveredFiles.Select((f, idx) => (f, idx)),
@@ -472,21 +645,32 @@ public sealed class CodeCondenserEngine : ICodeCondenserEngine
                 var hash = await _fileHasher.ComputeFileHashAsync(file, ct).ConfigureAwait(false);
 
                 List<MethodCloneInfo> methods = [];
-                if (settings.EnableDuplicationDetection)
+                List<SubMethodBlock> subMethodBlocks = [];
+
+                if (settings.EnableDuplicationDetection || settings.EnableSubMethodCloneDetection)
                 {
                     var sourceText = await File.ReadAllTextAsync(file, ct).ConfigureAwait(false);
                     var tree = CSharpSyntaxTree.ParseText(sourceText, path: file, cancellationToken: ct);
                     var projectId = _projectLocator.LocateProjectId(file, baseDirectory);
-                    methods = _cloneDetector.ExtractMethods(tree, relPath, settings, projectId).ToList();
+
+                    if (settings.EnableDuplicationDetection)
+                    {
+                        methods = _cloneDetector.ExtractMethods(tree, relPath, settings, projectId).ToList();
+                    }
+
+                    if (settings.EnableSubMethodCloneDetection)
+                    {
+                        subMethodBlocks = _cloneDetector.ExtractSubMethodBlocks(tree, relPath, settings, projectId).ToList();
+                    }
                 }
 
-                baselineResults[item.idx] = (relPath, hash, methods);
+                baselineResults[item.idx] = (relPath, hash, methods, subMethodBlocks);
             }).ConfigureAwait(false);
 
         var currentFileHashes = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
         var allMethods = new List<MethodCloneInfo>();
 
-        foreach (var (relPath, hash, methods) in baselineResults)
+        foreach (var (relPath, hash, methods, _) in baselineResults)
         {
             currentFileHashes[relPath] = hash;
             if (methods != null) allMethods.AddRange(methods);
@@ -515,6 +699,37 @@ public sealed class CodeCondenserEngine : ICodeCondenserEngine
         }
 
         await _snapshotStore.SaveAsync(snapshotPath, newSnapshot, cancellationToken).ConfigureAwait(false);
+
+        if (settings.EnableSubMethodCloneDetection && _subMethodCacheStore != null)
+        {
+            var cachePath = ResolveSnapshotPath(baseDirectory, settings.SubMethodCacheFilePath);
+            var subMethodCache = new SubMethodCacheModel
+            {
+                Version = SubMethodCacheModel.CurrentVersion,
+                NormalizerVersion = AnalysisSnapshot.CurrentNormalizerVersion
+            };
+
+            foreach (var (relPath, hash, _, blocks) in baselineResults)
+            {
+                subMethodCache.Files[relPath] = new FileSubMethodCacheEntry
+                {
+                    FileHash = hash,
+                    NormalizerVersion = AnalysisSnapshot.CurrentNormalizerVersion,
+                    Blocks = blocks?.Select(b => new SubMethodBlockCacheDto
+                    {
+                        MethodName = b.MethodName,
+                        BlockScopeId = b.BlockScopeId,
+                        ProjectId = b.ProjectId,
+                        MethodStartLine = b.MethodStartLine,
+                        StatementHashes = b.StatementHashes,
+                        StatementStartLines = b.StatementStartLines,
+                        StatementEndLines = b.StatementEndLines
+                    }).ToList() ?? []
+                };
+            }
+
+            await _subMethodCacheStore.SaveAsync(cachePath, subMethodCache, cancellationToken).ConfigureAwait(false);
+        }
 
         return newSnapshot;
     }

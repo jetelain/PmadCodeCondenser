@@ -57,6 +57,10 @@ public sealed class AnalyzeCommand : ICommand
         }
 
         formatter.PrintCloneGroups(output, result.CloneGroups, options.TargetPath);
+        if (result.SubMethodCloneGroups.Count > 0)
+        {
+            formatter.PrintSubMethodCloneGroups(output, result.SubMethodCloneGroups, options.TargetPath);
+        }
         formatter.PrintVerboseComments(output, result.VerboseComments, result.SummarizedComments, options.TargetPath);
 
         var mode = options.Incremental ? "Dry-Run (Incremental)" : "Dry-Run";
@@ -74,17 +78,28 @@ public sealed class AnalyzeCommand : ICommand
             result.TestFilesCount,
             result.SkippedGeneratedFilesCount,
             prodClones,
-            testClones);
+            testClones,
+            result.SubMethodCloneGroups.Count);
 
-        if (options.Incremental && settings.EnableDuplicationDetection)
+        if (options.Incremental && (settings.EnableDuplicationDetection || settings.EnableSubMethodCloneDetection))
         {
-            var gatedClones = result.CloneGroups
-                .Where(g => g.Category != CloneCategory.Test || settings.EnforceTestDuplication)
-                .ToList();
+            var gatedClones = settings.EnableDuplicationDetection
+                ? result.CloneGroups
+                    .Where(g => g.Category != CloneCategory.Test || settings.EnforceTestDuplication)
+                    .ToList()
+                : [];
 
-            if (gatedClones.Count > settings.DuplicationTolerance)
+            var gatedSubMethodClones = settings.EnableSubMethodCloneDetection
+                ? result.SubMethodCloneGroups
+                    .Where(g => g.Category != CloneCategory.Test || settings.EnforceTestDuplication)
+                    .ToList()
+                : [];
+
+            int totalGated = gatedClones.Count + gatedSubMethodClones.Count;
+
+            if (totalGated > settings.DuplicationTolerance)
             {
-                formatter.PrintAiActionableDuplicationFeedback(output, gatedClones, options.TargetPath, settings.DuplicationTolerance);
+                formatter.PrintAiActionableDuplicationFeedback(output, gatedClones, gatedSubMethodClones, options.TargetPath, settings.DuplicationTolerance);
                 return settings.DuplicationExitCode;
             }
         }

@@ -425,4 +425,36 @@ public class CliArgumentParserTests
         error.Should().BeNull();
         options.IncludeGenerated.Should().BeTrue();
     }
+
+    [Theory]
+    [InlineData("--sub-method-clones")]
+    [InlineData("--submethod-clones")]
+    [InlineData("--sub-method")]
+    public void TryParse_SubMethodClonesFlag_SetsSubMethodClones(string flag)
+    {
+        var success = CliArgumentParser.TryParse([flag], out var options, out var error);
+
+        success.Should().BeTrue();
+        error.Should().BeNull();
+        options.SubMethodClones.Should().BeTrue();
+    }
+
+    [Fact]
+    public void TryParse_ThresholdSubMethodStatementsOption_SetsValue()
+    {
+        var success = CliArgumentParser.TryParse(["--threshold-submethod-statements", "15"], out var options, out var error);
+
+        success.Should().BeTrue();
+        error.Should().BeNull();
+        options.ThresholdSubMethodStatements.Should().Be(15);
+    }
+
+    [Fact]
+    public void TryParse_ThresholdSubMethodStatementsInvalidValue_ReturnsError()
+    {
+        var success = CliArgumentParser.TryParse(["--threshold-submethod-statements", "-5"], out _, out var error);
+
+        success.Should().BeFalse();
+        error.Should().Contain("Invalid value for --threshold-submethod-statements");
+    }
 }

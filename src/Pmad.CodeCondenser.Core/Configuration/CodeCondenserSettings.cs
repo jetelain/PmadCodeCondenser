@@ -63,6 +63,51 @@ public sealed class CodeCondenserSettings
     /// </summary>
     public int DuplicationStatementThreshold { get; set; } = 8;
 
+    /// <summary>
+    /// Minimum number of consecutive statements in a block required for sliding-window sub-method clone detection.
+    /// Default is 10 statements.
+    /// </summary>
+    public int SubMethodStatementThreshold { get; set; } = 10;
+
+    /// <summary>
+    /// Alias for <see cref="SubMethodStatementThreshold"/>.
+    /// </summary>
+    public int? ThresholdSubMethodStatements
+    {
+        get => SubMethodStatementThreshold;
+        set { if (value.HasValue) SubMethodStatementThreshold = value.Value; }
+    }
+
+    /// <summary>
+    /// When true, enables sliding-window AST sequence detection within method bodies.
+    /// Default is false.
+    /// </summary>
+    public bool EnableSubMethodCloneDetection { get; set; } = false;
+
+    /// <summary>
+    /// Alias for <see cref="EnableSubMethodCloneDetection"/>.
+    /// </summary>
+    public bool? SubMethodClones
+    {
+        get => EnableSubMethodCloneDetection;
+        set { if (value.HasValue) EnableSubMethodCloneDetection = value.Value; }
+    }
+
+    /// <summary>
+    /// Alias for <see cref="EnableSubMethodCloneDetection"/>.
+    /// </summary>
+    public bool? EnableSubMethodClones
+    {
+        get => EnableSubMethodCloneDetection;
+        set { if (value.HasValue) EnableSubMethodCloneDetection = value.Value; }
+    }
+
+    /// <summary>
+    /// Relative or absolute path to the sub-method sequence cache file for incremental analysis.
+    /// Default is ".codecondenser/submethod-cache.json".
+    /// </summary>
+    public string SubMethodCacheFilePath { get; set; } = ".codecondenser/submethod-cache.json";
+
 
     /// <summary>
     /// When true, includes XML documentation comments (///) in addition to single-line (//) and multi-line (/* */) comments.
@@ -271,6 +316,9 @@ public sealed class CodeCondenserSettings
             XmlRemarksLengthThreshold = XmlRemarksLengthThreshold,
             XmlParamLengthThreshold = XmlParamLengthThreshold,
             DuplicationStatementThreshold = DuplicationStatementThreshold,
+            SubMethodStatementThreshold = SubMethodStatementThreshold,
+            EnableSubMethodCloneDetection = EnableSubMethodCloneDetection,
+            SubMethodCacheFilePath = SubMethodCacheFilePath,
             IncludeXmlDocumentation = IncludeXmlDocumentation,
             MaxParallelLlmRequests = MaxParallelLlmRequests,
             Provider = Provider,

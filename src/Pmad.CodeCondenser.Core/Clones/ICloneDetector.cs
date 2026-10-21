@@ -52,4 +52,34 @@ public interface ICloneDetector
 
         return GroupClones(allMethods);
     }
+
+    /// <summary>
+    /// Extracts discrete block scopes for sub-method sliding-window clone detection.
+    /// </summary>
+    IReadOnlyList<SubMethodBlock> ExtractSubMethodBlocks(
+        SyntaxTree syntaxTree,
+        string filePath,
+        CodeCondenserSettings settings,
+        string? projectId = null)
+        => [];
+
+    /// <summary>
+    /// Groups extracted blocks by sliding-window sequence hash, expanding contiguous matches.
+    /// </summary>
+    IReadOnlyList<SubMethodCloneGroup> GroupSubMethodClones(
+        IEnumerable<SubMethodBlock> blocks,
+        int threshold,
+        IReadOnlyList<CodeCloneGroup>? wholeMethodClones = null,
+        Func<string, FileCategory>? fileClassifier = null)
+        => [];
+
+    /// <summary>
+    /// Scans multiple syntax trees for sub-method clones.
+    /// </summary>
+    IReadOnlyList<SubMethodCloneGroup> DetectSubMethodClones(
+        IEnumerable<(SyntaxTree Tree, string FilePath)> syntaxTrees,
+        CodeCondenserSettings settings,
+        IReadOnlyList<CodeCloneGroup>? wholeMethodClones = null,
+        Func<string, FileCategory>? fileClassifier = null)
+        => [];
 }

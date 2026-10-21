@@ -110,7 +110,26 @@ public static class CliArgumentParser
                 continue;
             }
 
+            if (string.Equals(arg, "--sub-method-clones", StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(arg, "--submethod-clones", StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(arg, "--sub-method", StringComparison.OrdinalIgnoreCase))
+            {
+                options.SubMethodClones = true;
+                continue;
+            }
+
             // Options with values: check both "--option value" and "--option=value"
+            if (TryExtractOptionValue(args, ref i, "--threshold-submethod-statements", "--submethod-threshold", out var tsmVal, out errorMessage))
+            {
+                if (errorMessage != null) return false;
+                if (!int.TryParse(tsmVal, out var tsm) || tsm < 1)
+                {
+                    errorMessage = $"Invalid value for --threshold-submethod-statements: '{tsmVal}'. Must be a positive integer.";
+                    return false;
+                }
+                options.ThresholdSubMethodStatements = tsm;
+                continue;
+            }
             if (TryExtractOptionValue(args, ref i, "--duplication-tolerance", "-dt", out var dtVal, out errorMessage))
             {
                 if (errorMessage != null) return false;
@@ -354,7 +373,9 @@ public static class CliArgumentParser
           -dt, --duplication-tolerance <n> Maximum new clone clusters tolerated in incremental mode (default: 0)
           --no-comments               Disable comment extraction and summarization
           --no-duplication            Disable structural code clone detection
+          --sub-method-clones         Enable sliding-window sub-method clone detection
           -ts, --threshold-statements <n>  Minimum statements for clone detection (default: 8)
+          --threshold-submethod-statements <n> Minimum statements for sub-method clone detection (default: 10)
           -tc, --threshold-comments <n>    Minimum character length for verbose comments (default: 100)
           -txs, --threshold-xml-summary <n> Minimum content length for XML summary/remarks (default: threshold-comments)
           -txp, --threshold-xml-param <n>   Minimum content length for XML param (default: threshold-comments / 2)
