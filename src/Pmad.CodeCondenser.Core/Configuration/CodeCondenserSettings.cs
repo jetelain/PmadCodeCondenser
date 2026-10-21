@@ -133,6 +133,63 @@ public sealed class CodeCondenserSettings
     public OllamaSettings Ollama { get; set; } = new();
 
     /// <summary>
+    /// When true, indicates that an LLM model, endpoint, or provider was explicitly configured.
+    /// </summary>
+    public bool IsLlmConfigured { get; set; }
+
+    private SummaryMode? _summaryMode;
+
+    /// <summary>
+    /// Mode for comment summarization and reporting: Disabled, Summarize, or Report.
+    /// When not explicitly set, defaults to Summarize if an LLM is configured, or Report if no LLM is configured.
+    /// </summary>
+    [System.Text.Json.Serialization.JsonConverter(typeof(System.Text.Json.Serialization.JsonStringEnumConverter))]
+    public SummaryMode? SummaryMode
+    {
+        get => _summaryMode;
+        set
+        {
+            _summaryMode = value;
+            if (value == Configuration.SummaryMode.Disabled)
+            {
+                EnableCommentSummarization = false;
+            }
+            else if (value.HasValue)
+            {
+                EnableCommentSummarization = true;
+            }
+        }
+    }
+
+    /// <summary>
+    /// Alias for <see cref="SummaryMode"/>.
+    /// </summary>
+    [System.Text.Json.Serialization.JsonConverter(typeof(System.Text.Json.Serialization.JsonStringEnumConverter))]
+    public SummaryMode? Summary
+    {
+        get => SummaryMode;
+        set => SummaryMode = value;
+    }
+
+    /// <summary>
+    /// Resolves the effective <see cref="SummaryMode"/> based on explicit settings and whether an LLM is configured.
+    /// </summary>
+    public SummaryMode GetEffectiveSummaryMode()
+    {
+        if (SummaryMode.HasValue)
+        {
+            return SummaryMode.Value;
+        }
+
+        if (!EnableCommentSummarization)
+        {
+            return Configuration.SummaryMode.Disabled;
+        }
+
+        return IsLlmConfigured ? Configuration.SummaryMode.Summarize : Configuration.SummaryMode.Report;
+    }
+
+    /// <summary>
     /// When true, enables verbose comment extraction and LLM summarization.
     /// Default is true.
     /// </summary>
@@ -218,6 +275,27 @@ public sealed class CodeCondenserSettings
     /// Default is 2.
     /// </summary>
     public int DuplicationExitCode { get; set; } = 2;
+
+    /// <summary>
+    /// Maximum number of new verbose comments tolerated in incremental mode before failing CI / returning an exit code.
+    /// Default is null (does not fail CI on verbose comments unless configured).
+    /// </summary>
+    public int? CommentTolerance { get; set; }
+
+    /// <summary>
+    /// Alias for <see cref="CommentTolerance"/>.
+    /// </summary>
+    public int? VerboseCommentTolerance
+    {
+        get => CommentTolerance;
+        set => CommentTolerance = value;
+    }
+
+    /// <summary>
+    /// Exit code returned when additional verbose comments exceed <see cref="CommentTolerance"/> in incremental mode.
+    /// Default is 2.
+    /// </summary>
+    public int CommentExitCode { get; set; } = 2;
 
     /// <summary>
     /// Relative or absolute path to the snapshot cache file for incremental analysis and WYSIWYG summaries.
@@ -328,10 +406,14 @@ public sealed class CodeCondenserSettings
                 Model = Ollama.Model,
                 ContextSize = Ollama.ContextSize
             },
+            IsLlmConfigured = IsLlmConfigured,
+            SummaryMode = SummaryMode,
             EnableCommentSummarization = EnableCommentSummarization,
             EnableDuplicationDetection = EnableDuplicationDetection,
             DuplicationTolerance = DuplicationTolerance,
             DuplicationExitCode = DuplicationExitCode,
+            CommentTolerance = CommentTolerance,
+            CommentExitCode = CommentExitCode,
             SnapshotFilePath = SnapshotFilePath,
             SummarizedCommentsFilePath = SummarizedCommentsFilePath,
             MaxCommentLineLength = MaxCommentLineLength,

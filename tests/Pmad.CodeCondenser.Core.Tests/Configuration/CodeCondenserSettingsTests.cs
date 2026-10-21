@@ -67,4 +67,64 @@ public class CodeCondenserSettingsTests
         settings.GetEffectiveXmlSummaryThreshold().Should().Be(95);
         settings.GetEffectiveXmlRemarksThreshold().Should().Be(95);
     }
+
+    [Fact]
+    public void GetEffectiveSummaryMode_DefaultsToReport_WhenNoLlmConfigured()
+    {
+        var settings = new CodeCondenserSettings();
+        settings.IsLlmConfigured.Should().BeFalse();
+        settings.GetEffectiveSummaryMode().Should().Be(SummaryMode.Report);
+    }
+
+    [Fact]
+    public void GetEffectiveSummaryMode_DefaultsToSummarize_WhenLlmIsConfigured()
+    {
+        var settings = new CodeCondenserSettings { IsLlmConfigured = true };
+        settings.GetEffectiveSummaryMode().Should().Be(SummaryMode.Summarize);
+    }
+
+    [Fact]
+    public void GetEffectiveSummaryMode_ReturnsDisabled_WhenCommentsDisabled()
+    {
+        var settings = new CodeCondenserSettings { EnableCommentSummarization = false };
+        settings.GetEffectiveSummaryMode().Should().Be(SummaryMode.Disabled);
+    }
+
+    [Fact]
+    public void SummaryMode_ExplicitOverride_TakesPrecedence()
+    {
+        var settings = new CodeCondenserSettings
+        {
+            IsLlmConfigured = true,
+            SummaryMode = SummaryMode.Report
+        };
+        settings.GetEffectiveSummaryMode().Should().Be(SummaryMode.Report);
+
+        settings.SummaryMode = SummaryMode.Disabled;
+        settings.EnableCommentSummarization.Should().BeFalse();
+        settings.GetEffectiveSummaryMode().Should().Be(SummaryMode.Disabled);
+
+        settings.Summary = SummaryMode.Summarize;
+        settings.EnableCommentSummarization.Should().BeTrue();
+        settings.GetEffectiveSummaryMode().Should().Be(SummaryMode.Summarize);
+    }
+
+    [Fact]
+    public void Clone_CopiesSummaryModeAndCommentTolerance()
+    {
+        var original = new CodeCondenserSettings
+        {
+            SummaryMode = SummaryMode.Report,
+            IsLlmConfigured = true,
+            CommentTolerance = 3,
+            CommentExitCode = 4
+        };
+
+        var cloned = original.Clone();
+
+        cloned.SummaryMode.Should().Be(SummaryMode.Report);
+        cloned.IsLlmConfigured.Should().BeTrue();
+        cloned.CommentTolerance.Should().Be(3);
+        cloned.CommentExitCode.Should().Be(4);
+    }
 }

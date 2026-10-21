@@ -110,7 +110,7 @@ public sealed class ApplyCommand : ICommand
             result.CloneGroups.Count(g => g.Category == CloneCategory.Test),
             result.SubMethodCloneGroups.Count);
 
-        if (options.Incremental && (settings.EnableDuplicationDetection || settings.EnableSubMethodCloneDetection))
+        if (options.Incremental)
         {
             var gatedClones = settings.EnableDuplicationDetection
                 ? result.CloneGroups
@@ -125,11 +125,36 @@ public sealed class ApplyCommand : ICommand
                 : [];
 
             int totalGated = gatedClones.Count + gatedSubMethodClones.Count;
+            bool duplicationViolation = (settings.EnableDuplicationDetection || settings.EnableSubMethodCloneDetection) && totalGated > settings.DuplicationTolerance;
 
-            if (totalGated > settings.DuplicationTolerance)
+            var newVerboseComments = settings.GetEffectiveSummaryMode() != Core.Configuration.SummaryMode.Disabled
+                ? result.VerboseComments
+                : [];
+
+            bool commentViolation = settings.CommentTolerance.HasValue && newVerboseComments.Count > settings.CommentTolerance.Value;
+            bool hasCommentIssue = settings.CommentTolerance.HasValue ? commentViolation : newVerboseComments.Count > 0;
+
+            if (duplicationViolation || hasCommentIssue)
             {
-                formatter.PrintAiActionableDuplicationFeedback(output, gatedClones, gatedSubMethodClones, options.TargetPath, settings.DuplicationTolerance);
-                return settings.DuplicationExitCode;
+                formatter.PrintAiActionableIncrementalFeedback(
+                    output,
+                    gatedClones,
+                    gatedSubMethodClones,
+                    newVerboseComments,
+                    options.TargetPath,
+                    settings.DuplicationTolerance,
+                    hasDuplicationViolation: duplicationViolation,
+                    hasCommentViolation: commentViolation);
+
+                if (duplicationViolation)
+                {
+                    return settings.DuplicationExitCode;
+                }
+
+                if (commentViolation)
+                {
+                    return settings.CommentExitCode;
+                }
             }
         }
 

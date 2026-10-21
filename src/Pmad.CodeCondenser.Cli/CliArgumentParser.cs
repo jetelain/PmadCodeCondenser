@@ -67,6 +67,7 @@ public static class CliArgumentParser
                 string.Equals(arg, "--no-comment-summarization", StringComparison.OrdinalIgnoreCase))
             {
                 options.EnableCommentSummarization = false;
+                options.SummaryMode = Core.Configuration.SummaryMode.Disabled;
                 continue;
             }
 
@@ -74,6 +75,13 @@ public static class CliArgumentParser
                 string.Equals(arg, "--enable-comment-summarization", StringComparison.OrdinalIgnoreCase))
             {
                 options.EnableCommentSummarization = true;
+                continue;
+            }
+
+            if (string.Equals(arg, "--report-only", StringComparison.OrdinalIgnoreCase))
+            {
+                options.EnableCommentSummarization = true;
+                options.SummaryMode = Core.Configuration.SummaryMode.Report;
                 continue;
             }
 
@@ -131,6 +139,40 @@ public static class CliArgumentParser
                 options.ThresholdSubMethodStatements = tsm;
                 continue;
             }
+            if (TryExtractOptionValue(args, ref i, "--summary", "--summary-mode", out var summaryVal, out errorMessage))
+            {
+                if (errorMessage != null) return false;
+                if (string.Equals(summaryVal, "disabled", StringComparison.OrdinalIgnoreCase) ||
+                    string.Equals(summaryVal, "none", StringComparison.OrdinalIgnoreCase) ||
+                    string.Equals(summaryVal, "off", StringComparison.OrdinalIgnoreCase) ||
+                    string.Equals(summaryVal, "false", StringComparison.OrdinalIgnoreCase))
+                {
+                    options.SummaryMode = Core.Configuration.SummaryMode.Disabled;
+                    options.EnableCommentSummarization = false;
+                    continue;
+                }
+                if (string.Equals(summaryVal, "summarize", StringComparison.OrdinalIgnoreCase) ||
+                    string.Equals(summaryVal, "condense", StringComparison.OrdinalIgnoreCase) ||
+                    string.Equals(summaryVal, "llm", StringComparison.OrdinalIgnoreCase) ||
+                    string.Equals(summaryVal, "true", StringComparison.OrdinalIgnoreCase))
+                {
+                    options.SummaryMode = Core.Configuration.SummaryMode.Summarize;
+                    options.EnableCommentSummarization = true;
+                    continue;
+                }
+                if (string.Equals(summaryVal, "report", StringComparison.OrdinalIgnoreCase) ||
+                    string.Equals(summaryVal, "report-only", StringComparison.OrdinalIgnoreCase) ||
+                    string.Equals(summaryVal, "reportonly", StringComparison.OrdinalIgnoreCase))
+                {
+                    options.SummaryMode = Core.Configuration.SummaryMode.Report;
+                    options.EnableCommentSummarization = true;
+                    continue;
+                }
+
+                errorMessage = $"Invalid value for --summary: '{summaryVal}'. Expected 'disabled', 'summarize', or 'report'.";
+                return false;
+            }
+
             if (TryExtractOptionValue(args, ref i, "--duplication-tolerance", "-dt", out var dtVal, out errorMessage))
             {
                 if (errorMessage != null) return false;
@@ -140,6 +182,18 @@ public static class CliArgumentParser
                     return false;
                 }
                 options.DuplicationTolerance = dt;
+                continue;
+            }
+
+            if (TryExtractOptionValue(args, ref i, "--comment-tolerance", "-ct", out var ctVal, out errorMessage))
+            {
+                if (errorMessage != null) return false;
+                if (!int.TryParse(ctVal, out var ct) || ct < 0)
+                {
+                    errorMessage = $"Invalid value for --comment-tolerance: '{ctVal}'. Must be a non-negative integer.";
+                    return false;
+                }
+                options.CommentTolerance = ct;
                 continue;
             }
             if (TryExtractOptionValue(args, ref i, "--threshold-statements", "-ts", out var tsVal, out errorMessage))
@@ -421,7 +475,10 @@ public static class CliArgumentParser
           -i, --incremental           Use snapshot cache to analyze only modified or new files
           -u, --update-snapshot       Refresh the snapshot baseline
           -dt, --duplication-tolerance <n> Maximum new clone clusters tolerated in incremental mode (default: 0)
-          --no-comments               Disable comment extraction and summarization
+          -ct, --comment-tolerance <n>     Maximum new verbose comments tolerated in incremental mode
+          --summary <mode>            Comment summary mode: disabled, summarize, or report (default: summarize if LLM configured, report otherwise)
+          --report-only               Report-only mode for comments without calling an LLM
+          --no-comments               Disable comment extraction and summarization (alias for --summary disabled)
           --no-duplication            Disable structural code clone detection
           --sub-method-clones         Enable sliding-window sub-method clone detection
           -ts, --threshold-statements <n>  Minimum statements for clone detection (default: 8)

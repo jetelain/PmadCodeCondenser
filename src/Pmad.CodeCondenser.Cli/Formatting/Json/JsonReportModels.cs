@@ -49,6 +49,8 @@ public sealed record JsonReportSummary
     public int SubMethodClustersCount { get; init; }
 
     public int VerboseCommentsCount { get; init; }
+
+    public string SummaryMode { get; init; } = string.Empty;
 }
 
 /// <summary>
@@ -133,4 +135,6 @@ public sealed record JsonVerboseComment
     public string Kind { get; init; } = string.Empty;
 
     public string? Summary { get; init; }
+
+    public string? Recommendation { get; init; }
 }

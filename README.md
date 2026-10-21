@@ -94,9 +94,9 @@ The tool binary command is **`pmad-codecondenser`** (or `dotnet pmad-codecondens
 pmad-codecondenser [command] [path] [options]
 ```
 
-### Scenario A: Instant Code Clone Detection (No AI / Ollama Required)
+### Scenario A: Instant Code Clone Detection (No Comments)
 
-Scan for structural code clones without connecting to any LLM:
+Scan for structural code clones without checking comments:
 
 ```bash
 pmad-codecondenser ./src --no-comments
@@ -104,15 +104,31 @@ pmad-codecondenser ./src --no-comments
 
 Roslyn parses the syntax trees, normalizes identifier names, statements, and literals, and prints all duplicate method clusters with location details and refactoring guidance.
 
-### Scenario B: Dry-Run Analysis (Clones + Proposed Comment Summaries)
+### Scenario B: CI / AI Agent-Friendly Dry-Run (Report Mode - No LLM Required)
 
-Perform a full dry-run analysis. Overly verbose comments are condensed using the LLM, and results are safely stored in `.codecondenser/snapshot.json` without modifying any files on disk:
+When no LLM is configured (or with `--report-only`), CodeCondenser defaults to **`report` mode**:
 
 ```bash
 pmad-codecondenser ./src
+# Or explicitly:
+pmad-codecondenser ./src --summary report
 ```
 
-### Scenario C: Apply Summarized Comments to Source Code
+Report mode scans both structural code clones and overly verbose comments, printing actionable recommendations and suppression tips (e.g. `condense="no"` or `// codecondenser:ignore`) without needing any local or cloud LLM backend.
+
+### Scenario C: LLM Comment Summarization (Summarize Mode)
+
+When an LLM model or endpoint is specified (or configured in `codecondenser.json`), CodeCondenser defaults to **`summarize` mode**:
+
+```bash
+pmad-codecondenser ./src -m gemma4:e4b
+# Or explicitly:
+pmad-codecondenser ./src --summary summarize -m gemma4:e4b
+```
+
+Overly verbose comments are condensed using the LLM, and results are safely stored in `.codecondenser/snapshot.json` without modifying any files on disk.
+
+### Scenario D: Apply Summarized Comments to Source Code
 
 Apply the summarized comments directly into your C# source files on disk:
 
@@ -127,7 +143,7 @@ pmad-codecondenser apply ./src
 > [!TIP]
 > **WYSIWYG Guarantee**: `apply` reuses the exact LLM summaries generated and cached during dry-run analysis. No second LLM call is made, guaranteeing zero drift between review and commit.
 
-### Scenario D: Incremental Analysis (Modified Files Only)
+### Scenario E: Incremental Analysis (Modified Files Only)
 
 Analyze only files that were added or modified since the last snapshot baseline:
 
@@ -135,7 +151,9 @@ Analyze only files that were added or modified since the last snapshot baseline:
 pmad-codecondenser ./src --incremental
 ```
 
-### Scenario E: Refresh Snapshot Baseline
+In incremental mode, if new duplication or verbose comments are detected, CodeCondenser outputs unified **actionable feedback only once at the end**, complete with suppression instructions (`condense="no"`, `// codecondenser:ignore`, or `[SuppressMessage]`).
+
+### Scenario F: Refresh Snapshot Baseline
 
 Update or create the baseline snapshot stored in `.codecondenser/snapshot.json`:
 
@@ -151,9 +169,9 @@ pmad-codecondenser ./src --update-snapshot
 
 ## CI/CD & Agent Guardrail Integration
 
-`Pmad.CodeCondenser` can act as an automated gatekeeper in Pull Requests and CI workflows to block duplicate code introduction.
+`Pmad.CodeCondenser` can act as an automated gatekeeper in Pull Requests and CI workflows to block duplicate code introduction or unchecked verbose comments.
 
-When executed with `--incremental --duplication-tolerance 0`, the tool compares current changes against the baseline. If new code clones are introduced, it outputs structured, actionable instructions and exits with **exit code `2`**, failing the build.
+When executed with `--incremental --duplication-tolerance 0` (and optionally `--comment-tolerance 0`), the tool compares current changes against the baseline snapshot. If new code clones or verbose comments are introduced, it outputs structured, actionable instructions once at the end and exits with **exit code `2`**, failing the build with clear remediation and suppression steps.
 
 ### GitHub Actions Workflow Example
 
@@ -231,12 +249,15 @@ jobs:
 | `-i, --incremental` | `-i` | Use snapshot baseline to analyze only new/modified files | `false` |
 | `-u, --update-snapshot` | `-u` | Refresh the snapshot baseline | `false` |
 | `-dt, --duplication-tolerance <n>` | `-dt` | Maximum new clone clusters tolerated in incremental mode | `0` |
+| `-ct, --comment-tolerance <n>` | `-ct` | Maximum new verbose comments tolerated in incremental mode | `null` |
+| `--summary <mode>` | | Comment summary mode: `disabled`, `summarize`, or `report` | Auto (`summarize` if LLM configured, `report` otherwise) |
+| `--report-only` | | Report-only mode for comments without calling an LLM (alias for `--summary report`) | `false` |
 | `--include <pattern>` | | Add glob pattern of files/directories to include (multi-value) | `[]` *(all .cs files)* |
 | `--exclude <pattern>` | | Add glob pattern of files/directories to exclude (multi-value) | `[]` |
 | `--exclude-tests` | `--production-only` | Completely exclude unit and integration test files | `false` |
 | `--enforce-test-duplication` | | Treat test clones as CI policy violation in tolerance gate | `false` |
 | `--include-generated` | | Disable automatic exclusion of generated files | `false` |
-| `--no-comments` | | Disable comment extraction and LLM summarization | `false` |
+| `--no-comments` | | Disable comment extraction and summarization (alias for `--summary disabled`) | `false` |
 | `--enable-comments` | | Explicitly enable comment extraction and summarization | `true` |
 | `--no-duplication` | | Disable structural code clone detection | `false` |
 | `--enable-duplication` | | Explicitly enable structural code clone detection | `true` |
@@ -262,7 +283,7 @@ jobs:
 | :---: | :--- | :--- |
 | `0` | **Success** | Analysis clean; no policy violations. |
 | `1` | **General Error** | Invalid arguments, missing file, or unhandled exception. |
-| `2` | **Duplication Violation** | In incremental mode, newly introduced code clones exceed `duplicationTolerance`. Outputs refactoring advice for developers and AI agents. |
+| `2` | **Duplication / Comment Violation** | In incremental mode, newly introduced code clones exceed `duplicationTolerance` or new verbose comments exceed `commentTolerance`. Outputs refactoring and suppression advice for developers and AI agents. |
 | `130` | **Canceled** | Execution canceled by user (`Ctrl+C`). |
 
 ---
@@ -371,10 +392,13 @@ Even summarized comments might exceed the character threshold (e.g. 110 characte
     "**/*ModelSnapshot.cs",
     "**/Migrations/**"
   ],
+  "summaryMode": "Report",
   "enableCommentSummarization": true,
   "enableDuplicationDetection": true,
   "duplicationTolerance": 0,
   "duplicationExitCode": 2,
+  "commentTolerance": null,
+  "commentExitCode": 2,
   "commentLengthThreshold": 100,
   "xmlSummaryLengthThreshold": 100,
   "xmlParamLengthThreshold": 50,

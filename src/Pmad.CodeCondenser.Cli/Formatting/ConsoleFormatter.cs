@@ -201,7 +201,15 @@ public sealed class ConsoleFormatter : IConsoleFormatter
             }
             else
             {
-                writer.WriteLine(Dim("  (No summary generated yet; will be summarized via LLM)"));
+                writer.WriteLine(Dim("  Recommendation: Condense verbose comment to be concise (max 120 columns), or suppress if extensive documentation is intentional."));
+                if (comment.Kind == CommentKind.XmlDocumentation)
+                {
+                    writer.WriteLine(Dim("  To suppress: Add condense=\"no\" to XML doc tag (e.g. <summary condense=\"no\">)."));
+                }
+                else
+                {
+                    writer.WriteLine(Dim("  To suppress: Add '// codecondenser:ignore' or '// nocondense' on preceding line or inline."));
+                }
             }
 
             writer.WriteLine();
@@ -384,7 +392,8 @@ public sealed class ConsoleFormatter : IConsoleFormatter
         writer.WriteLine("  1. Inspect the duplicate methods listed in each cluster above.");
         writer.WriteLine("  2. Extract the identical structural logic into a shared helper method or service.");
         writer.WriteLine("  3. Replace the bodies of the duplicate methods with a call to the extracted helper.");
-        writer.WriteLine("  4. Re-run 'pmad-codecondenser --incremental' to confirm the violation is resolved.");
+        writer.WriteLine("  4. To suppress: Add '[SuppressMessage(\"CodeCondenser\", \"Duplication\", Justification = \"<why>\")]' or '// codecondenser:ignore-duplicate' on the method.");
+        writer.WriteLine("  5. Re-run 'pmad-codecondenser --incremental' to confirm the violation is resolved.");
         writer.WriteLine(Red(Bold("========================================================================")));
         writer.WriteLine();
     }
@@ -451,9 +460,143 @@ public sealed class ConsoleFormatter : IConsoleFormatter
         writer.WriteLine("  1. Inspect the duplicate methods / statement blocks listed in each cluster above.");
         writer.WriteLine("  2. Extract the identical structural logic into a shared helper method or service.");
         writer.WriteLine("  3. Replace the duplicate code with a call to the extracted helper.");
-        writer.WriteLine("  4. Re-run 'pmad-codecondenser --incremental' to confirm the violation is resolved.");
+        writer.WriteLine("  4. To suppress: Add '[SuppressMessage(\"CodeCondenser\", \"Duplication\", Justification = \"<why>\")]' or '// codecondenser:ignore-duplicate' on the method.");
+        writer.WriteLine("  5. Re-run 'pmad-codecondenser --incremental' to confirm the violation is resolved.");
         writer.WriteLine(Red(Bold("========================================================================")));
         writer.WriteLine();
+    }
+
+    public void PrintAiActionableIncrementalFeedback(
+        TextWriter writer,
+        IReadOnlyList<CodeCloneGroup> cloneGroups,
+        IReadOnlyList<SubMethodCloneGroup> subMethodGroups,
+        IReadOnlyList<VerboseComment> verboseComments,
+        string baseDirectory,
+        int duplicationTolerance,
+        bool hasDuplicationViolation = true,
+        bool hasCommentViolation = false)
+    {
+        ArgumentNullException.ThrowIfNull(writer);
+        cloneGroups ??= [];
+        subMethodGroups ??= [];
+        verboseComments ??= [];
+
+        bool hasComments = verboseComments.Count > 0;
+        int totalCloneCount = cloneGroups.Count + subMethodGroups.Count;
+
+        if (hasDuplicationViolation && !hasComments)
+        {
+            PrintAiActionableDuplicationFeedback(writer, cloneGroups, subMethodGroups, baseDirectory, duplicationTolerance);
+            return;
+        }
+
+        if (!hasDuplicationViolation && hasComments)
+        {
+            writer.WriteLine();
+            writer.WriteLine(Red(Bold("========================================================================")));
+            var title = hasCommentViolation
+                ? "[AI AGENT ACTION REQUIRED] Verbose Comments Policy Violation (Exit Code: 2)"
+                : "[AI AGENT ACTION REQUIRED] Verbose Comments Detected";
+            writer.WriteLine(Red(Bold(title)));
+            writer.WriteLine(Red(Bold("========================================================================")));
+            writer.WriteLine($"Incremental analysis detected {Bold(verboseComments.Count.ToString())} new verbose comment(s) exceeding length thresholds.");
+            writer.WriteLine();
+
+            for (int i = 0; i < verboseComments.Count; i++)
+            {
+                var comment = verboseComments[i];
+                var relPath = FormatPath(comment.FilePath, baseDirectory);
+                writer.WriteLine(Yellow($"Comment #{i + 1} [{comment.Kind}, {comment.OriginalText.Trim().Length} chars]:"));
+                writer.WriteLine($"  • {Cyan(relPath)}:{comment.StartLine}-{comment.EndLine}");
+                writer.WriteLine($"    {Red(TruncatePreview(comment.OriginalText.Trim(), 100))}");
+                writer.WriteLine();
+            }
+
+            writer.WriteLine(Bold("Actionable Instructions for AI Agent:"));
+            writer.WriteLine("  1. Inspect the verbose comment(s) listed above.");
+            writer.WriteLine("  2. Condense: Shorten or rewrite the comment text concisely to fit within 120 columns.");
+            writer.WriteLine("  3. Suppress: If extensive documentation is intentional:");
+            writer.WriteLine("     • XML doc comments: Add 'condense=\"no\"' attribute to XML tag (e.g. <summary condense=\"no\">).");
+            writer.WriteLine("     • Regular comments: Add '// codecondenser:ignore' or '// nocondense' on the preceding line or inline.");
+            writer.WriteLine("  4. Re-run 'pmad-codecondenser --incremental' to confirm the violation is resolved.");
+            writer.WriteLine(Red(Bold("========================================================================")));
+            writer.WriteLine();
+            return;
+        }
+
+        if (hasDuplicationViolation && hasComments)
+        {
+            writer.WriteLine();
+            writer.WriteLine(Red(Bold("========================================================================")));
+            var title = (hasDuplicationViolation || hasCommentViolation)
+                ? "[AI AGENT ACTION REQUIRED] Incremental Policy Violations (Exit Code: 2)"
+                : "[AI AGENT ACTION REQUIRED] Incremental Policy Violations";
+            writer.WriteLine(Red(Bold(title)));
+            writer.WriteLine(Red(Bold("========================================================================")));
+            writer.WriteLine($"Incremental analysis detected {Bold(totalCloneCount.ToString())} new duplication cluster(s) and {Bold(verboseComments.Count.ToString())} new verbose comment(s).");
+            writer.WriteLine();
+
+            int clusterIdx = 1;
+            if (cloneGroups.Count > 0)
+            {
+                writer.WriteLine(Bold("Code Duplication Clusters:"));
+                for (int i = 0; i < cloneGroups.Count; i++)
+                {
+                    var group = cloneGroups[i];
+                    var shortHash = group.NormalizedHash.Length > 12 ? group.NormalizedHash[..12] : group.NormalizedHash;
+                    writer.WriteLine(Yellow($"  Cluster #{clusterIdx++} [Whole-Method, AST Hash: {shortHash}..., {group.StatementCount} statements]:"));
+                    foreach (var method in group.Methods)
+                    {
+                        var relPath = FormatPath(method.FilePath, baseDirectory);
+                        var signature = !string.IsNullOrWhiteSpace(method.Signature) ? method.Signature : method.MethodName;
+                        writer.WriteLine($"    • {Cyan(relPath)}:{method.StartLine}-{method.EndLine} in {Bold(signature)}");
+                    }
+                }
+                writer.WriteLine();
+            }
+
+            if (subMethodGroups.Count > 0)
+            {
+                if (cloneGroups.Count == 0) writer.WriteLine(Bold("Sub-Method Duplication Clusters:"));
+                for (int i = 0; i < subMethodGroups.Count; i++)
+                {
+                    var group = subMethodGroups[i];
+                    writer.WriteLine(Yellow($"  Cluster #{clusterIdx++} [Sub-Method, {group.StatementCount} consecutive statements]:"));
+                    foreach (var occ in group.Occurrences)
+                    {
+                        var relPath = FormatPath(occ.FilePath, baseDirectory);
+                        writer.WriteLine($"    • {Cyan(relPath)}:{occ.StartLine}-{occ.EndLine} in {Bold(occ.MethodName)}");
+                    }
+                }
+                writer.WriteLine();
+            }
+
+            writer.WriteLine(Bold("Verbose Comments:"));
+            for (int i = 0; i < verboseComments.Count; i++)
+            {
+                var comment = verboseComments[i];
+                var relPath = FormatPath(comment.FilePath, baseDirectory);
+                writer.WriteLine(Yellow($"  Comment #{i + 1} [{comment.Kind}, {comment.OriginalText.Trim().Length} chars]:"));
+                writer.WriteLine($"    • {Cyan(relPath)}:{comment.StartLine}-{comment.EndLine}");
+                writer.WriteLine($"      {Red(TruncatePreview(comment.OriginalText.Trim(), 100))}");
+            }
+            writer.WriteLine();
+
+            writer.WriteLine(Bold("Actionable Instructions for AI Agent:"));
+            writer.WriteLine("  Code Duplication:");
+            writer.WriteLine("    1. Inspect the duplicate methods / statement blocks listed in each cluster above.");
+            writer.WriteLine("    2. Extract the identical structural logic into a shared helper method or service.");
+            writer.WriteLine("    3. Replace the duplicate code with a call to the extracted helper.");
+            writer.WriteLine("    4. To suppress: Add '[SuppressMessage(\"CodeCondenser\", \"Duplication\", Justification = \"<why>\")]' or '// codecondenser:ignore-duplicate' on the method.");
+            writer.WriteLine("  Verbose Comments:");
+            writer.WriteLine("    1. Inspect the verbose comment(s) listed above.");
+            writer.WriteLine("    2. Condense: Shorten or rewrite comment text concisely to fit within 120 columns.");
+            writer.WriteLine("    3. To suppress: Add 'condense=\"no\"' attribute (XML doc) or '// codecondenser:ignore' (preceding/inline).");
+            writer.WriteLine("  Verification:");
+            writer.WriteLine("    • Re-run 'pmad-codecondenser --incremental' to confirm all violations are resolved.");
+            writer.WriteLine(Red(Bold("========================================================================")));
+            writer.WriteLine();
+        }
     }
 
     private string Bold(string text) => _useColor ? $"{AnsiBold}{text}{AnsiReset}" : text;

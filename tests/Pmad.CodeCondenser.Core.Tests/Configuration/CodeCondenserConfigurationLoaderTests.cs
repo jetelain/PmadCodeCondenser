@@ -241,4 +241,53 @@ public class CodeCondenserConfigurationLoaderTests : IDisposable
         settings.Exclude.Should().Contain("src/Legacy/**");
         settings.Exclude.Should().NotContain(x => x.StartsWith("#"));
     }
+
+    [Fact]
+    public void LoadFromString_ParsesSummaryModeCorrectly()
+    {
+        var json = """
+        {
+            "summaryMode": "Report"
+        }
+        """;
+        var settings = CodeCondenserConfigurationLoader.LoadFromString(json);
+        settings.SummaryMode.Should().Be(SummaryMode.Report);
+        settings.GetEffectiveSummaryMode().Should().Be(SummaryMode.Report);
+    }
+
+    [Fact]
+    public void LoadFromString_ParsesSummaryAliasCorrectly()
+    {
+        var json = """
+        {
+            "summary": "Disabled"
+        }
+        """;
+        var settings = CodeCondenserConfigurationLoader.LoadFromString(json);
+        settings.SummaryMode.Should().Be(SummaryMode.Disabled);
+        settings.EnableCommentSummarization.Should().BeFalse();
+        settings.GetEffectiveSummaryMode().Should().Be(SummaryMode.Disabled);
+    }
+
+    [Fact]
+    public void LoadFromString_DetectsLlmConfiguration()
+    {
+        var jsonWithOllama = """
+        {
+            "ollama": { "model": "qwen3.5:4b" }
+        }
+        """;
+        var settingsWithOllama = CodeCondenserConfigurationLoader.LoadFromString(jsonWithOllama);
+        settingsWithOllama.IsLlmConfigured.Should().BeTrue();
+        settingsWithOllama.GetEffectiveSummaryMode().Should().Be(SummaryMode.Summarize);
+
+        var jsonWithoutLlm = """
+        {
+            "duplicationStatementThreshold": 12
+        }
+        """;
+        var settingsWithoutLlm = CodeCondenserConfigurationLoader.LoadFromString(jsonWithoutLlm);
+        settingsWithoutLlm.IsLlmConfigured.Should().BeFalse();
+        settingsWithoutLlm.GetEffectiveSummaryMode().Should().Be(SummaryMode.Report);
+    }
 }

@@ -545,5 +545,86 @@ public class CliArgumentParserTests
 
         help.Should().Contain("-f, --format <type>");
         help.Should().Contain("-o, --output <path>");
+        help.Should().Contain("--summary <mode>");
+        help.Should().Contain("-ct, --comment-tolerance <n>");
+    }
+
+    [Theory]
+    [InlineData("report", Pmad.CodeCondenser.Core.Configuration.SummaryMode.Report)]
+    [InlineData("summarize", Pmad.CodeCondenser.Core.Configuration.SummaryMode.Summarize)]
+    [InlineData("disabled", Pmad.CodeCondenser.Core.Configuration.SummaryMode.Disabled)]
+    [InlineData("Report", Pmad.CodeCondenser.Core.Configuration.SummaryMode.Report)]
+    [InlineData("Disabled", Pmad.CodeCondenser.Core.Configuration.SummaryMode.Disabled)]
+    public void TryParse_SummaryFlag_SetsSummaryMode(string modeStr, Pmad.CodeCondenser.Core.Configuration.SummaryMode expected)
+    {
+        var success = CliArgumentParser.TryParse(["--summary", modeStr], out var options, out var error);
+
+        success.Should().BeTrue();
+        error.Should().BeNull();
+        options.SummaryMode.Should().Be(expected);
+    }
+
+    [Fact]
+    public void TryParse_SummaryModeAlias_SetsSummaryMode()
+    {
+        var success = CliArgumentParser.TryParse(["--summary-mode=report"], out var options, out var error);
+
+        success.Should().BeTrue();
+        error.Should().BeNull();
+        options.SummaryMode.Should().Be(Pmad.CodeCondenser.Core.Configuration.SummaryMode.Report);
+    }
+
+    [Fact]
+    public void TryParse_ReportOnlyFlag_SetsSummaryModeReport()
+    {
+        var success = CliArgumentParser.TryParse(["--report-only"], out var options, out var error);
+
+        success.Should().BeTrue();
+        error.Should().BeNull();
+        options.SummaryMode.Should().Be(Pmad.CodeCondenser.Core.Configuration.SummaryMode.Report);
+    }
+
+    [Fact]
+    public void TryParse_NoCommentsFlag_SetsSummaryModeDisabled()
+    {
+        var success = CliArgumentParser.TryParse(["--no-comments"], out var options, out var error);
+
+        success.Should().BeTrue();
+        error.Should().BeNull();
+        options.SummaryMode.Should().Be(Pmad.CodeCondenser.Core.Configuration.SummaryMode.Disabled);
+    }
+
+    [Fact]
+    public void TryParse_InvalidSummaryMode_ReturnsError()
+    {
+        var success = CliArgumentParser.TryParse(["--summary", "unknown_mode"], out var options, out var error);
+
+        success.Should().BeFalse();
+        error.Should().Contain("Invalid value for --summary");
+    }
+
+    [Theory]
+    [InlineData("--comment-tolerance", "0", 0)]
+    [InlineData("-ct", "5", 5)]
+    [InlineData("--comment-tolerance=3", null, 3)]
+    public void TryParse_CommentTolerance_SetsTolerance(string arg1, string? arg2, int expected)
+    {
+        string[] args = arg2 != null ? [arg1, arg2] : [arg1];
+        var success = CliArgumentParser.TryParse(args, out var options, out var error);
+
+        success.Should().BeTrue();
+        error.Should().BeNull();
+        options.CommentTolerance.Should().Be(expected);
+    }
+
+    [Theory]
+    [InlineData("--comment-tolerance", "not-a-number")]
+    [InlineData("-ct", "-1")]
+    public void TryParse_InvalidCommentTolerance_ReturnsError(string arg1, string arg2)
+    {
+        var success = CliArgumentParser.TryParse([arg1, arg2], out var options, out var error);
+
+        success.Should().BeFalse();
+        error.Should().NotBeNull();
     }
 }

@@ -106,6 +106,11 @@ public sealed class CliOptions
     public bool? EnableCommentSummarization { get; set; }
 
     /// <summary>
+    /// Comment summary mode override: "disabled", "summarize", or "report".
+    /// </summary>
+    public Core.Configuration.SummaryMode? SummaryMode { get; set; }
+
+    /// <summary>
     /// When specified, explicitly enables or disables duplication detection.
     /// </summary>
     public bool? EnableDuplicationDetection { get; set; }
@@ -114,6 +119,11 @@ public sealed class CliOptions
     /// Maximum number of new clone clusters tolerated in incremental mode before returning an error exit code.
     /// </summary>
     public int? DuplicationTolerance { get; set; }
+
+    /// <summary>
+    /// Maximum number of new verbose comments tolerated in incremental mode before returning an error exit code.
+    /// </summary>
+    public int? CommentTolerance { get; set; }
 
     /// <summary>
     /// Path to JSON file stored in git recording summarized comments.

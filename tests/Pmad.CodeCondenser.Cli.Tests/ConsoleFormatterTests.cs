@@ -269,4 +269,139 @@ public class ConsoleFormatterTests
         output.Should().Contain("src/Service2.cs:15-25 in Execute");
         output.Should().Contain("Recommendation: Extract duplicate 10-statement block into a shared helper method.");
     }
+
+    [Fact]
+    public void PrintVerboseComments_WithoutSummaries_PrintsRecommendationAndSuppression()
+    {
+        var formatter = new ConsoleFormatter(enableColor: false);
+        using var writer = new StringWriter();
+
+        var xmlComment = new VerboseComment(
+            FilePath: "src/Foo.cs",
+            StartLine: 1,
+            EndLine: 5,
+            SpanStart: 0,
+            SpanLength: 150,
+            Kind: CommentKind.XmlDocumentation,
+            OriginalText: "/// <summary>Very long xml doc exceeding threshold characters.</summary>",
+            LeadingWhitespace: "");
+
+        var regularComment = new VerboseComment(
+            FilePath: "src/Bar.cs",
+            StartLine: 10,
+            EndLine: 12,
+            SpanStart: 200,
+            SpanLength: 130,
+            Kind: CommentKind.SingleLine,
+            OriginalText: "// Very long regular comment exceeding threshold characters.",
+            LeadingWhitespace: "");
+
+        formatter.PrintVerboseComments(writer, [xmlComment, regularComment], new Dictionary<string, string>(), ".");
+
+        var output = writer.ToString();
+        output.Should().Contain("Recommendation: Condense verbose comment to be concise (max 120 columns)");
+        output.Should().Contain("To suppress: Add condense=\"no\" to XML doc tag (e.g. <summary condense=\"no\">).");
+        output.Should().Contain("To suppress: Add '// codecondenser:ignore' or '// nocondense' on preceding line or inline.");
+    }
+
+    [Fact]
+    public void PrintAiActionableDuplicationFeedback_IncludesSuppressionInstruction()
+    {
+        var formatter = new ConsoleFormatter(enableColor: false);
+        using var writer = new StringWriter();
+
+        var methods = new List<MethodCloneInfo>
+        {
+            new("src/Svc1.cs", "M1", 10, 20, 8, "hashA", "void M1()"),
+            new("src/Svc2.cs", "M2", 10, 20, 8, "hashA", "void M2()")
+        };
+        var group = new CodeCloneGroup("hashA", methods);
+
+        formatter.PrintAiActionableDuplicationFeedback(writer, [group], ".", tolerance: 0);
+
+        var output = writer.ToString();
+        output.Should().Contain("To suppress: Add '[SuppressMessage(\"CodeCondenser\", \"Duplication\", Justification = \"<why>\")]' or '// codecondenser:ignore-duplicate' on the method.");
+    }
+
+    [Fact]
+    public void PrintAiActionableIncrementalFeedback_CommentsOnly_PrintsActionableBlockWithSuppression()
+    {
+        var formatter = new ConsoleFormatter(enableColor: false);
+        using var writer = new StringWriter();
+
+        var comment = new VerboseComment(
+            FilePath: "src/Service.cs",
+            StartLine: 15,
+            EndLine: 18,
+            SpanStart: 50,
+            SpanLength: 140,
+            Kind: CommentKind.XmlDocumentation,
+            OriginalText: "/// <summary>Exceeding text here</summary>",
+            LeadingWhitespace: "");
+
+        formatter.PrintAiActionableIncrementalFeedback(
+            writer,
+            cloneGroups: [],
+            subMethodGroups: [],
+            verboseComments: [comment],
+            baseDirectory: ".",
+            duplicationTolerance: 0,
+            hasDuplicationViolation: false,
+            hasCommentViolation: true);
+
+        var output = writer.ToString();
+        output.Should().Contain("[AI AGENT ACTION REQUIRED] Verbose Comments Policy Violation (Exit Code: 2)");
+        output.Should().Contain("Incremental analysis detected 1 new verbose comment(s) exceeding length thresholds.");
+        output.Should().Contain("src/Service.cs:15-18");
+        output.Should().Contain("Actionable Instructions for AI Agent:");
+        output.Should().Contain("Condense: Shorten or rewrite the comment text concisely");
+        output.Should().Contain("XML doc comments: Add 'condense=\"no\"' attribute to XML tag");
+        output.Should().Contain("Regular comments: Add '// codecondenser:ignore' or '// nocondense'");
+    }
+
+    [Fact]
+    public void PrintAiActionableIncrementalFeedback_BothDuplicationAndComments_PrintsUnifiedActionableBlockOnce()
+    {
+        var formatter = new ConsoleFormatter(enableColor: false);
+        using var writer = new StringWriter();
+
+        var methods = new List<MethodCloneInfo>
+        {
+            new("src/S1.cs", "M1", 1, 10, 5, "hash1", "void M1()"),
+            new("src/S2.cs", "M2", 1, 10, 5, "hash1", "void M2()")
+        };
+        var group = new CodeCloneGroup("hash1", methods);
+
+        var comment = new VerboseComment(
+            FilePath: "src/S3.cs",
+            StartLine: 20,
+            EndLine: 22,
+            SpanStart: 100,
+            SpanLength: 130,
+            Kind: CommentKind.SingleLine,
+            OriginalText: "// Very long text exceeding threshold",
+            LeadingWhitespace: "");
+
+        formatter.PrintAiActionableIncrementalFeedback(
+            writer,
+            cloneGroups: [group],
+            subMethodGroups: [],
+            verboseComments: [comment],
+            baseDirectory: ".",
+            duplicationTolerance: 0,
+            hasDuplicationViolation: true,
+            hasCommentViolation: true);
+
+        var output = writer.ToString();
+        // Displays unified header only once
+        output.Should().Contain("[AI AGENT ACTION REQUIRED] Incremental Policy Violations (Exit Code: 2)");
+        output.Should().Contain("Incremental analysis detected 1 new duplication cluster(s) and 1 new verbose comment(s).");
+        output.Should().Contain("Code Duplication Clusters:");
+        output.Should().Contain("Verbose Comments:");
+        output.Should().Contain("Actionable Instructions for AI Agent:");
+        output.Should().Contain("Code Duplication:");
+        output.Should().Contain("To suppress: Add '[SuppressMessage(\"CodeCondenser\", \"Duplication\", Justification = \"<why>\")]' or '// codecondenser:ignore-duplicate'");
+        output.Should().Contain("Verbose Comments:");
+        output.Should().Contain("To suppress: Add 'condense=\"no\"' attribute (XML doc) or '// codecondenser:ignore'");
+    }
 }

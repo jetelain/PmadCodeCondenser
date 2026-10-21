@@ -80,22 +80,40 @@ public static class Program
         if (!string.IsNullOrWhiteSpace(options.Model))
         {
             settings.Ollama.Model = options.Model;
+            settings.IsLlmConfigured = true;
         }
 
         if (!string.IsNullOrWhiteSpace(options.Endpoint))
         {
             settings.Ollama.Endpoint = options.Endpoint;
+            settings.IsLlmConfigured = true;
         }
 
         if (options.ContextSize.HasValue)
         {
             settings.Ollama.ContextSize = options.ContextSize.Value;
+            settings.IsLlmConfigured = true;
         }
 
-        if (options.EnableCommentSummarization.HasValue)
+        if (customEngine != null || options.Apply || options.Command == CliOptions.CommandApply)
+        {
+            settings.IsLlmConfigured = true;
+        }
+
+        if (options.SummaryMode.HasValue)
+        {
+            settings.SummaryMode = options.SummaryMode.Value;
+        }
+        else if (options.EnableCommentSummarization.HasValue)
         {
             settings.EnableCommentSummarization = options.EnableCommentSummarization.Value;
+            if (!options.EnableCommentSummarization.Value)
+            {
+                settings.SummaryMode = SummaryMode.Disabled;
+            }
         }
+
+        settings.SummaryMode = settings.GetEffectiveSummaryMode();
 
         if (options.EnableDuplicationDetection.HasValue)
         {
@@ -105,6 +123,11 @@ public static class Program
         if (options.DuplicationTolerance.HasValue)
         {
             settings.DuplicationTolerance = options.DuplicationTolerance.Value;
+        }
+
+        if (options.CommentTolerance.HasValue)
+        {
+            settings.CommentTolerance = options.CommentTolerance.Value;
         }
 
         if (!string.IsNullOrWhiteSpace(options.SummarizedCommentsPath))

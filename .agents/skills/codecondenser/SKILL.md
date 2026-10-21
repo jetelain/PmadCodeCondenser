@@ -21,15 +21,22 @@ The CLI can be invoked via the global tool `pmad-codecondenser`, local tool `dot
 
 | Task | Command | AI Backend Needed? |
 | :--- | :--- | :---: |
-| **Check for code clones only** | `pmad-codecondenser ./src --no-comments` | No |
+| **Check clones & comments (Report mode - default)** | `pmad-codecondenser ./src` | No |
+| **Check clones only (disable comments)** | `pmad-codecondenser ./src --no-comments` | No |
 | **Check production code only (skip tests)** | `pmad-codecondenser ./ --exclude-tests --no-comments` | No |
-| **Incremental CI clone check (strict production)** | `pmad-codecondenser ./ --incremental --duplication-tolerance 0 --no-comments` | No |
-| **Incremental CI check (enforce test duplication)** | `pmad-codecondenser ./ --incremental --duplication-tolerance 0 --enforce-test-duplication --no-comments` | No |
+| **Incremental CI check (strict duplication + comments)** | `pmad-codecondenser ./ --incremental --duplication-tolerance 0 -ct 0` | No |
+| **Incremental CI check (strict duplication only)** | `pmad-codecondenser ./ --incremental --duplication-tolerance 0` | No |
 | **Export SARIF report for GitHub Actions** | `pmad-codecondenser ./src --format sarif --output results.sarif` | No |
 | **Export structured JSON report** | `pmad-codecondenser ./src --format json --output results.json` | No |
-| **Dry-run analysis (clones + comments)** | `pmad-codecondenser ./src` | Yes (Ollama) |
+| **Summarize comments using LLM** | `pmad-codecondenser ./src -m gemma4:e4b` | Yes (Ollama) |
 | **Apply summarized comments to disk** | `pmad-codecondenser ./src --apply` | No (uses cache) |
 | **Refresh baseline snapshot** | `pmad-codecondenser snapshot ./src` | No |
+
+> [!NOTE]
+> **Summary Modes**:
+> - **`report`** (default if no LLM configured, or `--report-only` / `--summary report`): Extracts verbose comments and structural clones, outputting tips, refactoring recommendations, and suppression guidance without calling an LLM.
+> - **`summarize`** (default if LLM is configured, or `--summary summarize`): Uses LLM to condense verbose comments and caches summaries for WYSIWYG application.
+> - **`disabled`** (`--no-comments` / `--summary disabled`): Disables comment extraction and summarization entirely.
 
 > [!NOTE]
 > **Default Test & Generated Code Filtering**:
@@ -41,21 +48,25 @@ The CLI can be invoked via the global tool `pmad-codecondenser`, local tool `dot
 
 ## Agent Decision Tree & Workflows
 
-### Workflow 1: Pre-PR / Pre-Commit Check (Fast Clone Check)
-Before finalizing changes or opening a PR, always check for accidental code duplication:
+### Workflow 1: Pre-PR / Pre-Commit Check (Report Mode)
+Before finalizing changes or opening a PR, run a dry-run check for accidental code duplication and verbose comments:
 ```bash
-pmad-codecondenser ./src --no-comments
+pmad-codecondenser ./src
 ```
 - If clean (Exit code `0`): Proceed with your workflow.
-- If clones detected: Review the flagged methods. Refactor or suppress appropriately (see [Handling Duplication Violations](#handling-duplication-violations-exit-code-2)).
+- If clones or verbose comments detected: Review the recommendations. Refactor, condense, or suppress appropriately (see [Managing Suppressions](#managing-suppressions)).
 
 ### Workflow 2: Resolving CI Build Failures (Exit Code `2`)
-When CI fails with exit code `2`, new code duplication was introduced in modified files:
-1. Run the incremental check locally to view the duplication report:
+When CI fails with exit code `2`, new code duplication or new verbose comments were introduced exceeding policy tolerance:
+1. Run the incremental check locally to view the actionable feedback:
    ```bash
-   pmad-codecondenser ./src --incremental --duplication-tolerance 0 --no-comments
+   pmad-codecondenser ./src --incremental --duplication-tolerance 0 -ct 0
    ```
-2. Follow the [Handling Duplication Violations](#handling-duplication-violations-exit-code-2) procedure below.
+2. The CLI outputs unified **actionable feedback only once at the end** specifying the exact files, lines, and suppress instructions:
+   - For duplication: add `[SuppressMessage("CodeCondenser", "Duplication", Justification = "<why>")]` or `// codecondenser:ignore-duplicate`.
+   - For XML comments: add `condense="no"` (e.g. `<summary condense="no">`).
+   - For regular comments: add `// codecondenser:ignore` or `// nocondense`.
+3. Follow the [Handling Duplication Violations](#handling-duplication-violations-exit-code-2) procedure below.
 
 ### Workflow 3: Comment Condensation (Dry-Run & Apply)
 When asked to condense or clean up verbose comments:

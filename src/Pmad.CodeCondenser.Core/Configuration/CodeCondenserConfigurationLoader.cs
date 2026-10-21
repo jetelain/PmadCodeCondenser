@@ -68,6 +68,18 @@ public static class CodeCondenserConfigurationLoader
         try
         {
             var settings = JsonSerializer.Deserialize<CodeCondenserSettings>(json, SerializerOptions);
+            if (settings != null)
+            {
+                using var doc = JsonDocument.Parse(json);
+                if (doc.RootElement.TryGetProperty("ollama", out _) ||
+                    doc.RootElement.TryGetProperty("model", out _) ||
+                    doc.RootElement.TryGetProperty("endpoint", out _) ||
+                    (doc.RootElement.TryGetProperty("provider", out var p) && p.ValueKind == JsonValueKind.String && !string.IsNullOrWhiteSpace(p.GetString())))
+                {
+                    settings.IsLlmConfigured = true;
+                }
+            }
+
             return settings ?? new CodeCondenserSettings();
         }
         catch (JsonException)

@@ -86,6 +86,14 @@ public sealed class CodeCondenserEngine : ICodeCondenserEngine
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(targetPath);
         var effectiveSettings = (settings ?? new CodeCondenserSettings()).Clone();
+        if (effectiveSettings.SummaryMode == null && !effectiveSettings.IsLlmConfigured && _commentSummarizer != null)
+        {
+            if (effectiveSettings.EnableCommentSummarization)
+            {
+                effectiveSettings.SummaryMode = SummaryMode.Summarize;
+            }
+        }
+        var effectiveSummaryMode = effectiveSettings.GetEffectiveSummaryMode();
 
         var (baseDirectory, discoveredFiles, fileCategories, skippedGeneratedCount) = ResolveFiles(targetPath, effectiveSettings);
         _lastBaseDirectory = baseDirectory;
@@ -201,7 +209,7 @@ public sealed class CodeCondenserEngine : ICodeCondenserEngine
         // 5. Parse syntax trees and extract comments & methods in parallel (if features are enabled)
         var fileResults = new (List<VerboseComment> Comments, List<MethodCloneInfo> Methods, List<SubMethodBlock> SubMethodBlocks)[filesToScan.Count];
 
-        if (effectiveSettings.EnableCommentSummarization || effectiveSettings.EnableDuplicationDetection || effectiveSettings.EnableSubMethodCloneDetection)
+        if (effectiveSummaryMode != SummaryMode.Disabled || effectiveSettings.EnableDuplicationDetection || effectiveSettings.EnableSubMethodCloneDetection)
         {
             await Parallel.ForEachAsync(
                 filesToScan.Select((f, idx) => (f, idx)),
@@ -214,7 +222,7 @@ public sealed class CodeCondenserEngine : ICodeCondenserEngine
                     var syntaxTree = CSharpSyntaxTree.ParseText(sourceText, path: file, cancellationToken: ct);
                     var projectId = _projectLocator.LocateProjectId(file, baseDirectory);
 
-                    var comments = effectiveSettings.EnableCommentSummarization
+                    var comments = effectiveSummaryMode != SummaryMode.Disabled
                         ? _commentExtractor.Extract(syntaxTree, file, effectiveSettings).ToList()
                         : [];
 
@@ -461,7 +469,7 @@ public sealed class CodeCondenserEngine : ICodeCondenserEngine
         }
 
         // 7. Filter & Summarize comments via LLM
-        if (effectiveSettings.EnableCommentSummarization && _commentSummarizer != null)
+        if (effectiveSummaryMode == SummaryMode.Summarize && _commentSummarizer != null)
         {
             var commentsToSummarize = (incremental && baseline != null)
                 ? _snapshotDiffer.FilterNewComments(allExtractedComments, baseline)
@@ -494,8 +502,8 @@ public sealed class CodeCondenserEngine : ICodeCondenserEngine
                 ? allAnalyzedMethods
                 : (baseline != null ? [] : allAnalyzedMethods);
 
-            // When comment summarization is disabled, preserve baseline comment cache
-            var cacheForSnapshot = effectiveSettings.EnableCommentSummarization
+            // When comment summarization is not performed, preserve baseline comment cache
+            var cacheForSnapshot = effectiveSummaryMode == SummaryMode.Summarize
                 ? cache.ToDictionary()
                 : (baseline?.CommentCache ?? cache.ToDictionary());
 
@@ -517,9 +525,13 @@ public sealed class CodeCondenserEngine : ICodeCondenserEngine
             await _snapshotStore.SaveAsync(snapshotPath, newSnapshot, cancellationToken).ConfigureAwait(false);
         }
 
+        var resultComments = (incremental && baseline != null)
+            ? _snapshotDiffer.FilterNewComments(allExtractedComments, baseline)
+            : allExtractedComments;
+
         return new AnalysisResult
         {
-            VerboseComments = allExtractedComments,
+            VerboseComments = resultComments,
             CloneGroups = cloneGroups,
             SubMethodCloneGroups = subMethodGroups,
             SummarizedComments = cache.ToDictionary(),
@@ -552,7 +564,7 @@ public sealed class CodeCondenserEngine : ICodeCondenserEngine
         settings ??= new CodeCondenserSettings();
 
         var modifiedFiles = new List<string>();
-        if (!settings.EnableCommentSummarization || analysisResult.VerboseComments.Count == 0 || analysisResult.SummarizedComments.Count == 0)
+        if (settings.GetEffectiveSummaryMode() == SummaryMode.Disabled || analysisResult.VerboseComments.Count == 0 || analysisResult.SummarizedComments.Count == 0)
         {
             return modifiedFiles;
         }

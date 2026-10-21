@@ -61,4 +61,20 @@ public interface IConsoleFormatter
     {
         PrintAiActionableDuplicationFeedback(writer, cloneGroups, baseDirectory, tolerance);
     }
+
+    void PrintAiActionableIncrementalFeedback(
+        TextWriter writer,
+        IReadOnlyList<CodeCloneGroup> cloneGroups,
+        IReadOnlyList<SubMethodCloneGroup> subMethodGroups,
+        IReadOnlyList<VerboseComment> verboseComments,
+        string baseDirectory,
+        int duplicationTolerance,
+        bool hasDuplicationViolation = true,
+        bool hasCommentViolation = false)
+    {
+        if (hasDuplicationViolation)
+        {
+            PrintAiActionableDuplicationFeedback(writer, cloneGroups, subMethodGroups, baseDirectory, duplicationTolerance);
+        }
+    }
 }

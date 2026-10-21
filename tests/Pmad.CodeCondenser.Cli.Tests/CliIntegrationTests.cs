@@ -539,6 +539,200 @@ public class CliIntegrationTests : IDisposable
         output.ToString().Should().NotContain("Found 1 verbose comment(s) exceeding threshold:");
     }
 
+    [Fact]
+    public async Task RunAsync_DefaultWithoutLlm_RunsInReportMode_AndOutputsRecommendationsAndSuppressionTips()
+    {
+        var file = Path.Combine(_testDirectory, "ReportModeTest.cs");
+        await File.WriteAllTextAsync(file, """
+        namespace MyCompany;
+        public class ReportModeTest
+        {
+            // This is an extremely long and verbose explanation that easily exceeds the default threshold of one hundred characters in total length
+            public void M() {}
+        }
+        """);
+
+        // Engine with no LLM summarizer
+        var engine = new CodeCondenserEngine(snapshotStore: new JsonSnapshotStore());
+
+        using var output = new StringWriter();
+        var exitCode = await Program.RunAsync(
+            [_testDirectory, "--no-color"],
+            output,
+            new StringWriter(),
+            customEngine: engine);
+
+        exitCode.Should().Be(0);
+        var outputText = output.ToString();
+        outputText.Should().Contain("Found 1 verbose comment(s) exceeding threshold:");
+        outputText.Should().Contain("Recommendation: Condense verbose comment to be concise (max 120 columns)");
+        outputText.Should().Contain("To suppress: Add '// codecondenser:ignore' or '// nocondense' on preceding line or inline.");
+        outputText.Should().NotContain("+ Condensed:");
+    }
+
+    [Fact]
+    public async Task RunAsync_IncrementalMode_WhenNewVerboseCommentDetected_OutputsActionableFeedbackOnlyOnceAtTheEnd()
+    {
+        // 1. Establish baseline
+        var file1 = Path.Combine(_testDirectory, "Initial.cs");
+        await File.WriteAllTextAsync(file1, """
+        namespace MyCompany;
+        public class Initial
+        {
+            public void Run() {}
+        }
+        """);
+
+        var engine = new CodeCondenserEngine(snapshotStore: new JsonSnapshotStore());
+        await Program.RunAsync(
+            ["snapshot", _testDirectory, "--no-color"],
+            new StringWriter(),
+            new StringWriter(),
+            customEngine: engine);
+
+        // 2. Introduce a new file with a verbose comment
+        var file2 = Path.Combine(_testDirectory, "NewWithComment.cs");
+        await File.WriteAllTextAsync(file2, """
+        namespace MyCompany;
+        public class NewWithComment
+        {
+            // This is an extremely long and verbose explanation that easily exceeds the default threshold of one hundred characters in total length
+            public void RunNew() {}
+        }
+        """);
+
+        // 3. Run incremental
+        using var outInc = new StringWriter();
+        var exitCode = await Program.RunAsync(
+            [_testDirectory, "--incremental", "--no-color"],
+            outInc,
+            new StringWriter(),
+            customEngine: engine);
+
+        exitCode.Should().Be(0);
+        var outputText = outInc.ToString();
+        outputText.Should().Contain("[AI AGENT ACTION REQUIRED] Verbose Comments Detected");
+        outputText.Should().Contain("Incremental analysis detected 1 new verbose comment(s) exceeding length thresholds.");
+        outputText.Should().Contain("Actionable Instructions for AI Agent:");
+        outputText.Should().Contain("XML doc comments: Add 'condense=\"no\"' attribute to XML tag");
+        outputText.Should().Contain("Regular comments: Add '// codecondenser:ignore' or '// nocondense'");
+
+        // Actionable feedback should be displayed only once at the end
+        System.Text.RegularExpressions.Regex.Matches(outputText, @"\[AI AGENT ACTION REQUIRED\]").Count.Should().Be(1);
+    }
+
+    [Fact]
+    public async Task RunAsync_IncrementalMode_WhenCommentToleranceZero_ReturnsExitCode2()
+    {
+        // 1. Establish baseline
+        var file1 = Path.Combine(_testDirectory, "Base.cs");
+        await File.WriteAllTextAsync(file1, "public class Base { public void M() {} }");
+
+        var engine = new CodeCondenserEngine(snapshotStore: new JsonSnapshotStore());
+        await Program.RunAsync(
+            ["snapshot", _testDirectory, "--no-color"],
+            new StringWriter(),
+            new StringWriter(),
+            customEngine: engine);
+
+        // 2. Introduce new file with verbose comment
+        var file2 = Path.Combine(_testDirectory, "NewComment.cs");
+        await File.WriteAllTextAsync(file2, """
+        public class NewComment
+        {
+            // This is an extremely long and verbose explanation that easily exceeds the default threshold of one hundred characters in total length
+            public void M() {}
+        }
+        """);
+
+        // 3. Incremental run with --comment-tolerance 0
+        using var outInc = new StringWriter();
+        var exitCode = await Program.RunAsync(
+            [_testDirectory, "--incremental", "-ct", "0", "--no-color"],
+            outInc,
+            new StringWriter(),
+            customEngine: engine);
+
+        exitCode.Should().Be(2);
+        var outputText = outInc.ToString();
+        outputText.Should().Contain("[AI AGENT ACTION REQUIRED] Verbose Comments Policy Violation (Exit Code: 2)");
+        outputText.Should().Contain("To suppress:");
+        System.Text.RegularExpressions.Regex.Matches(outputText, @"\[AI AGENT ACTION REQUIRED\]").Count.Should().Be(1);
+    }
+
+    [Fact]
+    public async Task RunAsync_IncrementalMode_WhenBothDuplicationAndComments_OutputsUnifiedActionableFeedbackOnceAtTheEnd()
+    {
+        // 1. Establish baseline
+        var file1 = Path.Combine(_testDirectory, "Orig.cs");
+        await File.WriteAllTextAsync(file1, """
+        public class Orig
+        {
+            public void Compute(int a, int b)
+            {
+                int x = a + b;
+                int y = x * 2;
+                int z = y - 5;
+                if (z > 10) z = 10;
+                int r = z + 1;
+                Console.WriteLine(r);
+                int f = r * 3;
+                Console.WriteLine(f);
+            }
+        }
+        """);
+
+        var engine = new CodeCondenserEngine(snapshotStore: new JsonSnapshotStore());
+        await Program.RunAsync(
+            ["snapshot", _testDirectory, "--no-color"],
+            new StringWriter(),
+            new StringWriter(),
+            customEngine: engine);
+
+        // 2. Introduce clone method AND verbose comment
+        var file2 = Path.Combine(_testDirectory, "NewFeature.cs");
+        await File.WriteAllTextAsync(file2, """
+        public class NewFeature
+        {
+            // This is an extremely long and verbose explanation that easily exceeds the default threshold of one hundred characters in total length
+            public void Calculate(int a, int b)
+            {
+                int x = a + b;
+                int y = x * 2;
+                int z = y - 5;
+                if (z > 10) z = 10;
+                int r = z + 1;
+                Console.WriteLine(r);
+                int f = r * 3;
+                Console.WriteLine(f);
+            }
+        }
+        """);
+
+        // 3. Incremental run
+        using var outInc = new StringWriter();
+        var exitCode = await Program.RunAsync(
+            [_testDirectory, "--incremental", "--no-color"],
+            outInc,
+            new StringWriter(),
+            customEngine: engine);
+
+        // Exit code 2 due to duplication policy violation
+        exitCode.Should().Be(2);
+        var outputText = outInc.ToString();
+
+        // Single actionable header for both violations
+        System.Text.RegularExpressions.Regex.Matches(outputText, @"\[AI AGENT ACTION REQUIRED\]").Count.Should().Be(1);
+        outputText.Should().Contain("[AI AGENT ACTION REQUIRED] Incremental Policy Violations (Exit Code: 2)");
+        outputText.Should().Contain("Code Duplication Clusters:");
+        outputText.Should().Contain("Verbose Comments:");
+        outputText.Should().Contain("Actionable Instructions for AI Agent:");
+        outputText.Should().Contain("Code Duplication:");
+        outputText.Should().Contain("To suppress: Add '[SuppressMessage(\"CodeCondenser\", \"Duplication\", Justification = \"<why>\")]' or '// codecondenser:ignore-duplicate'");
+        outputText.Should().Contain("Verbose Comments:");
+        outputText.Should().Contain("To suppress: Add 'condense=\"no\"' attribute (XML doc) or '// codecondenser:ignore'");
+    }
+
     private sealed class SettingsCapturingSummarizer : ICommentSummarizer
     {
         private readonly Action<CodeCondenserSettings> _onSummarize;

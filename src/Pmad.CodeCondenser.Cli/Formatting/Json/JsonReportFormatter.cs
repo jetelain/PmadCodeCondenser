@@ -28,7 +28,7 @@ public sealed class JsonReportFormatter : IReportFormatter
         ArgumentNullException.ThrowIfNull(settings);
         ArgumentNullException.ThrowIfNull(output);
 
-        var report = BuildReport(result, baseDirectory);
+        var report = BuildReport(result, settings, baseDirectory);
         var json = JsonSerializer.Serialize(report, SerializerOptions);
 
         output.WriteLine(json);
@@ -37,6 +37,14 @@ public sealed class JsonReportFormatter : IReportFormatter
 
     public static CodeCondenserJsonReport BuildReport(AnalysisResult result, string baseDirectory)
     {
+        return BuildReport(result, new CodeCondenserSettings(), baseDirectory);
+    }
+
+    public static CodeCondenserJsonReport BuildReport(AnalysisResult result, CodeCondenserSettings settings, string baseDirectory)
+    {
+        ArgumentNullException.ThrowIfNull(result);
+        settings ??= new CodeCondenserSettings();
+
         int prodClones = result.CloneGroups.Count(g => g.Category == CloneCategory.Production);
         int testClones = result.CloneGroups.Count(g => g.Category == CloneCategory.Test);
         int crossClones = result.CloneGroups.Count(g => g.Category == CloneCategory.CrossBoundary);
@@ -53,7 +61,8 @@ public sealed class JsonReportFormatter : IReportFormatter
             TestClustersCount = testClones,
             CrossBoundaryClustersCount = crossClones,
             SubMethodClustersCount = result.SubMethodCloneGroups.Count,
-            VerboseCommentsCount = result.VerboseComments.Count
+            VerboseCommentsCount = result.VerboseComments.Count,
+            SummaryMode = settings.GetEffectiveSummaryMode().ToString()
         };
 
         var cloneClusters = new List<JsonCloneCluster>();
@@ -113,6 +122,10 @@ public sealed class JsonReportFormatter : IReportFormatter
         var verboseComments = result.VerboseComments.Select(c =>
         {
             result.SummarizedComments.TryGetValue(c.ContentHash, out var summaryText);
+            var recommendation = c.Kind == CommentKind.XmlDocumentation
+                ? "Condense XML doc comment, or add condense=\"no\" attribute to tag to suppress."
+                : "Condense comment text to max 120 columns, or add '// codecondenser:ignore' to suppress.";
+
             return new JsonVerboseComment
             {
                 FilePath = ReportPathHelper.NormalizeRelativePath(c.FilePath, baseDirectory),
@@ -120,7 +133,8 @@ public sealed class JsonReportFormatter : IReportFormatter
                 EndLine = c.EndLine,
                 CharacterCount = c.OriginalText.Length,
                 Kind = c.Kind.ToString(),
-                Summary = summaryText
+                Summary = summaryText,
+                Recommendation = recommendation
             };
         }).ToList();
 
