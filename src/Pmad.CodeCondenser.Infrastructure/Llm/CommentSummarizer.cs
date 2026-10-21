@@ -171,7 +171,7 @@ public sealed class CommentSummarizer : ICommentSummarizer
         var rawText = response.Text ?? string.Empty;
         var cleaned = CommentPrompts.CleanModelResponse(rawText, comment.Kind);
 
-        if (string.IsNullOrWhiteSpace(cleaned))
+        if (string.IsNullOrWhiteSpace(cleaned) || CommentVerbosityHelper.IsMoreVerbose(cleaned, comment))
         {
             cleaned = comment.OriginalText.Trim();
         }
@@ -179,3 +179,4 @@ public sealed class CommentSummarizer : ICommentSummarizer
         return cleaned;
     }
 }
+

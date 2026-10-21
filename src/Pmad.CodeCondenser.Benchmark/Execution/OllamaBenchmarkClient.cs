@@ -169,7 +169,7 @@ public sealed class OllamaBenchmarkClient : IDisposable
             }
 
             var cleaned = CommentPrompts.CleanModelResponse(rawText, comment.Kind);
-            if (string.IsNullOrWhiteSpace(cleaned))
+            if (string.IsNullOrWhiteSpace(cleaned) || CommentVerbosityHelper.IsMoreVerbose(cleaned, comment.OriginalText, comment.Kind))
             {
                 cleaned = comment.OriginalText.Trim();
             }

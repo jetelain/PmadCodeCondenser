@@ -829,7 +829,62 @@ public class CodeCondenserEngineTests : IDisposable
         reportResult.VerboseComments.Should().BeEmpty();
     }
 
+    [Fact]
+    public async Task AnalyzeAsync_WhenSummarizerReturnsMoreVerboseComment_GuardsAndKeepsOldComment()
+    {
+        var file = Path.Combine(_testDir, "VerboseTest.cs");
+        var originalComment = "// Short comment that exceeds threshold by a tiny bit.";
+        var code = $$"""
+        namespace MyTest;
+        public class VerboseTest
+        {
+            {{originalComment}}
+            public void Run() {}
+        }
+        """;
+        await File.WriteAllTextAsync(file, code);
+
+        // Summarizer returns a much longer comment
+        var moreVerboseSummary = "// An exceptionally verbose and unnecessarily wordy replacement comment that is much longer than the original.";
+
+        var summarizer = new FuncCommentSummarizer((comments, cache) =>
+        {
+            var dict = new Dictionary<string, string>(cache);
+            foreach (var c in comments)
+            {
+                dict[c.ContentHash] = moreVerboseSummary;
+            }
+            return dict;
+        });
+
+        var engine = new CodeCondenserEngine(
+            snapshotStore: _snapshotStore,
+            commentSummarizer: summarizer);
+
+        var settings = new CodeCondenserSettings
+        {
+            CommentLengthThreshold = 40,
+            SummaryMode = SummaryMode.Summarize
+        };
+
+        var result = await engine.AnalyzeAsync(_testDir, settings);
+        result.VerboseComments.Should().HaveCount(1);
+
+        var comment = result.VerboseComments[0];
+        // The guard must have replaced the more verbose summary with the original comment text
+        result.SummarizedComments[comment.ContentHash].Should().Be(originalComment.Trim());
+
+        // Total gain must be 0
+        result.TotalCommentGainCharacters.Should().Be(0);
+        result.TotalCommentReductionPercent.Should().Be(0);
+
+        // Applying summaries must NOT modify the file
+        var modified = await engine.ApplySummariesWithModifiedFilesAsync(result, settings);
+        modified.Should().BeEmpty();
+    }
+
     private sealed class InMemorySummarizedCommentsStore : ISummarizedCommentsStore
+
 
     {
         public Dictionary<string, string> Stored { get; } = new(StringComparer.Ordinal);

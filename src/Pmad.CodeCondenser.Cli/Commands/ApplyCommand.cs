@@ -99,6 +99,10 @@ public sealed class ApplyCommand : ICommand
         }
 
         var mode = options.Incremental ? "Apply (Incremental)" : "Apply";
+        var (_, _, gainChars, reductionPercent, count) = result.CalculateCommentGain();
+        int? commentGain = count > 0 ? gainChars : null;
+        int? commentReduction = count > 0 ? reductionPercent : null;
+
         formatter.PrintSummary(
             output,
             result.AnalyzedFilesCount,
@@ -111,7 +115,9 @@ public sealed class ApplyCommand : ICommand
             result.SkippedGeneratedFilesCount,
             result.CloneGroups.Count(g => g.Category != CloneCategory.Test),
             result.CloneGroups.Count(g => g.Category == CloneCategory.Test),
-            result.SubMethodCloneGroups.Count);
+            result.SubMethodCloneGroups.Count,
+            commentGain,
+            commentReduction);
 
         if (options.Incremental)
         {

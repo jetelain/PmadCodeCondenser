@@ -79,6 +79,8 @@ public class JsonReportFormatterTests
         report.Summary.CrossBoundaryClustersCount.Should().Be(0);
         report.Summary.SubMethodClustersCount.Should().Be(1);
         report.Summary.VerboseCommentsCount.Should().Be(1);
+        report.Summary.TotalCommentGainCharacters.Should().Be(96);
+        report.Summary.TotalCommentReductionPercent.Should().Be(80);
 
         // Clone Clusters
         report.CloneClusters.Should().HaveCount(1);
@@ -117,5 +119,6 @@ public class JsonReportFormatterTests
         verbComment.CharacterCount.Should().Be(120);
         verbComment.Kind.Should().Be("SingleLine");
         verbComment.Summary.Should().Be("Summarized comment text.");
+        verbComment.GainCharacters.Should().Be(96);
     }
 }

@@ -272,6 +272,45 @@ public class CommentSummarizerTests
         progressReports.Last().Percentage.Should().Be(100);
     }
 
+    [Fact]
+    public async Task SummarizeAsync_WhenLlmOutputIsMoreVerboseThanOriginalComment_KeepsOldComment()
+    {
+        var originalComment = "// Short comment that was flagged.";
+        var comment = CreateComment(originalComment);
+
+        // LLM returns a more verbose explanation
+        var verboseLlmOutput = "// This is an unnecessarily long explanation that adds lots of redundant filler words to the comment.";
+
+        var client = new TestChatClient(_ => verboseLlmOutput);
+        var summarizer = new CommentSummarizer(client);
+
+        var result = await summarizer.SummarizeAsync(new[] { comment }, new Dictionary<string, string>(), new CodeCondenserSettings());
+
+        result.Should().ContainKey(comment.ContentHash);
+        // The guard must keep the old comment
+        result[comment.ContentHash].Should().Be(originalComment.Trim());
+    }
+
+    [Fact]
+    public async Task SummarizeAsync_WhenLlmOutputIsMoreVerboseXmlDoc_KeepsOldComment()
+    {
+        var originalComment = "/// <summary>\r\n/// Brief method summary.\r\n/// </summary>";
+        var comment = CreateComment(originalComment, CommentKind.XmlDocumentation);
+
+        // LLM returns a much longer XML doc comment
+        var verboseLlmOutput = "/// <summary>\r\n/// This method performs an exceptionally detailed operation with multiple stages of validation, caching, and serialization.\r\n/// </summary>";
+
+        var client = new TestChatClient(_ => verboseLlmOutput);
+        var summarizer = new CommentSummarizer(client);
+
+        var result = await summarizer.SummarizeAsync(new[] { comment }, new Dictionary<string, string>(), new CodeCondenserSettings());
+
+        result.Should().ContainKey(comment.ContentHash);
+        // The guard must keep the old comment
+        result[comment.ContentHash].Should().Be(originalComment.Trim());
+    }
+
+
     private sealed class DirectProgress<T>(Action<T> handler) : IProgress<T>
     {
         public void Report(T value) => handler(value);

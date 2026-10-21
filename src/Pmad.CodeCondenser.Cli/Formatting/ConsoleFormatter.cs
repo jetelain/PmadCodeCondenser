@@ -1,3 +1,4 @@
+using Pmad.CodeCondenser.Core.Comments;
 using Pmad.CodeCondenser.Core.Models;
 
 namespace Pmad.CodeCondenser.Cli.Formatting;
@@ -178,6 +179,10 @@ public sealed class ConsoleFormatter : IConsoleFormatter
         writer.WriteLine(Cyan(Bold($"Found {comments.Count} verbose comment(s) exceeding threshold:")));
         writer.WriteLine();
 
+        int totalOriginalLen = 0;
+        int totalCondensedLen = 0;
+        int totalSummarized = 0;
+
         for (int i = 0; i < comments.Count; i++)
         {
             var comment = comments[i];
@@ -189,15 +194,32 @@ public sealed class ConsoleFormatter : IConsoleFormatter
             var originalPreview = TruncatePreview(comment.OriginalText.Trim(), 120);
             writer.WriteLine(Red($"  - Original:  {originalPreview}"));
 
-            if (summaries.TryGetValue(comment.ContentHash, out var summary))
+            if (summaries.TryGetValue(comment.ContentHash, out var summary) && !string.IsNullOrWhiteSpace(summary))
             {
                 var summaryPreview = TruncatePreview(summary.Trim(), 120);
-                var condensedLen = summary.Trim().Length;
-                int reduction = originalLen > 0 ? (int)Math.Round((1.0 - (double)condensedLen / originalLen) * 100) : 0;
-                reduction = Math.Clamp(reduction, 0, 100);
+                bool isKept = string.Equals(summary.Trim(), comment.OriginalText.Trim(), StringComparison.Ordinal) ||
+                              CommentVerbosityHelper.IsMoreVerbose(summary, comment);
 
-                writer.WriteLine(Green($"  + Condensed: {summaryPreview}"));
-                writer.WriteLine(Dim($"    Diff: {originalLen} -> {condensedLen} chars ({reduction}% reduction)"));
+                if (isKept)
+                {
+                    writer.WriteLine(Yellow($"  = Kept:      {summaryPreview}"));
+                    writer.WriteLine(Dim($"    Diff: {originalLen} -> {originalLen} chars (0% reduction, kept original comment)"));
+                    totalOriginalLen += originalLen;
+                    totalCondensedLen += originalLen;
+                    totalSummarized++;
+                }
+                else
+                {
+                    var condensedLen = summary.Trim().Length;
+                    int reduction = originalLen > 0 ? (int)Math.Round((1.0 - (double)condensedLen / originalLen) * 100) : 0;
+                    reduction = Math.Clamp(reduction, 0, 100);
+
+                    writer.WriteLine(Green($"  + Condensed: {summaryPreview}"));
+                    writer.WriteLine(Dim($"    Diff: {originalLen} -> {condensedLen} chars ({reduction}% reduction)"));
+                    totalOriginalLen += originalLen;
+                    totalCondensedLen += condensedLen;
+                    totalSummarized++;
+                }
             }
             else
             {
@@ -214,6 +236,20 @@ public sealed class ConsoleFormatter : IConsoleFormatter
 
             writer.WriteLine();
         }
+
+        if (totalSummarized > 0)
+        {
+            int totalGain = Math.Max(0, totalOriginalLen - totalCondensedLen);
+            int totalReduction = totalOriginalLen > 0 ? (int)Math.Round((1.0 - (double)totalCondensedLen / totalOriginalLen) * 100) : 0;
+            totalReduction = Math.Clamp(totalReduction, 0, 100);
+
+            var gainText = totalGain > 0
+                ? Green($"Total Gain: {totalGain} chars ({totalReduction}% reduction, {totalOriginalLen} -> {totalCondensedLen} chars across {totalSummarized} comment(s))")
+                : Dim($"Total Gain: 0 chars (0% reduction across {totalSummarized} comment(s))");
+
+            writer.WriteLine(Bold(gainText));
+            writer.WriteLine();
+        }
     }
 
     public void PrintSummary(
@@ -228,7 +264,9 @@ public sealed class ConsoleFormatter : IConsoleFormatter
         int skippedGenerated = 0,
         int productionClones = 0,
         int testClones = 0,
-        int subMethodClones = 0)
+        int subMethodClones = 0,
+        int? commentGainChars = null,
+        int? commentReductionPercent = null)
     {
         ArgumentNullException.ThrowIfNull(writer);
 
@@ -268,6 +306,15 @@ public sealed class ConsoleFormatter : IConsoleFormatter
         }
 
         writer.WriteLine($"  Verbose Comments:  {(verboseCommentsCount > 0 ? Cyan(verboseCommentsCount.ToString()) : Green("0"))}");
+
+        if (commentGainChars.HasValue)
+        {
+            var gainDisplay = commentGainChars.Value > 0
+                ? Green($"+{commentGainChars.Value} chars ({commentReductionPercent ?? 0}% reduction)")
+                : Dim("0 chars (0% reduction)");
+            writer.WriteLine($"  Comment Gain:      {gainDisplay}");
+        }
+
         writer.WriteLine(Dim("------------------------------------------------------------------------"));
     }
 

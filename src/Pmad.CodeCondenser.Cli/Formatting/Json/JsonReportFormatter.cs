@@ -1,5 +1,6 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using Pmad.CodeCondenser.Core.Comments;
 using Pmad.CodeCondenser.Core.Configuration;
 using Pmad.CodeCondenser.Core.Models;
 
@@ -49,6 +50,8 @@ public sealed class JsonReportFormatter : IReportFormatter
         int testClones = result.CloneGroups.Count(g => g.Category == CloneCategory.Test);
         int crossClones = result.CloneGroups.Count(g => g.Category == CloneCategory.CrossBoundary);
 
+        var (_, _, gainChars, reductionPercent, count) = result.CalculateCommentGain();
+
         var summary = new JsonReportSummary
         {
             FilesAnalyzed = result.AnalyzedFilesCount,
@@ -62,7 +65,9 @@ public sealed class JsonReportFormatter : IReportFormatter
             CrossBoundaryClustersCount = crossClones,
             SubMethodClustersCount = result.SubMethodCloneGroups.Count,
             VerboseCommentsCount = result.VerboseComments.Count,
-            SummaryMode = settings.GetEffectiveSummaryMode().ToString()
+            SummaryMode = settings.GetEffectiveSummaryMode().ToString(),
+            TotalCommentGainCharacters = count > 0 ? gainChars : null,
+            TotalCommentReductionPercent = count > 0 ? reductionPercent : null
         };
 
         var cloneClusters = new List<JsonCloneCluster>();
@@ -126,6 +131,12 @@ public sealed class JsonReportFormatter : IReportFormatter
                 ? "Condense XML doc comment, or add condense=\"no\" attribute to tag to suppress."
                 : "Condense comment text to max 120 columns, or add '// codecondenser:ignore' to suppress.";
 
+            int? gain = null;
+            if (!string.IsNullOrWhiteSpace(summaryText))
+            {
+                gain = CommentVerbosityHelper.CalculateGain(c, summaryText);
+            }
+
             return new JsonVerboseComment
             {
                 FilePath = ReportPathHelper.NormalizeRelativePath(c.FilePath, baseDirectory),
@@ -134,7 +145,8 @@ public sealed class JsonReportFormatter : IReportFormatter
                 CharacterCount = c.OriginalText.Length,
                 Kind = c.Kind.ToString(),
                 Summary = summaryText,
-                Recommendation = recommendation
+                Recommendation = recommendation,
+                GainCharacters = gain
             };
         }).ToList();
 

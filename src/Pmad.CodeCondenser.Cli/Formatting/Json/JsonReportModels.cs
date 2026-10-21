@@ -51,6 +51,10 @@ public sealed record JsonReportSummary
     public int VerboseCommentsCount { get; init; }
 
     public string SummaryMode { get; init; } = string.Empty;
+
+    public int? TotalCommentGainCharacters { get; init; }
+
+    public int? TotalCommentReductionPercent { get; init; }
 }
 
 /// <summary>
@@ -137,4 +141,6 @@ public sealed record JsonVerboseComment
     public string? Summary { get; init; }
 
     public string? Recommendation { get; init; }
+
+    public int? GainCharacters { get; init; }
 }

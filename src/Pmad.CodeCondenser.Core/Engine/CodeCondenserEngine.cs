@@ -490,7 +490,17 @@ public sealed class CodeCondenserEngine : ICodeCondenserEngine
                     progress: progressHandler,
                     cancellationToken: cancellationToken).ConfigureAwait(false);
 
-                cache.SetRange(summaries);
+                var sanitizedSummaries = new Dictionary<string, string>(summaries, StringComparer.Ordinal);
+                foreach (var comment in commentsToSummarize)
+                {
+                    if (sanitizedSummaries.TryGetValue(comment.ContentHash, out var summaryText) &&
+                        CommentVerbosityHelper.IsMoreVerbose(summaryText, comment))
+                    {
+                        sanitizedSummaries[comment.ContentHash] = comment.OriginalText.Trim();
+                    }
+                }
+
+                cache.SetRange(sanitizedSummaries);
             }
         }
 

@@ -39,6 +39,10 @@ public sealed class ConsoleReportFormatter : IReportFormatter
         int prodClones = result.CloneGroups.Count(g => g.Category != CloneCategory.Test);
         int testClones = result.CloneGroups.Count(g => g.Category == CloneCategory.Test);
 
+        var (_, _, gainChars, reductionPercent, count) = result.CalculateCommentGain();
+        int? commentGain = count > 0 ? gainChars : null;
+        int? commentReduction = count > 0 ? reductionPercent : null;
+
         _consoleFormatter.PrintSummary(
             output,
             result.AnalyzedFilesCount,
@@ -51,7 +55,9 @@ public sealed class ConsoleReportFormatter : IReportFormatter
             result.SkippedGeneratedFilesCount,
             prodClones,
             testClones,
-            result.SubMethodCloneGroups.Count);
+            result.SubMethodCloneGroups.Count,
+            commentGain,
+            commentReduction);
 
         return Task.CompletedTask;
     }

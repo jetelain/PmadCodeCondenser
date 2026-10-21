@@ -27,7 +27,9 @@ public interface IConsoleFormatter
         int skippedGenerated,
         int productionClones,
         int testClones,
-        int subMethodClones = 0);
+        int subMethodClones = 0,
+        int? commentGainChars = null,
+        int? commentReductionPercent = null);
 
     void PrintFileApplied(TextWriter writer, string filePath, string baseDirectory);
 

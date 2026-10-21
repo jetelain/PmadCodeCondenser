@@ -116,6 +116,36 @@ public class ConsoleFormatterTests
         output.Should().Contain("- Original:");
         output.Should().Contain("+ Condensed: // Concise summary");
         output.Should().Contain("reduction");
+        output.Should().Contain("Total Gain:");
+    }
+
+    [Fact]
+    public void PrintVerboseComments_WhenSummaryIsKeptOldComment_PrintsKeptAndZeroReduction()
+    {
+        var formatter = new ConsoleFormatter(enableColor: false);
+        using var writer = new StringWriter();
+
+        var comment = new VerboseComment(
+            FilePath: "src/Foo.cs",
+            StartLine: 5,
+            EndLine: 7,
+            SpanStart: 0,
+            SpanLength: 120,
+            Kind: CommentKind.SingleLine,
+            OriginalText: "// Original comment text exceeding length threshold",
+            LeadingWhitespace: "    ");
+
+        var summaries = new Dictionary<string, string>
+        {
+            [comment.ContentHash] = "// Original comment text exceeding length threshold"
+        };
+
+        formatter.PrintVerboseComments(writer, [comment], summaries, ".");
+
+        var output = writer.ToString();
+        output.Should().Contain("= Kept:      // Original comment text exceeding length threshold");
+        output.Should().Contain("0% reduction, kept original comment");
+        output.Should().Contain("Total Gain: 0 chars (0% reduction");
     }
 
     [Fact]
@@ -132,7 +162,29 @@ public class ConsoleFormatterTests
         output.Should().Contain("Methods Scanned:   12");
         output.Should().Contain("Clone Clusters:    2");
         output.Should().Contain("Verbose Comments:  3");
+        output.Should().NotContain("Comment Gain:");
     }
+
+    [Fact]
+    public void PrintSummary_WithCommentGain_OutputsCommentGain()
+    {
+        var formatter = new ConsoleFormatter(enableColor: false);
+        using var writer = new StringWriter();
+
+        formatter.PrintSummary(
+            writer,
+            filesAnalyzed: 5,
+            methodsScanned: 12,
+            cloneGroupsCount: 2,
+            verboseCommentsCount: 3,
+            mode: "Dry-Run",
+            commentGainChars: 150,
+            commentReductionPercent: 45);
+
+        var output = writer.ToString();
+        output.Should().Contain("Comment Gain:      +150 chars (45% reduction)");
+    }
+
 
     [Fact]
     public void PrintStatusMessages_OutputsCorrectly()

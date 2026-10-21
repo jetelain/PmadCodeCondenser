@@ -1,3 +1,5 @@
+using Pmad.CodeCondenser.Core.Comments;
+
 namespace Pmad.CodeCondenser.Core.Models;
 
 /// <summary>
@@ -14,4 +16,26 @@ public sealed class AnalysisResult
     public int TestFilesCount { get; init; }
     public int SkippedGeneratedFilesCount { get; init; }
     public IReadOnlyList<SubMethodCloneGroup> SubMethodCloneGroups { get; init; } = [];
+
+    /// <summary>
+    /// Gets the total character gain (reduction in characters) achieved by replacing all verbose comments with their summaries.
+    /// Returns 0 if no comments were summarized.
+    /// </summary>
+    public int TotalCommentGainCharacters => CalculateCommentGain().GainCharacters;
+
+    /// <summary>
+    /// Gets the overall comment reduction percentage achieved by replacing all verbose comments with their summaries.
+    /// Returns 0 if no comments were summarized.
+    /// </summary>
+    public int TotalCommentReductionPercent => CalculateCommentGain().ReductionPercent;
+
+    /// <summary>
+    /// Calculates the total original characters, condensed characters, character gain, and reduction percentage
+    /// for all verbose comments that have summaries.
+    /// </summary>
+    public (int OriginalCharacters, int CondensedCharacters, int GainCharacters, int ReductionPercent, int SummarizedCount) CalculateCommentGain()
+    {
+        return CommentVerbosityHelper.CalculateTotalGain(VerboseComments, SummarizedComments);
+    }
 }
+
