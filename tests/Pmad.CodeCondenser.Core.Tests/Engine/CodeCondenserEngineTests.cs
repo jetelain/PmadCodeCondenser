@@ -765,7 +765,7 @@ public class CodeCondenserEngineTests : IDisposable
         var file = Path.Combine(_testDir, "UnchangedPreset.cs");
         var existingDoc = """
                 /// <summary>
-                /// Returns the local multimodal projector file path ( <c> mmproj-*.gguf </c>) in the models cache, or default.
+                /// Returns the local multimodal projector file path (<c>mmproj-*.gguf</c>) in the models cache, or default.
                 /// </summary>
             """;
         var code = $$"""
@@ -780,7 +780,7 @@ public class CodeCondenserEngineTests : IDisposable
 
         var summarizedStore = new InMemorySummarizedCommentsStore();
         // The LLM returns virtually the same text (unindented)
-        var unindentedSummary = "/// <summary>\r\n/// Returns the local multimodal projector file path ( <c> mmproj-*.gguf </c>) in the models cache, or default.\r\n/// </summary>";
+        var unindentedSummary = "/// <summary>\r\n/// Returns the local multimodal projector file path (<c>mmproj-*.gguf</c>) in the models cache, or default.\r\n/// </summary>";
 
         var summarizer = new FuncCommentSummarizer((comments, cache) =>
         {
@@ -799,7 +799,7 @@ public class CodeCondenserEngineTests : IDisposable
 
         var settings = new CodeCondenserSettings
         {
-            CommentLengthThreshold = 100,
+            CommentLengthThreshold = 90,
             SummaryMode = SummaryMode.Summarize
         };
 
@@ -821,7 +821,7 @@ public class CodeCondenserEngineTests : IDisposable
 
         var reportSettings = new CodeCondenserSettings
         {
-            CommentLengthThreshold = 100,
+            CommentLengthThreshold = 90,
             SummaryMode = SummaryMode.Report
         };
 

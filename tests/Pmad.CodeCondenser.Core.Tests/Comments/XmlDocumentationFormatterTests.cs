@@ -250,5 +250,53 @@ public class XmlDocumentationFormatterTests
         formatted.Should().Contain("<remarks>");
         formatted.Should().Contain("</remarks>");
     }
+
+    [Fact]
+    public void Format_InlineCodeTags_DoesNotAddExtraSpacesInsideCodeTag()
+    {
+        var input = """
+            /// <summary>GitHub Copilot in VS Code — reads <c>.github/prompts/*.prompt.md</c>; the discovery document is
+            /// <c>.github/copilot-instructions.md</c>.</summary>
+            """;
+
+        var formatted = XmlDocumentationFormatter.Format(input, indentation: "    ", maxLineLength: 120);
+
+        formatted.Should().NotContain("<c>. ");
+        formatted.Should().NotContain(" </c>");
+        formatted.Should().Contain("<c>.github/prompts/*.prompt.md</c>;");
+        formatted.Should().Contain("<c>.github/copilot-instructions.md</c>.");
+    }
+
+    [Fact]
+    public void Format_PreviouslyMangledSpacesInsideCodeTags_CleansExtraSpaces()
+    {
+        var input = """
+            /// <summary>
+            /// Copilot in VS Code reads <c>. github/prompts/*.prompt.md </c>; the
+            /// discovery document is <c>. github/copilot-instructions.md </c>.
+            /// </summary>
+            """;
+
+        var formatted = XmlDocumentationFormatter.Format(input, indentation: "    ", maxLineLength: 120);
+
+        formatted.Should().NotContain("<c>. ");
+        formatted.Should().NotContain(" </c>");
+        formatted.Should().Contain("<c>.github/prompts/*.prompt.md</c>;");
+        formatted.Should().Contain("<c>.github/copilot-instructions.md</c>.");
+    }
+
+    [Fact]
+    public void Format_VariousInlineTags_PreservesNoSpacePadding()
+    {
+        var input = """
+            /// <summary>Press <c> Esc </c> or <c> Enter </c> to browse <c> .candidates/ </c>.</summary>
+            """;
+
+        var formatted = XmlDocumentationFormatter.Format(input, indentation: "", maxLineLength: 120);
+
+        formatted.Should().Contain("<c>Esc</c>");
+        formatted.Should().Contain("<c>Enter</c>");
+        formatted.Should().Contain("<c>.candidates/</c>");
+    }
 }
 

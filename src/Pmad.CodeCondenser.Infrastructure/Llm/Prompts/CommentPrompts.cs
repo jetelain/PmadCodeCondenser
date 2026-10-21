@@ -12,9 +12,9 @@ public static class CommentPrompts
         """
         You are a concise C# code condenser. Your task is to summarize verbose code comments into concise, high-value explanations.
         Rules:
-        1. Keep essential technical intent, assumptions, and constraints.
-        2. Remove conversational filler, obvious restatements of code, and unnecessary verbosity.
-        3. Aim for 1-2 clear, direct sentences.
+        1. Focus strictly on the WHY: explain the underlying rationale, non-obvious constraints, edge-case assumptions, or workarounds.
+        2. Never restate the WHAT: do not describe what the code syntax already makes obvious.
+        3. Be extremely concise: aim for a single punchy, high-density sentence (ideally under 100 characters).
         4. Output ONLY the summarized comment text. Do NOT wrap in markdown code blocks, and do NOT include preamble or conversational commentary.
         """;
 
@@ -23,12 +23,15 @@ public static class CommentPrompts
         You are a concise C# code condenser specialized in XML documentation comments.
         Your task is to condense verbose XML documentation comments while strictly preserving valid XML documentation comment structure.
         Rules:
-        1. Always wrap the summary description inside <summary> and </summary>. Never emit untagged text or inline tags outside of top-level tags.
-        2. If providing extended technical explanations, caveats, or implementation details beyond the summary, wrap them inside <remarks> and </remarks>.
-        3. Preserve other XML tags (such as <param name="...">, <returns>, <typeparam>, <exception>).
-        4. Condense the text payload inside each tag to be direct, precise, and succinct.
-        5. Format each line of the output starting with C# XML doc comment slashes (///) and wrap lines so that lines do not exceed 100 columns.
-        6. Output ONLY the condensed XML documentation comment. Do NOT wrap in markdown code blocks, and do NOT include preamble or conversational commentary.
+        1. Focus strictly on the WHAT: clearly and compactly describe what the symbol does, its public contract, or its return behavior.
+        2. Be extremely concise: <summary> should ideally be a single, direct sentence in active present tense (e.g., "Calculates...", "Resolves...", "Represents...").
+        3. Always wrap the summary description inside <summary> and </summary>. Never emit untagged text or inline tags outside of top-level tags.
+        4. If critical caveats or technical details are necessary beyond the summary, place them in <remarks>.
+        5. Preserve other XML tags (such as <param name="...">, <returns>, <typeparam>, <exception>).
+        6. Condense the text payload inside each tag to be direct, precise, and succinct.
+        7. Format each line of the output starting with C# XML doc comment slashes (///) and wrap lines so that lines do not exceed 100 columns.
+        8. Do not add whitespace inside inline tags such as <c> (e.g. write <c>.github/copilot-instructions.md</c>, never <c> .github... </c> or <c>. github... </c>).
+        9. Output ONLY the condensed XML documentation comment. Do NOT wrap in markdown code blocks, and do NOT include preamble or conversational commentary.
         """;
 
     /// <summary>
@@ -39,7 +42,7 @@ public static class CommentPrompts
         ArgumentNullException.ThrowIfNull(originalComment);
 
         return $"""
-            Summarize the following verbose C# comment:
+            Summarize the following verbose C# comment, focusing on the underlying rationale or constraint (the 'why'):
 
             {originalComment.Trim()}
             """;
@@ -53,7 +56,7 @@ public static class CommentPrompts
         ArgumentNullException.ThrowIfNull(originalComment);
 
         return $"""
-            Condense the following verbose C# XML documentation comment, ensuring <summary> tags are included and /// formatting is preserved:
+            Condense the following verbose C# XML documentation comment, focusing on what the symbol does (the 'what'), ensuring <summary> tags are included and /// formatting is preserved:
 
             {originalComment.Trim()}
             """;

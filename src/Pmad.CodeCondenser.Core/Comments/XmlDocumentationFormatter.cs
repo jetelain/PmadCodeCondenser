@@ -108,6 +108,31 @@ public static class XmlDocumentationFormatter
         "exception", "example", "seealso", "inheritdoc", "include"
     };
 
+    private static readonly Regex InlineCodeDotSpaceRegex = new(@"<c>\s*\.\s+([a-zA-Z0-9_/\\])", RegexOptions.Compiled | RegexOptions.IgnoreCase);
+    private static readonly Regex InlineTagLeadingSpaceRegex = new(@"<(c|b|i|em|strong)>\s+", RegexOptions.Compiled | RegexOptions.IgnoreCase);
+    private static readonly Regex InlineTagTrailingSpaceRegex = new(@"\s+</(c|b|i|em|strong)>", RegexOptions.Compiled | RegexOptions.IgnoreCase);
+    private static readonly Regex TagTrailingPunctuationSpaceRegex = new(@"(/>|</(c|b|i|em|strong|see|seealso)>)\s+([.,;:!?])", RegexOptions.Compiled | RegexOptions.IgnoreCase);
+
+    private static string NormalizeInnerXml(string innerXml)
+    {
+        if (string.IsNullOrEmpty(innerXml))
+        {
+            return innerXml;
+        }
+
+        // Clean up accidentally separated dot prefix inside <c> (e.g. <c>. github... </c> -> <c>.github... </c>)
+        innerXml = InlineCodeDotSpaceRegex.Replace(innerXml, "<c>.$1");
+
+        // Trim leading and trailing whitespace inside inline tags (e.g. <c> foo </c> -> <c>foo</c>)
+        innerXml = InlineTagLeadingSpaceRegex.Replace(innerXml, "<$1>");
+        innerXml = InlineTagTrailingSpaceRegex.Replace(innerXml, "</$1>");
+
+        // Attach punctuation immediately following closing or self-closing tags (e.g. </c> ; -> </c>; or /> . -> />.)
+        innerXml = TagTrailingPunctuationSpaceRegex.Replace(innerXml, "$1$3");
+
+        return innerXml;
+    }
+
     private static string EnsureSummaryTag(string xmlContent)
     {
         // Check if <summary> or <summary ...> is already present
@@ -283,6 +308,7 @@ public static class XmlDocumentationFormatter
 
         bool wasMultiline = innerXml.Contains('\n') || innerXml.Contains('\r');
         innerXml = innerXml.Trim();
+        innerXml = NormalizeInnerXml(innerXml);
         var tokens = TokenizeXmlContent(innerXml);
 
         // Check if single line fits within available width
@@ -361,6 +387,7 @@ public static class XmlDocumentationFormatter
             }
 
             var text = line[3..].Trim();
+            text = NormalizeInnerXml(text);
             var tokens = TokenizeXmlContent(text);
             var currentLine = new StringBuilder();
 
@@ -396,40 +423,34 @@ public static class XmlDocumentationFormatter
         var tokens = new List<string>();
         var current = new StringBuilder();
         bool insideTag = false;
+        char quote = '\0';
 
         for (int i = 0; i < innerXml.Length; i++)
         {
             char c = innerXml[i];
 
-            if (c == '<' && !insideTag)
+            if (insideTag)
             {
-                if (current.Length > 0)
+                current.Append(c);
+                if (quote != '\0')
                 {
-                    tokens.Add(current.ToString());
-                    current.Clear();
+                    if (c == quote)
+                    {
+                        quote = '\0';
+                    }
                 }
+                else if (c == '"' || c == '\'')
+                {
+                    quote = c;
+                }
+                else if (c == '>')
+                {
+                    insideTag = false;
+                }
+            }
+            else if (c == '<')
+            {
                 insideTag = true;
-                current.Append(c);
-            }
-            else if (c == '>' && insideTag)
-            {
-                insideTag = false;
-                current.Append(c);
-
-                // Attach any immediate punctuation (.,;:!?) or closing quote/parenthesis/slash to the tag token
-                while (i + 1 < innerXml.Length && (innerXml[i + 1] == '.' || innerXml[i + 1] == ',' ||
-                       innerXml[i + 1] == ';' || innerXml[i + 1] == ':' || innerXml[i + 1] == ')' ||
-                       innerXml[i + 1] == '\'' || innerXml[i + 1] == '"' || innerXml[i + 1] == '/'))
-                {
-                    i++;
-                    current.Append(innerXml[i]);
-                }
-
-                tokens.Add(current.ToString());
-                current.Clear();
-            }
-            else if (insideTag)
-            {
                 current.Append(c);
             }
             else if (char.IsWhiteSpace(c))
