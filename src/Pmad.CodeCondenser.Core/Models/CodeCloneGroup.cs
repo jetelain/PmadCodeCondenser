@@ -7,7 +7,8 @@ public sealed record CodeCloneGroup(
     string NormalizedHash,
     IReadOnlyList<MethodCloneInfo> Methods,
     CloneCategory Category = CloneCategory.Production,
-    int ImpactScore = 0)
+    int ImpactScore = 0,
+    bool IsComplementaryPair = false)
 {
     /// <summary>
     /// Gets the number of statements in each duplicate method of this cluster.

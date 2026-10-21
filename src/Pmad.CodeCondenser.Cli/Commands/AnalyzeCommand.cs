@@ -33,6 +33,16 @@ public sealed class AnalyzeCommand : ICommand
             formatter.PrintCommentProgress(output, p.Completed, p.Total);
         });
 
+        if (engine is CodeCondenserEngine engineWithInfo)
+        {
+            engineWithInfo.InfoLogged += msg =>
+            {
+                var clean = msg.StartsWith("[Info] ", StringComparison.Ordinal) ? msg[7..] : msg;
+                formatter.PrintInfo(output, clean);
+                output.WriteLine();
+            };
+        }
+
         var result = await engine.AnalyzeAsync(
             options.TargetPath,
             settings,

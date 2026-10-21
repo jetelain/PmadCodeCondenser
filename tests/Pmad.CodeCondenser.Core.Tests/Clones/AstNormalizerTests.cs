@@ -50,9 +50,9 @@ public void Process(Order order)
         var normalizedCode = normalized.NormalizeWhitespace().ToFullString();
 
         normalizedCode.Should().Contain("METHOD(VAR VAR)");
-        normalizedCode.Should().Contain("VAR.VAR();");
-        normalizedCode.Should().Contain("VAR.VAR(VAR);");
-        normalizedCode.Should().Contain("VAR.VAR(VAR.VAR);");
+        normalizedCode.Should().Contain("VAR.Validate();");
+        normalizedCode.Should().Contain("VAR.Info(VAR);");
+        normalizedCode.Should().Contain("VAR.WriteLine(VAR.VAR);");
     }
 
     [Fact]
@@ -153,7 +153,7 @@ public void LoopAndCatch(List<int> items)
 
         normalizedCode.Should().Contain("foreach (VAR VAR in VAR)");
         normalizedCode.Should().Contain("catch (VAR VAR)");
-        normalizedCode.Should().Contain("VAR.VAR(VAR);");
+        normalizedCode.Should().Contain("VAR.WriteLine(VAR);");
     }
 
     [Fact]
@@ -176,7 +176,7 @@ public void Patterns(object obj, string text)
         var normalized = _normalizer.Normalize(method);
         var normalizedCode = normalized.NormalizeWhitespace().ToFullString();
 
-        normalizedCode.Should().Contain("int.VAR(VAR, out int VAR)");
+        normalizedCode.Should().Contain("int.TryParse(VAR, out int VAR)");
         normalizedCode.Should().Contain("VAR is string VAR");
     }
 

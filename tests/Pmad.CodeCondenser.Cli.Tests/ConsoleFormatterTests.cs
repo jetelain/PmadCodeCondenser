@@ -194,4 +194,45 @@ public class ConsoleFormatterTests
         output.Should().Contain("Actionable Instructions for AI Agent:");
         output.Should().Contain("Extract the identical structural logic into a shared helper method");
     }
+
+    [Fact]
+    public void PrintCloneGroups_WithComplementaryPair_PrintsAdjustedRecommendation()
+    {
+        var formatter = new ConsoleFormatter(enableColor: false);
+        using var writer = new StringWriter();
+
+        var methods = new List<MethodCloneInfo>
+        {
+            new("src/Connection.cs", "JoinTaskGroupAsync", 10, 20, 8, "hashJoinLeave", "Task JoinTaskGroupAsync()"),
+            new("src/Connection.cs", "LeaveTaskGroupAsync", 25, 35, 8, "hashJoinLeave", "Task LeaveTaskGroupAsync()")
+        };
+        var group = new CodeCloneGroup("hashJoinLeave", methods, CloneCategory.Production, ImpactScore: 8, IsComplementaryPair: true);
+
+        formatter.PrintCloneGroups(writer, [group], ".");
+
+        var output = writer.ToString();
+        output.Should().Contain("Symmetric opposite methods. Extracting a shared helper may impair readability; evaluate whether keeping explicit paired methods is preferable.");
+    }
+
+    [Fact]
+    public void PrintAiActionableDuplicationFeedback_UsesGroupStatementCount_EvenWhenFirstMethodHasZeroStatements()
+    {
+        var formatter = new ConsoleFormatter(enableColor: false);
+        using var writer = new StringWriter();
+
+        var methods = new List<MethodCloneInfo>
+        {
+            // First method restored from baseline has 0 statements
+            new("src/ServiceA.cs", "DoWork", 1, 1, 0, "hash1", "void DoWork()"),
+            // Second method scanned has 15 statements
+            new("src/ServiceB.cs", "DoWork", 10, 25, 15, "hash1", "void DoWork()")
+        };
+        var group = new CodeCloneGroup("hash1", methods, CloneCategory.Production, ImpactScore: 15);
+
+        formatter.PrintAiActionableDuplicationFeedback(writer, [group], ".", tolerance: 0);
+
+        var output = writer.ToString();
+        output.Should().Contain("15 statements");
+        output.Should().NotContain("0 statements");
+    }
 }

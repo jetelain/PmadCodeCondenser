@@ -10,4 +10,5 @@ public sealed record MethodCloneInfo(
     int EndLine,
     int StatementCount,
     string NormalizedHash,
-    string Signature);
+    string Signature,
+    string ProjectId = "Default");

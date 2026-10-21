@@ -8,6 +8,10 @@ namespace Pmad.CodeCondenser.Core.Snapshots;
 public interface ISnapshotDiffer
 {
     /// <summary>
+    /// Event raised when informational messages (e.g. normalizer upgrades) are emitted during diffing.
+    /// </summary>
+    event Action<string>? InfoLogged;
+    /// <summary>
     /// Diffs the provided file hashes against a baseline snapshot.
     /// </summary>
     FileDiffResult DiffFiles(

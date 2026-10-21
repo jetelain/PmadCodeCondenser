@@ -9,6 +9,9 @@ public sealed class SnapshotDiffer : ISnapshotDiffer
 {
     private readonly IFileHasher _fileHasher;
 
+    /// <inheritdoc />
+    public event Action<string>? InfoLogged;
+
     public SnapshotDiffer(IFileHasher? fileHasher = null)
     {
         _fileHasher = fileHasher ?? new FileHasher();
@@ -109,6 +112,11 @@ public sealed class SnapshotDiffer : ISnapshotDiffer
                 UnchangedMethods: []);
         }
 
+        if (baseline.NormalizerVersion < AnalysisSnapshot.CurrentNormalizerVersion)
+        {
+            InfoLogged?.Invoke($"[Info] Normalizer version upgraded (v{baseline.NormalizerVersion} -> v{AnalysisSnapshot.CurrentNormalizerVersion}). Baseline snapshot was created with an older normalizer version.");
+        }
+
         var newMethods = new List<MethodCloneInfo>();
         var modifiedMethods = new List<MethodCloneInfo>();
         var unchangedMethods = new List<MethodCloneInfo>();
@@ -195,6 +203,7 @@ public sealed class SnapshotDiffer : ISnapshotDiffer
         var snapshot = new AnalysisSnapshot
         {
             Version = baseline?.Version ?? 1,
+            NormalizerVersion = baseline?.NormalizerVersion ?? AnalysisSnapshot.CurrentNormalizerVersion,
             CreatedAt = DateTimeOffset.UtcNow
         };
 

@@ -63,4 +63,39 @@ public static class MethodKeyHelper
     {
         return TryParseKey(key, out var filePath, out _) ? filePath : string.Empty;
     }
+
+    /// <summary>
+    /// Extracts the simple method name from a method signature or identifier.
+    /// </summary>
+    public static string ExtractMethodName(string signatureOrName)
+    {
+        if (string.IsNullOrWhiteSpace(signatureOrName))
+        {
+            return string.Empty;
+        }
+
+        var parenIdx = signatureOrName.IndexOf('(');
+        var target = parenIdx >= 0 ? signatureOrName[..parenIdx].Trim() : signatureOrName.Trim();
+
+        if (target.EndsWith('>'))
+        {
+            int depth = 0;
+            for (int i = target.Length - 1; i >= 0; i--)
+            {
+                if (target[i] == '>') depth++;
+                else if (target[i] == '<')
+                {
+                    depth--;
+                    if (depth == 0)
+                    {
+                        target = target[..i].Trim();
+                        break;
+                    }
+                }
+            }
+        }
+
+        var lastSpace = target.LastIndexOf(' ');
+        return lastSpace >= 0 ? target[(lastSpace + 1)..].Trim() : target;
+    }
 }

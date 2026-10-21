@@ -5,7 +5,18 @@ namespace Pmad.CodeCondenser.Core.Snapshots;
 /// </summary>
 public sealed class AnalysisSnapshot
 {
+    /// <summary>
+    /// The current AST normalizer engine version.
+    /// </summary>
+    public const int CurrentNormalizerVersion = 2;
+
     public int Version { get; set; } = 1;
+
+    /// <summary>
+    /// The AST normalizer engine version used to generate method hashes in this snapshot.
+    /// Default snapshots without this property are treated as NormalizerVersion 1.
+    /// </summary>
+    public int NormalizerVersion { get; set; } = 1;
 
     public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;
 

@@ -92,8 +92,8 @@ public class CloneDetectorRankingTests
 
         var crossMethods = new List<MethodCloneInfo>
         {
-            new("src/Service3.cs", "M3", 1, 10, 10, "hash_cross", "void M3()"),
-            new("tests/Service3Tests.cs", "T3", 1, 10, 10, "hash_cross", "void T3()")
+            new("src/Service3.cs", "M3", 1, 15, 15, "hash_cross", "void M3()"),
+            new("tests/Service3Tests.cs", "T3", 1, 15, 15, "hash_cross", "void T3()")
         };
 
         FileCategory Classifier(string path) => path.StartsWith("tests/") ? FileCategory.Test : FileCategory.Production;

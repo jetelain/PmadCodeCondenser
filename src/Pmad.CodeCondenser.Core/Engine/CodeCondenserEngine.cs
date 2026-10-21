@@ -22,7 +22,13 @@ public sealed class CodeCondenserEngine : ICodeCondenserEngine
     private readonly ISummarizedCommentsStore? _summarizedCommentsStore;
     private readonly ICommentSummarizer? _commentSummarizer;
     private readonly IFileHasher _fileHasher;
+    private readonly IProjectLocator _projectLocator;
     private string? _lastBaseDirectory;
+
+    /// <summary>
+    /// Event raised when informational messages (e.g. normalizer upgrades) are emitted.
+    /// </summary>
+    public event Action<string>? InfoLogged;
 
     /// <summary>
     /// Event raised when a file's comments have been rewritten and saved to disk.
@@ -43,7 +49,8 @@ public sealed class CodeCondenserEngine : ICodeCondenserEngine
         ISnapshotStore? snapshotStore = null,
         ICommentSummarizer? commentSummarizer = null,
         IFileHasher? fileHasher = null,
-        ISummarizedCommentsStore? summarizedCommentsStore = null)
+        ISummarizedCommentsStore? summarizedCommentsStore = null,
+        IProjectLocator? projectLocator = null)
     {
         _cloneDetector = cloneDetector ?? new CloneDetector();
         _commentExtractor = commentExtractor ?? new VerboseCommentExtractor();
@@ -53,6 +60,7 @@ public sealed class CodeCondenserEngine : ICodeCondenserEngine
         _summarizedCommentsStore = summarizedCommentsStore;
         _commentSummarizer = commentSummarizer;
         _fileHasher = fileHasher ?? new FileHasher();
+        _projectLocator = projectLocator ?? new ProjectLocator();
     }
 
     /// <inheritdoc />
@@ -114,6 +122,11 @@ public sealed class CodeCondenserEngine : ICodeCondenserEngine
             baseline = await _snapshotStore.LoadAsync(snapshotPath, cancellationToken).ConfigureAwait(false);
         }
 
+        if (baseline != null && baseline.NormalizerVersion < AnalysisSnapshot.CurrentNormalizerVersion)
+        {
+            InfoLogged?.Invoke($"[Info] Normalizer version upgraded (v{baseline.NormalizerVersion} -> v{AnalysisSnapshot.CurrentNormalizerVersion}). Baseline snapshot was created with an older normalizer version.");
+        }
+
         // 3. Initialize WYSIWYG comment cache from baseline
         var cache = WysiwygCommentCache.FromSnapshot(baseline);
 
@@ -146,6 +159,36 @@ public sealed class CodeCondenserEngine : ICodeCondenserEngine
             fileDiff = _snapshotDiffer.DiffFiles(currentFileHashes, baseline);
             var changedSet = new HashSet<string>(fileDiff.AddedFiles.Concat(fileDiff.ModifiedFiles), StringComparer.OrdinalIgnoreCase);
             filesToScan = discoveredFiles.Where(f => changedSet.Contains(fileToNormalizedPath[f])).ToList();
+
+            if (baseline.NormalizerVersion < AnalysisSnapshot.CurrentNormalizerVersion && effectiveSettings.EnableDuplicationDetection)
+            {
+                var unchangedFiles = discoveredFiles.Where(f => !changedSet.Contains(fileToNormalizedPath[f])).ToList();
+                var rebasedBaselineHashes = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+
+                await Parallel.ForEachAsync(
+                    unchangedFiles,
+                    parallelOptions,
+                    async (file, ct) =>
+                    {
+                        var relPath = fileToNormalizedPath[file];
+                        var sourceText = await File.ReadAllTextAsync(file, ct).ConfigureAwait(false);
+                        var syntaxTree = CSharpSyntaxTree.ParseText(sourceText, path: file, cancellationToken: ct);
+                        var projectId = _projectLocator.LocateProjectId(file, baseDirectory);
+                        var methods = _cloneDetector.ExtractMethods(syntaxTree, relPath, effectiveSettings, projectId);
+
+                        lock (rebasedBaselineHashes)
+                        {
+                            foreach (var m in methods)
+                            {
+                                var key = MethodKeyHelper.BuildKey(m);
+                                rebasedBaselineHashes[key] = m.NormalizedHash;
+                            }
+                        }
+                    }).ConfigureAwait(false);
+
+                baseline.MethodHashes = rebasedBaselineHashes;
+                baseline.NormalizerVersion = AnalysisSnapshot.CurrentNormalizerVersion;
+            }
         }
         else
         {
@@ -166,13 +209,14 @@ public sealed class CodeCondenserEngine : ICodeCondenserEngine
                     var normalizedRelPath = fileToNormalizedPath[file];
                     var sourceText = await File.ReadAllTextAsync(file, ct).ConfigureAwait(false);
                     var syntaxTree = CSharpSyntaxTree.ParseText(sourceText, path: file, cancellationToken: ct);
+                    var projectId = _projectLocator.LocateProjectId(file, baseDirectory);
 
                     var comments = effectiveSettings.EnableCommentSummarization
                         ? _commentExtractor.Extract(syntaxTree, file, effectiveSettings).ToList()
                         : [];
 
                     var methods = effectiveSettings.EnableDuplicationDetection
-                        ? _cloneDetector.ExtractMethods(syntaxTree, normalizedRelPath, effectiveSettings).ToList()
+                        ? _cloneDetector.ExtractMethods(syntaxTree, normalizedRelPath, effectiveSettings, projectId).ToList()
                         : [];
 
                     fileResults[item.idx] = (comments, methods);
@@ -221,14 +265,17 @@ public sealed class CodeCondenserEngine : ICodeCondenserEngine
                 {
                     if (MethodKeyHelper.TryParseKey(key, out var path, out var signature) && unchangedSet.Contains(path))
                     {
+                        var fullOrRel = Path.Combine(baseDirectory, path);
+                        var projId = _projectLocator.LocateProjectId(fullOrRel, baseDirectory);
                         combinedMethods.Add(new MethodCloneInfo(
                             FilePath: path,
-                            MethodName: signature,
+                            MethodName: MethodKeyHelper.ExtractMethodName(signature),
                             StartLine: 1,
                             EndLine: 1,
                             StatementCount: 0,
                             NormalizedHash: hash,
-                            Signature: signature));
+                            Signature: signature,
+                            ProjectId: projId));
                     }
                 }
             }
@@ -429,7 +476,8 @@ public sealed class CodeCondenserEngine : ICodeCondenserEngine
                 {
                     var sourceText = await File.ReadAllTextAsync(file, ct).ConfigureAwait(false);
                     var tree = CSharpSyntaxTree.ParseText(sourceText, path: file, cancellationToken: ct);
-                    methods = _cloneDetector.ExtractMethods(tree, relPath, settings).ToList();
+                    var projectId = _projectLocator.LocateProjectId(file, baseDirectory);
+                    methods = _cloneDetector.ExtractMethods(tree, relPath, settings, projectId).ToList();
                 }
 
                 baselineResults[item.idx] = (relPath, hash, methods);

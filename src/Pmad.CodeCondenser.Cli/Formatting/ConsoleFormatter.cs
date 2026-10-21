@@ -69,7 +69,14 @@ public sealed class ConsoleFormatter : IConsoleFormatter
                     }
                 }
 
-                writer.WriteLine(Dim("  Recommendation: Extract duplicate structural logic into a shared helper method or service."));
+                if (group.IsComplementaryPair)
+                {
+                    writer.WriteLine(Dim("  Recommendation: Symmetric opposite methods. Extracting a shared helper may impair readability; evaluate whether keeping explicit paired methods is preferable."));
+                }
+                else
+                {
+                    writer.WriteLine(Dim("  Recommendation: Extract duplicate structural logic into a shared helper method or service."));
+                }
                 writer.WriteLine(Dim("  To suppress: Add '[SuppressMessage(\"CodeCondenser\", \"Duplication\", Justification = \"<why>\")]' on method."));
                 writer.WriteLine();
             }
@@ -104,7 +111,14 @@ public sealed class ConsoleFormatter : IConsoleFormatter
                     }
                 }
 
-                writer.WriteLine(Dim("  Recommendation: Consider parameterized tests ([Theory] + [InlineData]) or test builder fixtures instead of production helpers."));
+                if (group.IsComplementaryPair)
+                {
+                    writer.WriteLine(Dim("  Recommendation: Symmetric opposite methods. Extracting a shared helper may impair readability; evaluate whether keeping explicit paired methods is preferable."));
+                }
+                else
+                {
+                    writer.WriteLine(Dim("  Recommendation: Consider parameterized tests ([Theory] + [InlineData]) or test builder fixtures instead of production helpers."));
+                }
                 writer.WriteLine(Dim("  To suppress: Add '[SuppressMessage(\"CodeCondenser\", \"Duplication\", Justification = \"<why>\")]' on method."));
                 writer.WriteLine();
             }
@@ -298,7 +312,7 @@ public sealed class ConsoleFormatter : IConsoleFormatter
         {
             var group = cloneGroups[i];
             var shortHash = group.NormalizedHash.Length > 12 ? group.NormalizedHash[..12] : group.NormalizedHash;
-            int statementCount = group.Methods.FirstOrDefault()?.StatementCount ?? 0;
+            int statementCount = group.StatementCount;
 
             writer.WriteLine(Yellow($"Cluster #{i + 1} [AST Hash: {shortHash}..., {statementCount} statements]:"));
             foreach (var method in group.Methods)

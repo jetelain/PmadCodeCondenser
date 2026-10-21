@@ -15,6 +15,17 @@ public interface ICloneDetector
     IReadOnlyList<MethodCloneInfo> ExtractMethods(SyntaxTree syntaxTree, string filePath, CodeCondenserSettings settings);
 
     /// <summary>
+    /// Extracts methods from a syntax tree meeting the statement count threshold and computes their normalized hashes,
+    /// with an optional pre-resolved project identifier.
+    /// </summary>
+    IReadOnlyList<MethodCloneInfo> ExtractMethods(
+        SyntaxTree syntaxTree,
+        string filePath,
+        CodeCondenserSettings settings,
+        string? projectId)
+        => ExtractMethods(syntaxTree, filePath, settings);
+
+    /// <summary>
     /// Groups extracted methods by normalized hash, filtering for groups containing two or more clones.
     /// </summary>
     IReadOnlyList<CodeCloneGroup> GroupClones(IEnumerable<MethodCloneInfo> methods);

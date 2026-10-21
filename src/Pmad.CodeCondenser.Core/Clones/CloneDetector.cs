@@ -13,6 +13,7 @@ public sealed class CloneDetector : ICloneDetector
     private readonly IAstNormalizer _normalizer;
     private readonly IMethodHasher _hasher;
     private readonly IMethodExtractor _extractor;
+    private readonly IProjectLocator _projectLocator;
 
     /// <summary>
     /// Initializes a new instance of <see cref="CloneDetector"/>.
@@ -20,14 +21,17 @@ public sealed class CloneDetector : ICloneDetector
     /// <param name="normalizer">AST normalizer (defaults to <see cref="AstNormalizer"/>).</param>
     /// <param name="hasher">Method hasher (defaults to <see cref="MethodHasher"/>).</param>
     /// <param name="extractor">Method extractor (defaults to <see cref="MethodExtractor"/>).</param>
+    /// <param name="projectLocator">Project locator (defaults to <see cref="ProjectLocator"/>).</param>
     public CloneDetector(
         IAstNormalizer? normalizer = null,
         IMethodHasher? hasher = null,
-        IMethodExtractor? extractor = null)
+        IMethodExtractor? extractor = null,
+        IProjectLocator? projectLocator = null)
     {
         _normalizer = normalizer ?? new AstNormalizer();
         _hasher = hasher ?? new MethodHasher();
         _extractor = extractor ?? new MethodExtractor();
+        _projectLocator = projectLocator ?? new ProjectLocator();
     }
 
     /// <inheritdoc />
@@ -36,11 +40,23 @@ public sealed class CloneDetector : ICloneDetector
         string filePath,
         CodeCondenserSettings settings)
     {
+        return ExtractMethods(syntaxTree, filePath, settings, projectId: null);
+    }
+
+    /// <inheritdoc />
+    public IReadOnlyList<MethodCloneInfo> ExtractMethods(
+        SyntaxTree syntaxTree,
+        string filePath,
+        CodeCondenserSettings settings,
+        string? projectId)
+    {
         ArgumentNullException.ThrowIfNull(syntaxTree);
         ArgumentNullException.ThrowIfNull(settings);
 
         var methods = _extractor.ExtractWithStatementCounts(syntaxTree, settings.DuplicationStatementThreshold);
         var result = new List<MethodCloneInfo>(methods.Count);
+
+        projectId ??= _projectLocator.LocateProjectId(filePath);
 
         foreach (var (method, statementCount) in methods)
         {
@@ -59,7 +75,8 @@ public sealed class CloneDetector : ICloneDetector
                 EndLine: endLine,
                 StatementCount: statementCount,
                 NormalizedHash: hash,
-                Signature: signature));
+                Signature: signature,
+                ProjectId: projectId));
         }
 
         return result;
@@ -78,21 +95,155 @@ public sealed class CloneDetector : ICloneDetector
     {
         ArgumentNullException.ThrowIfNull(methods);
 
-        return methods
-            .GroupBy(m => m.NormalizedHash)
-            .Where(g => g.Count() > 1)
-            .Select(g =>
+        var results = new List<CodeCloneGroup>();
+
+        foreach (var hashGroup in methods.GroupBy(m => m.NormalizedHash))
+        {
+            var methodList = hashGroup.ToList();
+            if (methodList.Count < 2)
             {
-                var methodList = g.ToList();
-                var statementCount = methodList.Count > 0 ? methodList.Max(m => m.StatementCount) : 0;
-                var impactScore = statementCount * Math.Max(0, methodList.Count - 1);
-                var category = DetermineCategory(methodList, fileClassifier);
-                return new CodeCloneGroup(g.Key, methodList, category, impactScore);
-            })
+                continue;
+            }
+
+            var distinctProjects = methodList
+                .Select(m => m.ProjectId)
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToList();
+
+            int statementCount = methodList.Max(m => m.StatementCount);
+
+            if (distinctProjects.Count > 1)
+            {
+                // Multi-project cluster
+                if (statementCount >= 12)
+                {
+                    // Meets cross-project threshold (>= 12 statements)
+                    PartitionAndAddCluster(results, hashGroup.Key, methodList, fileClassifier, isCrossProject: true);
+                }
+                else
+                {
+                    // Below 12 statements across multiple projects: partition into project-local sub-clusters
+                    foreach (var projectGroup in methodList.GroupBy(m => m.ProjectId, StringComparer.OrdinalIgnoreCase))
+                    {
+                        var localMethods = projectGroup.ToList();
+                        if (localMethods.Count >= 2)
+                        {
+                            PartitionAndAddCluster(results, hashGroup.Key, localMethods, fileClassifier, isCrossProject: false);
+                        }
+                    }
+                }
+            }
+            else
+            {
+                // Single-project cluster
+                PartitionAndAddCluster(results, hashGroup.Key, methodList, fileClassifier, isCrossProject: false);
+            }
+        }
+
+        return results
             .OrderByDescending(g => g.ImpactScore)
             .ThenByDescending(g => g.StatementCount)
             .ThenBy(g => g.NormalizedHash, StringComparer.Ordinal)
             .ToList();
+    }
+
+    private static void PartitionAndAddCluster(
+        List<CodeCloneGroup> results,
+        string hash,
+        List<MethodCloneInfo> methods,
+        Func<string, FileCategory>? fileClassifier,
+        bool isCrossProject)
+    {
+        if (methods.Count < 2)
+        {
+            return;
+        }
+
+        int statementCount = methods.Max(m => m.StatementCount);
+        var category = DetermineCategory(methods, fileClassifier);
+
+        if (category == CloneCategory.CrossBoundary && statementCount < 12)
+        {
+            // CrossBoundary requires >= 12 statements.
+            // Partition by category so cross-boundary noise is eliminated.
+            foreach (var catGroup in methods.GroupBy(m => fileClassifier != null ? fileClassifier(m.FilePath) : FileCategory.Production))
+            {
+                var catMethods = catGroup.ToList();
+                if (catMethods.Count >= 2)
+                {
+                    int catStatementCount = catMethods.Max(m => m.StatementCount);
+                    int catImpact = catStatementCount * Math.Max(0, catMethods.Count - 1);
+                    var cat = catGroup.Key == FileCategory.Test ? CloneCategory.Test : CloneCategory.Production;
+                    bool isComp = CheckComplementaryPair(catMethods, catStatementCount, isCrossProject: false);
+                    results.Add(new CodeCloneGroup(hash, catMethods, cat, catImpact, isComp));
+                }
+            }
+            return;
+        }
+
+        int impact = statementCount * Math.Max(0, methods.Count - 1);
+        bool comp = CheckComplementaryPair(methods, statementCount, isCrossProject);
+        results.Add(new CodeCloneGroup(hash, methods, category, impact, comp));
+    }
+
+    private static readonly (string P1, string P2)[] ComplementaryPrefixPairs =
+    [
+        ("Join", "Leave"),
+        ("Add", "Remove"),
+        ("Register", "Unregister"),
+        ("Subscribe", "Unsubscribe"),
+        ("Open", "Close"),
+        ("Start", "Stop"),
+        ("Attach", "Detach"),
+        ("Encode", "Decode")
+    ];
+
+    internal static bool CheckComplementaryPair(
+        IReadOnlyList<MethodCloneInfo> methods,
+        int statementCount,
+        bool isCrossProject)
+    {
+        int maxStatements = isCrossProject ? 14 : 10;
+        if (statementCount > maxStatements || methods.Count < 2)
+        {
+            return false;
+        }
+
+        for (int i = 0; i < methods.Count; i++)
+        {
+            for (int j = i + 1; j < methods.Count; j++)
+            {
+                var name1 = methods[i].MethodName;
+                var name2 = methods[j].MethodName;
+
+                foreach (var (p1, p2) in ComplementaryPrefixPairs)
+                {
+                    if (MatchesComplementaryPair(name1, name2, p1, p2) ||
+                        MatchesComplementaryPair(name2, name1, p1, p2))
+                    {
+                        return true;
+                    }
+                }
+            }
+        }
+
+        return false;
+    }
+
+    private static bool MatchesComplementaryPair(string name1, string name2, string p1, string p2)
+    {
+        if (name1.StartsWith(p1, StringComparison.Ordinal) && name2.StartsWith(p2, StringComparison.Ordinal))
+        {
+            var suffix1 = name1[p1.Length..];
+            var suffix2 = name2[p2.Length..];
+            if ((suffix1.Length == 0 || char.IsUpper(suffix1[0])) &&
+                string.Equals(suffix1, suffix2, StringComparison.Ordinal))
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     private static CloneCategory DetermineCategory(
