@@ -71,6 +71,16 @@ public sealed class CliOptions
     public string? Model { get; set; }
 
     /// <summary>
+    /// Specifies the report output format: "console" (default), "sarif", or "json".
+    /// </summary>
+    public OutputFormat Format { get; set; } = OutputFormat.Console;
+
+    /// <summary>
+    /// Optional file path to write report output to. When null, output is written to stdout.
+    /// </summary>
+    public string? OutputFilePath { get; set; }
+
+    /// <summary>
     /// Ollama endpoint URL override (e.g. "http://localhost:11434").
     /// </summary>
     public string? Endpoint { get; set; }
@@ -150,3 +160,14 @@ public sealed class CliOptions
     /// </summary>
     public bool Version { get; set; }
 }
+
+/// <summary>
+/// Supported output formats for analysis reporting.
+/// </summary>
+public enum OutputFormat
+{
+    Console,
+    Sarif,
+    Json
+}
+

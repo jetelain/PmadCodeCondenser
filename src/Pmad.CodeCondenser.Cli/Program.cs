@@ -48,8 +48,10 @@ public static class Program
             || (output == Console.Out && Console.IsOutputRedirected)
             || (error == Console.Error && Console.IsErrorRedirected);
 
+        bool isMachineReadableStdout = options.Format != OutputFormat.Console && string.IsNullOrWhiteSpace(options.OutputFilePath);
         var formatter = customFormatter ?? new ConsoleFormatter(enableColor: !disableAnsi);
-        formatter.PrintBanner(output);
+        var bannerWriter = isMachineReadableStdout ? error : output;
+        formatter.PrintBanner(bannerWriter);
 
         // Load configuration from codecondenser.json if present
         var settings = CodeCondenserConfigurationLoader.Load(options.ConfigPath ?? options.TargetPath);
@@ -188,7 +190,8 @@ public static class Program
         }
         catch (OperationCanceledException)
         {
-            formatter.PrintWarning(output, "Operation was canceled.");
+            var cancelWriter = isMachineReadableStdout ? error : output;
+            formatter.PrintWarning(cancelWriter, "Operation was canceled.");
             return ExitCodes.Canceled;
         }
         catch (Exception ex)

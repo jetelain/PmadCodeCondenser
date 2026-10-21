@@ -1,6 +1,9 @@
 using Pmad.CodeCondenser.Cli.Formatting;
+using Pmad.CodeCondenser.Cli.Formatting.Json;
+using Pmad.CodeCondenser.Cli.Formatting.Sarif;
 using Pmad.CodeCondenser.Core.Configuration;
 using Pmad.CodeCondenser.Core.Engine;
+using Pmad.CodeCondenser.Core.Filtering;
 using Pmad.CodeCondenser.Core.Models;
 
 namespace Pmad.CodeCondenser.Cli.Commands;
@@ -10,6 +13,13 @@ namespace Pmad.CodeCondenser.Cli.Commands;
 /// </summary>
 public sealed class AnalyzeCommand : ICommand
 {
+    private readonly Func<OutputFormat, IReportFormatter>? _formatterFactory;
+
+    public AnalyzeCommand(Func<OutputFormat, IReportFormatter>? formatterFactory = null)
+    {
+        _formatterFactory = formatterFactory;
+    }
+
     public async Task<int> ExecuteAsync(
         CliOptions options,
         CodeCondenserSettings settings,
@@ -24,13 +34,17 @@ public sealed class AnalyzeCommand : ICommand
         ArgumentNullException.ThrowIfNull(engine);
         ArgumentNullException.ThrowIfNull(formatter);
         ArgumentNullException.ThrowIfNull(output);
+        ArgumentNullException.ThrowIfNull(error);
 
-        formatter.PrintInfo(output, $"Analyzing target: {Path.GetFullPath(options.TargetPath)} (Mode: Dry-Run{(options.Incremental ? " Incremental" : "")})");
-        output.WriteLine();
+        bool isMachineReadableStdout = options.Format != OutputFormat.Console && string.IsNullOrWhiteSpace(options.OutputFilePath);
+        var statusWriter = isMachineReadableStdout ? error : output;
+
+        formatter.PrintInfo(statusWriter, $"Analyzing target: {Path.GetFullPath(options.TargetPath)} (Mode: Dry-Run{(options.Incremental ? " Incremental" : "")})");
+        statusWriter.WriteLine();
 
         var progress = new Progress<Pmad.CodeCondenser.Core.Comments.CommentSummarizationProgress>(p =>
         {
-            formatter.PrintCommentProgress(output, p.Completed, p.Total);
+            formatter.PrintCommentProgress(statusWriter, p.Completed, p.Total);
         });
 
         if (engine is CodeCondenserEngine engineWithInfo)
@@ -38,8 +52,8 @@ public sealed class AnalyzeCommand : ICommand
             engineWithInfo.InfoLogged += msg =>
             {
                 var clean = msg.StartsWith("[Info] ", StringComparison.Ordinal) ? msg[7..] : msg;
-                formatter.PrintInfo(output, clean);
-                output.WriteLine();
+                formatter.PrintInfo(statusWriter, clean);
+                statusWriter.WriteLine();
             };
         }
 
@@ -52,34 +66,44 @@ public sealed class AnalyzeCommand : ICommand
 
         if (result.SkippedGeneratedFilesCount > 0)
         {
-            formatter.PrintInfo(output, $"Skipped {result.SkippedGeneratedFilesCount} auto-generated file(s).");
-            output.WriteLine();
+            formatter.PrintInfo(statusWriter, $"Skipped {result.SkippedGeneratedFilesCount} auto-generated file(s).");
+            statusWriter.WriteLine();
         }
 
-        formatter.PrintCloneGroups(output, result.CloneGroups, options.TargetPath);
-        if (result.SubMethodCloneGroups.Count > 0)
+        var baseDirectory = PathFilter.ResolveBaseDirectory(options.TargetPath);
+
+        IReportFormatter reportFormatter = _formatterFactory?.Invoke(options.Format)
+            ?? options.Format switch
+            {
+                OutputFormat.Sarif => new SarifReportFormatter(),
+                OutputFormat.Json => new JsonReportFormatter(),
+                _ => !string.IsNullOrWhiteSpace(options.OutputFilePath)
+                    ? new ConsoleReportFormatter(new ConsoleFormatter(enableColor: false), isIncremental: options.Incremental)
+                    : new ConsoleReportFormatter(formatter, isIncremental: options.Incremental)
+            };
+
+        if (!string.IsNullOrWhiteSpace(options.OutputFilePath))
         {
-            formatter.PrintSubMethodCloneGroups(output, result.SubMethodCloneGroups, options.TargetPath);
+            var fullOutputPath = Path.GetFullPath(options.OutputFilePath);
+            var parentDir = Path.GetDirectoryName(fullOutputPath);
+            if (!string.IsNullOrEmpty(parentDir) && !Directory.Exists(parentDir))
+            {
+                Directory.CreateDirectory(parentDir);
+            }
+
+            await using (var fileStream = new FileStream(fullOutputPath, FileMode.Create, FileAccess.Write, FileShare.Read))
+            await using (var fileWriter = new StreamWriter(fileStream, new System.Text.UTF8Encoding(false)))
+            {
+                await reportFormatter.FormatAsync(result, settings, fileWriter, baseDirectory, cancellationToken).ConfigureAwait(false);
+            }
+
+            formatter.PrintSuccess(statusWriter, $"Report written to: {fullOutputPath}");
+            statusWriter.WriteLine();
         }
-        formatter.PrintVerboseComments(output, result.VerboseComments, result.SummarizedComments, options.TargetPath);
-
-        var mode = options.Incremental ? "Dry-Run (Incremental)" : "Dry-Run";
-        int prodClones = result.CloneGroups.Count(g => g.Category != CloneCategory.Test);
-        int testClones = result.CloneGroups.Count(g => g.Category == CloneCategory.Test);
-
-        formatter.PrintSummary(
-            output,
-            result.AnalyzedFilesCount,
-            result.TotalMethodsScanned,
-            result.CloneGroups.Count,
-            result.VerboseComments.Count,
-            mode,
-            result.ProductionFilesCount,
-            result.TestFilesCount,
-            result.SkippedGeneratedFilesCount,
-            prodClones,
-            testClones,
-            result.SubMethodCloneGroups.Count);
+        else
+        {
+            await reportFormatter.FormatAsync(result, settings, output, baseDirectory, cancellationToken).ConfigureAwait(false);
+        }
 
         if (options.Incremental && (settings.EnableDuplicationDetection || settings.EnableSubMethodCloneDetection))
         {
@@ -99,7 +123,7 @@ public sealed class AnalyzeCommand : ICommand
 
             if (totalGated > settings.DuplicationTolerance)
             {
-                formatter.PrintAiActionableDuplicationFeedback(output, gatedClones, gatedSubMethodClones, options.TargetPath, settings.DuplicationTolerance);
+                formatter.PrintAiActionableDuplicationFeedback(statusWriter, gatedClones, gatedSubMethodClones, options.TargetPath, settings.DuplicationTolerance);
                 return settings.DuplicationExitCode;
             }
         }
@@ -107,8 +131,8 @@ public sealed class AnalyzeCommand : ICommand
         if (options.UpdateSnapshot && engine is CodeCondenserEngine cce)
         {
             await cce.UpdateSnapshotBaselineAsync(options.TargetPath, settings, cancellationToken).ConfigureAwait(false);
-            formatter.PrintSnapshotSaved(output, settings.SnapshotFilePath);
-            output.WriteLine();
+            formatter.PrintSnapshotSaved(statusWriter, settings.SnapshotFilePath);
+            statusWriter.WriteLine();
         }
 
         return ExitCodes.Success;

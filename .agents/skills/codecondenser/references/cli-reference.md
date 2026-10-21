@@ -45,6 +45,8 @@ pmad-codecondenser [command] [path] [options]
 | `--endpoint <url>` | `-e` | `string` | `http://localhost:11434` | Ollama service endpoint URL |
 | `--context-size <n>` | `-cs` | `int` | `24576` | Ollama context window size (`num_ctx`) |
 | `--config <path>` | `-c` | `string` | Auto | Path to custom `codecondenser.json` config file |
+| `--format <type>` | `-f` | `string` | `console` | Report format: `console`, `sarif`, `json` |
+| `--output <path>` | `-o` | `string` | `null` | Output file path to write report to (stdout if omitted) |
 | `--no-color` | | `switch` | `false` | Disable ANSI color sequences in output |
 | `--help` | `-h` | `switch` | | Display help message and exit |
 | `--version` | `-v` | `switch` | | Display version information and exit |

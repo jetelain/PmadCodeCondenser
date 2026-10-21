@@ -25,6 +25,8 @@ The CLI can be invoked via the global tool `pmad-codecondenser`, local tool `dot
 | **Check production code only (skip tests)** | `pmad-codecondenser ./ --exclude-tests --no-comments` | No |
 | **Incremental CI clone check (strict production)** | `pmad-codecondenser ./ --incremental --duplication-tolerance 0 --no-comments` | No |
 | **Incremental CI check (enforce test duplication)** | `pmad-codecondenser ./ --incremental --duplication-tolerance 0 --enforce-test-duplication --no-comments` | No |
+| **Export SARIF report for GitHub Actions** | `pmad-codecondenser ./src --format sarif --output results.sarif` | No |
+| **Export structured JSON report** | `pmad-codecondenser ./src --format json --output results.json` | No |
 | **Dry-run analysis (clones + comments)** | `pmad-codecondenser ./src` | Yes (Ollama) |
 | **Apply summarized comments to disk** | `pmad-codecondenser ./src --apply` | No (uses cache) |
 | **Refresh baseline snapshot** | `pmad-codecondenser snapshot ./src` | No |

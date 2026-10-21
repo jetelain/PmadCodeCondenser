@@ -457,4 +457,93 @@ public class CliArgumentParserTests
         success.Should().BeFalse();
         error.Should().Contain("Invalid value for --threshold-submethod-statements");
     }
+
+    [Theory]
+    [InlineData("--format", "console", OutputFormat.Console)]
+    [InlineData("--format", "sarif", OutputFormat.Sarif)]
+    [InlineData("--format", "json", OutputFormat.Json)]
+    [InlineData("-f", "CONSOLE", OutputFormat.Console)]
+    [InlineData("-f", "SARIF", OutputFormat.Sarif)]
+    [InlineData("-f", "JSON", OutputFormat.Json)]
+    [InlineData("--format=sarif", null, OutputFormat.Sarif)]
+    [InlineData("-f=json", null, OutputFormat.Json)]
+    public void TryParse_FormatOption_SetsOutputFormat(string arg1, string? arg2, OutputFormat expectedFormat)
+    {
+        string[] args = arg2 != null ? [arg1, arg2] : [arg1];
+        var success = CliArgumentParser.TryParse(args, out var options, out var error);
+
+        success.Should().BeTrue();
+        error.Should().BeNull();
+        options.Format.Should().Be(expectedFormat);
+    }
+
+    [Fact]
+    public void TryParse_FormatOptionInvalidValue_ReturnsError()
+    {
+        var success = CliArgumentParser.TryParse(["--format", "xml"], out _, out var error);
+
+        success.Should().BeFalse();
+        error.Should().Be("Invalid value for --format: 'xml'. Allowed values are: console, sarif, json.");
+    }
+
+    [Theory]
+    [InlineData("--output", "results.sarif")]
+    [InlineData("-o", "results.json")]
+    [InlineData("--output=out/results.sarif", "out/results.sarif")]
+    [InlineData("-o=out/results.json", "out/results.json")]
+    public void TryParse_OutputOption_SetsOutputFilePath(string arg1, string? expectedPath)
+    {
+        string[] args;
+        if (arg1.Contains('='))
+        {
+            args = [arg1];
+        }
+        else
+        {
+            args = [arg1, expectedPath!];
+        }
+
+        var success = CliArgumentParser.TryParse(args, out var options, out var error);
+
+        success.Should().BeTrue();
+        error.Should().BeNull();
+        options.OutputFilePath.Should().Be(expectedPath);
+    }
+
+    [Theory]
+    [InlineData("results.sarif", OutputFormat.Sarif)]
+    [InlineData("results.SARIF", OutputFormat.Sarif)]
+    [InlineData("path/to/report.json", OutputFormat.Json)]
+    [InlineData("path/to/report.JSON", OutputFormat.Json)]
+    [InlineData("results.txt", OutputFormat.Console)]
+    [InlineData("results.log", OutputFormat.Console)]
+    public void TryParse_OutputOption_InfersFormatFromExtensionWhenNotExplicitlySet(string filePath, OutputFormat expectedFormat)
+    {
+        var success = CliArgumentParser.TryParse(["--output", filePath], out var options, out var error);
+
+        success.Should().BeTrue();
+        error.Should().BeNull();
+        options.OutputFilePath.Should().Be(filePath);
+        options.Format.Should().Be(expectedFormat);
+    }
+
+    [Fact]
+    public void TryParse_ExplicitFormat_OverridesOutputExtensionInference()
+    {
+        var success = CliArgumentParser.TryParse(["--format", "console", "--output", "results.sarif"], out var options, out var error);
+
+        success.Should().BeTrue();
+        error.Should().BeNull();
+        options.Format.Should().Be(OutputFormat.Console);
+        options.OutputFilePath.Should().Be("results.sarif");
+    }
+
+    [Fact]
+    public void TryParse_HelpText_ContainsFormatAndOutput()
+    {
+        var help = CliArgumentParser.GetHelpText();
+
+        help.Should().Contain("-f, --format <type>");
+        help.Should().Contain("-o, --output <path>");
+    }
 }

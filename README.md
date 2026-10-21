@@ -158,18 +158,24 @@ When executed with `--incremental --duplication-tolerance 0`, the tool compares 
 ### GitHub Actions Workflow Example
 
 ```yaml
-name: Code Quality & Duplication Check
+name: Static Analysis & Clone Gate
 
 on:
   pull_request:
     branches: [main]
 
+permissions:
+  contents: read
+  security-events: write
+
 jobs:
-  check-clones:
+  analyze:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout code
+      - name: Checkout Code
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Setup .NET 10 SDK
         uses: actions/setup-dotnet@v4
@@ -179,8 +185,29 @@ jobs:
       - name: Install Pmad.CodeCondenser
         run: dotnet tool install -g Pmad.CodeCondenser --prerelease
 
-      - name: Run Incremental Clone Check
-        run: pmad-codecondenser ./src --incremental --duplication-tolerance 0 --no-comments
+      - name: Run Incremental Clone Check with SARIF Export
+        id: analyze
+        continue-on-error: true
+        run: |
+          pmad-codecondenser ./src \
+            --incremental \
+            --duplication-tolerance 0 \
+            --no-comments \
+            --format sarif \
+            --output results.sarif
+
+      - name: Upload SARIF to GitHub Code Scanning
+        uses: github/codeql-action/upload-sarif@v3
+        if: always() && github.event.pull_request.head.repo.full_name == github.repository
+        with:
+          sarif_file: results.sarif
+          category: pmad-codecondenser
+
+      - name: Enforce Policy Quality Gate
+        if: steps.analyze.outcome == 'failure'
+        run: |
+          echo "::error::Pmad.CodeCondenser detected code duplication exceeding tolerance."
+          exit 1
 ```
 
 ---
@@ -223,6 +250,8 @@ jobs:
 | `-e, --endpoint <url>` | `-e` | Ollama endpoint URL | `http://localhost:11434` |
 | `-cs, --context-size <n>` | `-cs` | Ollama context window size (`num_ctx`) | `24576` |
 | `-c, --config <path>` | `-c` | Explicit path to `codecondenser.json` configuration file | Auto-detected |
+| `-f, --format <type>` | `-f` | Output report format: `console`, `sarif`, `json` | `console` |
+| `-o, --output <path>` | `-o` | File path to write report output to instead of stdout | `null` *(stdout)* |
 | `--no-color` | | Disable ANSI color formatting in console output (auto-disabled if redirected or `NO_COLOR` is set) | `false` |
 | `-h, --help` | | Show usage instructions and command help | |
 | `-v, --version` | | Show tool version information | |
@@ -235,6 +264,41 @@ jobs:
 | `1` | **General Error** | Invalid arguments, missing file, or unhandled exception. |
 | `2` | **Duplication Violation** | In incremental mode, newly introduced code clones exceed `duplicationTolerance`. Outputs refactoring advice for developers and AI agents. |
 | `130` | **Canceled** | Execution canceled by user (`Ctrl+C`). |
+
+---
+
+## CI/CD, SARIF & Machine-Readable Formats
+
+`Pmad.CodeCondenser` supports standard **SARIF 2.1.0** and **structured JSON** exports for automated CI/CD integration, PR annotations, and custom quality dashboards:
+
+### 1. SARIF 2.1.0 Export (`--format sarif`)
+
+Generates standard OASIS SARIF 2.1.0 compatible with GitHub Code Scanning, GitLab, Azure DevOps, and VS Code.
+
+- **Symmetrical PR Diff Annotations**: Emits a `result` for each participating method in a clone cluster with other methods in `relatedLocations`, guaranteeing that pull requests modifying any duplicate file receive inline PR annotations.
+- **Alert De-duplication**: Includes stable `partialFingerprints` (`astHash/v1` and `locationKey/v1`) and a deterministic Version 5 UUID `correlationGuid` to group identical clones on GitHub's Security tab without multiplying alerts.
+- **Rule Taxonomy**:
+  - `CC001` (`warning`): `ProductionCodeDuplication`
+  - `CC002` (`note`): `TestCodeDuplication`
+  - `CC003` (`note`): `VerboseComment`
+  - `CC004` (`warning`): `CrossBoundaryDuplication`
+  - `CC005` (`warning`): `SubMethodCodeDuplication`
+
+```bash
+# Export SARIF to file
+pmad-codecondenser ./src --format sarif --output results.sarif
+
+# Or pipe directly (progress/banners are automatically routed to stderr)
+pmad-codecondenser ./src --format sarif > results.sarif
+```
+
+### 2. Structured JSON Export (`--format json`)
+
+Outputs a versioned JSON report conforming to the [`schemas/codecondenser-report.json`](schemas/codecondenser-report.json) schema, including full metrics, cluster impact scores, AST hashes, line numbers, and actionable recommendations.
+
+```bash
+pmad-codecondenser ./src --format json --output results.json
+```
 
 ---
 

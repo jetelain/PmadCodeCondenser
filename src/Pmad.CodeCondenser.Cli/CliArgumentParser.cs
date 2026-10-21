@@ -13,6 +13,7 @@ public static class CliArgumentParser
         errorMessage = null;
 
         var positionalArgs = new List<string>();
+        bool formatExplicitlySet = false;
 
         for (int i = 0; i < args.Length; i++)
         {
@@ -266,6 +267,42 @@ public static class CliArgumentParser
                 continue;
             }
 
+            if (TryExtractOptionValue(args, ref i, "--format", "-f", out var formatVal, out errorMessage))
+            {
+                if (errorMessage != null) return false;
+                formatExplicitlySet = true;
+                if (string.Equals(formatVal, "console", StringComparison.OrdinalIgnoreCase))
+                {
+                    options.Format = OutputFormat.Console;
+                }
+                else if (string.Equals(formatVal, "sarif", StringComparison.OrdinalIgnoreCase))
+                {
+                    options.Format = OutputFormat.Sarif;
+                }
+                else if (string.Equals(formatVal, "json", StringComparison.OrdinalIgnoreCase))
+                {
+                    options.Format = OutputFormat.Json;
+                }
+                else
+                {
+                    errorMessage = $"Invalid value for --format: '{formatVal}'. Allowed values are: console, sarif, json.";
+                    return false;
+                }
+                continue;
+            }
+
+            if (TryExtractOptionValue(args, ref i, "--output", "-o", out var outputVal, out errorMessage))
+            {
+                if (errorMessage != null) return false;
+                if (string.IsNullOrWhiteSpace(outputVal))
+                {
+                    errorMessage = "Missing file path for --output.";
+                    return false;
+                }
+                options.OutputFilePath = outputVal;
+                continue;
+            }
+
             if (arg.StartsWith('-'))
             {
                 errorMessage = $"Unrecognized option: '{arg}'. Use --help to view available options.";
@@ -302,6 +339,19 @@ public static class CliArgumentParser
         else if (options.UpdateSnapshot && !explicitCommand)
         {
             options.Command = CliOptions.CommandSnapshot;
+        }
+
+        // Infer format from --output file extension if not explicitly configured
+        if (!formatExplicitlySet && !string.IsNullOrWhiteSpace(options.OutputFilePath))
+        {
+            if (options.OutputFilePath.EndsWith(".sarif", StringComparison.OrdinalIgnoreCase))
+            {
+                options.Format = OutputFormat.Sarif;
+            }
+            else if (options.OutputFilePath.EndsWith(".json", StringComparison.OrdinalIgnoreCase))
+            {
+                options.Format = OutputFormat.Json;
+            }
         }
 
         return true;
@@ -390,6 +440,8 @@ public static class CliArgumentParser
           --exclude-tests             Completely exclude test files (alias: --production-only)
           --enforce-test-duplication  Treat test clones as CI policy violation in gate check
           --include-generated         Disable automatic exclusion of generated files
+          -f, --format <type>          Output format: console, sarif, json (default: console)
+          -o, --output <path>          Output file path (default: stdout)
           --no-color                  Disable ANSI color formatting
           -h, --help                  Show command line help and options
           -v, --version               Show application version
