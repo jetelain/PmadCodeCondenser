@@ -53,6 +53,18 @@ public static class Program
         var bannerWriter = isMachineReadableStdout ? error : output;
         formatter.PrintBanner(bannerWriter);
 
+        if (!string.IsNullOrWhiteSpace(options.ConfigPath) && !File.Exists(options.ConfigPath))
+        {
+            formatter.PrintError(error, $"Configuration file not found: '{options.ConfigPath}'");
+            return ExitCodes.Error;
+        }
+
+        if (!string.IsNullOrWhiteSpace(options.GlobalConfigPath) && !File.Exists(options.GlobalConfigPath) && !Directory.Exists(options.GlobalConfigPath))
+        {
+            formatter.PrintError(error, $"Global configuration path not found: '{options.GlobalConfigPath}'");
+            return ExitCodes.Error;
+        }
+
         // Load configuration from global user profile and codecondenser.json if present
         var settings = CodeCondenserConfigurationLoader.Load(
             options.ConfigPath ?? options.TargetPath,

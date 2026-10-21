@@ -136,7 +136,7 @@ public sealed class AnalyzeCommand : ICommand
                     gatedClones,
                     gatedSubMethodClones,
                     newVerboseComments,
-                    options.TargetPath,
+                    baseDirectory,
                     settings.DuplicationTolerance,
                     hasDuplicationViolation: duplicationViolation,
                     hasCommentViolation: commentViolation);

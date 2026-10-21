@@ -235,6 +235,93 @@ public class CodeCondenserEngineTests : IDisposable
     }
 
     [Fact]
+    public async Task UpdateSnapshotBaselineAsync_UpgradesNormalizerVersion_WhenBaselineHasOlderVersion()
+    {
+        var file = Path.Combine(_testDir, "BaselineFile.cs");
+        var code = """
+        namespace MyTest;
+        public class BaselineFile
+        {
+            public void TestMethod(int a, int b)
+            {
+                int c = a + b;
+                int d = c * 2;
+                int e = d - 1;
+                if (e > 5) e = 5;
+                int f = e + 2;
+                Console.WriteLine(f);
+                int g = f * 3;
+                Console.WriteLine(g);
+            }
+        }
+        """;
+        await File.WriteAllTextAsync(file, code);
+
+        var baselineSnapshot = new AnalysisSnapshot
+        {
+            Version = 1,
+            NormalizerVersion = 1, // older normalizer version
+            CreatedAt = DateTimeOffset.UtcNow
+        };
+        var snapshotPath = Path.Combine(_testDir, ".codecondenser", "snapshot.json");
+        await _snapshotStore.SaveAsync(snapshotPath, baselineSnapshot);
+
+        var engine = new CodeCondenserEngine(snapshotStore: _snapshotStore);
+        var settings = new CodeCondenserSettings { EnableDuplicationDetection = true };
+
+        var newSnapshot = await engine.UpdateSnapshotBaselineAsync(_testDir, settings);
+
+        newSnapshot.Should().NotBeNull();
+        newSnapshot!.NormalizerVersion.Should().Be(AnalysisSnapshot.CurrentNormalizerVersion);
+    }
+
+    [Fact]
+    public async Task AppliedXmlDocumentationComment_IsRecognizedAsIgnoredOnSubsequentAnalysis_EvenWithIndentation()
+    {
+        var file = Path.Combine(_testDir, "XmlDocService.cs");
+        var originalCode = """
+        namespace MyTest;
+        public class XmlDocService
+        {
+            /// <summary>
+            /// This is a verbose XML documentation comment that describes the Calculate method in excessive detail to exceed threshold.
+            /// </summary>
+            public void Calculate()
+            {
+            }
+        }
+        """;
+        await File.WriteAllTextAsync(file, originalCode);
+
+        var summarizer = new MockCommentSummarizer();
+        var summarizedStore = new InMemorySummarizedCommentsStore();
+        var engine = new CodeCondenserEngine(
+            snapshotStore: _snapshotStore,
+            commentSummarizer: summarizer,
+            summarizedCommentsStore: summarizedStore);
+
+        var settings = new CodeCondenserSettings
+        {
+            CommentLengthThreshold = 50,
+            XmlSummaryLengthThreshold = 40,
+            EnableCommentSummarization = true,
+            SummaryMode = SummaryMode.Summarize
+        };
+
+        // 1. Initial analysis produces verbose comment
+        var initialResult = await engine.AnalyzeAsync(_testDir, settings);
+        initialResult.VerboseComments.Should().HaveCount(1);
+
+        // 2. Apply summaries to source file
+        var modified = await engine.ApplySummariesWithModifiedFilesAsync(initialResult, settings);
+        modified.Should().Contain(file);
+
+        // 3. Subsequent analysis on modified file: applied XML comment should be recognized as ignored and NOT flagged again!
+        var secondResult = await engine.AnalyzeAsync(_testDir, settings, incremental: false);
+        secondResult.VerboseComments.Should().BeEmpty();
+    }
+
+    [Fact]
     public async Task AnalyzeAsync_WhenCommentSummarizationDisabled_SkipsComments()
     {
         var file = Path.Combine(_testDir, "CommentSkip.cs");
@@ -511,7 +598,9 @@ public class CodeCondenserEngineTests : IDisposable
             {
                 if (!dict.ContainsKey(c.ContentHash))
                 {
-                    dict[c.ContentHash] = "// [Summarized] Concise summary";
+                    dict[c.ContentHash] = c.Kind == CommentKind.XmlDocumentation
+                        ? "/// <summary>\n/// Concise summary of calculate method exceeding forty characters.\n/// </summary>"
+                        : "// [Summarized] Concise summary";
                     count++;
                     progress?.Report(new CommentSummarizationProgress(count, comments.Count, c));
                 }

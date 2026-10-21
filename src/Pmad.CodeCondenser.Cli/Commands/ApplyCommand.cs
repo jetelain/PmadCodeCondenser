@@ -1,6 +1,7 @@
 using Pmad.CodeCondenser.Cli.Formatting;
 using Pmad.CodeCondenser.Core.Configuration;
 using Pmad.CodeCondenser.Core.Engine;
+using Pmad.CodeCondenser.Core.Filtering;
 using Pmad.CodeCondenser.Core.Models;
 
 namespace Pmad.CodeCondenser.Cli.Commands;
@@ -50,10 +51,12 @@ public sealed class ApplyCommand : ICommand
             progress: progress,
             cancellationToken: cancellationToken).ConfigureAwait(false);
 
-        formatter.PrintCloneGroups(output, result.CloneGroups, options.TargetPath);
+        var baseDirectory = PathFilter.ResolveBaseDirectory(options.TargetPath);
+
+        formatter.PrintCloneGroups(output, result.CloneGroups, baseDirectory);
         if (result.SubMethodCloneGroups.Count > 0)
         {
-            formatter.PrintSubMethodCloneGroups(output, result.SubMethodCloneGroups, options.TargetPath);
+            formatter.PrintSubMethodCloneGroups(output, result.SubMethodCloneGroups, baseDirectory);
         }
 
         int modifiedCount = 0;
@@ -61,7 +64,7 @@ public sealed class ApplyCommand : ICommand
         {
             void OnFileApplied(string file)
             {
-                formatter.PrintFileApplied(output, file, options.TargetPath);
+                formatter.PrintFileApplied(output, file, baseDirectory);
                 Interlocked.Increment(ref modifiedCount);
             }
 
@@ -85,14 +88,14 @@ public sealed class ApplyCommand : ICommand
             await engine.ApplySummariesAsync(result, settings, cancellationToken).ConfigureAwait(false);
         }
 
-        if (modifiedCount == 0 && result.VerboseComments.Count == 0)
+        if (modifiedCount == 0)
         {
             formatter.PrintSuccess(output, "No source files required modification.");
         }
         else
         {
             output.WriteLine();
-            formatter.PrintSuccess(output, $"Successfully updated comments across modified source file(s).");
+            formatter.PrintSuccess(output, $"Successfully updated comments across {modifiedCount} modified source file(s).");
         }
 
         var mode = options.Incremental ? "Apply (Incremental)" : "Apply";
@@ -141,7 +144,7 @@ public sealed class ApplyCommand : ICommand
                     gatedClones,
                     gatedSubMethodClones,
                     newVerboseComments,
-                    options.TargetPath,
+                    baseDirectory,
                     settings.DuplicationTolerance,
                     hasDuplicationViolation: duplicationViolation,
                     hasCommentViolation: commentViolation);

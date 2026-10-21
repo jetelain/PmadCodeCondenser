@@ -16,6 +16,7 @@ namespace Pmad.CodeCondenser.Benchmark.Execution;
 public sealed class OllamaBenchmarkClient : IDisposable
 {
     private readonly HttpClient _httpClient;
+    private readonly bool _disposeHttpClient;
     private readonly string _endpoint;
     private readonly int _contextSize;
 
@@ -29,6 +30,7 @@ public sealed class OllamaBenchmarkClient : IDisposable
     {
         _endpoint = ResolveEndpoint(endpoint);
         _contextSize = contextSize > 0 ? contextSize : 24576;
+        _disposeHttpClient = httpClient == null;
         _httpClient = httpClient ?? new HttpClient
         {
             Timeout = TimeSpan.FromMinutes(5)
@@ -483,6 +485,9 @@ public sealed class OllamaBenchmarkClient : IDisposable
 
     public void Dispose()
     {
-        _httpClient.Dispose();
+        if (_disposeHttpClient)
+        {
+            _httpClient.Dispose();
+        }
     }
 }

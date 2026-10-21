@@ -107,4 +107,30 @@ public class OllamaBenchmarkClientTests
         eval.Success.Should().BeFalse();
         eval.ErrorMessage.Should().NotBeNullOrEmpty();
     }
+
+    [Fact]
+    public void Dispose_InjectedHttpClient_IsNotDisposed()
+    {
+        var testHandler = new TestHttpMessageHandler();
+        var httpClient = new HttpClient(testHandler);
+
+        var client = new OllamaBenchmarkClient("http://localhost:11434", httpClient: httpClient);
+        client.Dispose();
+
+        var act = () => httpClient.Send(new HttpRequestMessage(HttpMethod.Get, "http://localhost:11434"));
+        act.Should().NotThrow<ObjectDisposedException>();
+    }
+
+    private sealed class TestHttpMessageHandler : HttpMessageHandler
+    {
+        protected override HttpResponseMessage Send(HttpRequestMessage request, CancellationToken cancellationToken)
+        {
+            return new HttpResponseMessage(System.Net.HttpStatusCode.OK);
+        }
+
+        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
+        {
+            return Task.FromResult(new HttpResponseMessage(System.Net.HttpStatusCode.OK));
+        }
+    }
 }

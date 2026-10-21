@@ -527,4 +527,21 @@ public class CodeCondenserConfigurationLoaderTests : IDisposable
         settings.IsLlmConfigured.Should().BeFalse();
         settings.Ollama.Model.Should().Be("gemma4:e4b"); // default
     }
+
+    [Fact]
+    public void ResolveConfigFile_TraversesParentDirectories_UntilConfigFound()
+    {
+        var repoRoot = Path.Combine(_tempDirectory, "RepoRoot");
+        Directory.CreateDirectory(repoRoot);
+        var configFile = Path.Combine(repoRoot, CodeCondenserConfigurationLoader.DefaultConfigFileName);
+        File.WriteAllText(configFile, "{}");
+
+        var deepNestedDir = Path.Combine(repoRoot, "src", "ProjectA", "SubModule");
+        Directory.CreateDirectory(deepNestedDir);
+
+        var resolved = CodeCondenserConfigurationLoader.ResolveConfigFile(deepNestedDir);
+
+        resolved.Should().NotBeNull();
+        resolved.Should().Be(Path.GetFullPath(configFile));
+    }
 }

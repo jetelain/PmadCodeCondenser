@@ -202,8 +202,11 @@ public sealed class SubMethodCloneDetector : ISubMethodCloneDetector
                 {
                     var w2 = bucket[j];
 
+                    var normP1 = NormalizePath(w1.Block.FilePath);
+                    var normP2 = NormalizePath(w2.Block.FilePath);
+
                     // Self-match check: intra-method matches within the exact same method declaration are suppressed
-                    bool isSameMethod = string.Equals(w1.Block.FilePath, w2.Block.FilePath, StringComparison.OrdinalIgnoreCase) &&
+                    bool isSameMethod = string.Equals(normP1, normP2, StringComparison.OrdinalIgnoreCase) &&
                                         (w1.Block.MethodStartLine > 0 && w2.Block.MethodStartLine > 0
                                             ? w1.Block.MethodStartLine == w2.Block.MethodStartLine
                                             : string.Equals(w1.Block.BlockScopeId, w2.Block.BlockScopeId, StringComparison.Ordinal));
@@ -214,9 +217,6 @@ public sealed class SubMethodCloneDetector : ISubMethodCloneDetector
                     }
 
                     // Whole-method subsumption: suppress sub-method clone if methods already match whole-method
-                    var normP1 = NormalizePath(w1.Block.FilePath);
-                    var normP2 = NormalizePath(w2.Block.FilePath);
-
                     bool isWholeMethodSubsumed = false;
                     if (w1.Block.MethodStartLine > 0 && w2.Block.MethodStartLine > 0 && wholeMethodCloneLinePairs.Count > 0)
                     {

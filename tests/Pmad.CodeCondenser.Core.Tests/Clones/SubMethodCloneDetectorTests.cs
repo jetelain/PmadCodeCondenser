@@ -569,4 +569,37 @@ public class ServiceB
         // Path normalization should allow wholeMethodClone to correctly subsume the sub-method clone!
         groups.Should().BeEmpty();
     }
+
+    [Fact]
+    public void DetectClones_IntraMethodSelfMatch_IsSuppressed_EvenWithDifferentPathSeparators()
+    {
+        var block1 = new SubMethodBlock
+        {
+            FilePath = "src/Services/ServiceA.cs",
+            MethodName = "ProcessOrder",
+            BlockScopeId = "ProcessOrder:10#body",
+            ProjectId = "Core",
+            MethodStartLine = 10,
+            StatementHashes = [1, 2, 3, 4, 5, 6, 7, 8],
+            StatementStartLines = [10, 11, 12, 13, 14, 15, 16, 17],
+            StatementEndLines = [10, 11, 12, 13, 14, 15, 16, 17]
+        };
+
+        var block2 = new SubMethodBlock
+        {
+            FilePath = @"src\Services\ServiceA.cs",
+            MethodName = "ProcessOrder",
+            BlockScopeId = "ProcessOrder:10#body",
+            ProjectId = "Core",
+            MethodStartLine = 10,
+            StatementHashes = [1, 2, 3, 4, 5, 6, 7, 8],
+            StatementStartLines = [10, 11, 12, 13, 14, 15, 16, 17],
+            StatementEndLines = [10, 11, 12, 13, 14, 15, 16, 17]
+        };
+
+        var groups = _detector.DetectClones([block1, block2], threshold: 8);
+
+        // Even though block1 has '/' and block2 has '\', they belong to the exact same method and must be suppressed
+        groups.Should().BeEmpty();
+    }
 }

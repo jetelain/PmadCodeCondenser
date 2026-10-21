@@ -66,6 +66,84 @@ public class CliIntegrationTests : IDisposable
     }
 
     [Fact]
+    public async Task RunAsync_ExplicitMissingConfigFile_ReturnsErrorAndExitsOne()
+    {
+        using var output = new StringWriter();
+        using var error = new StringWriter();
+
+        var missingConfig = Path.Combine(_testDirectory, "nonexistent-config.json");
+        var exitCode = await Program.RunAsync([_testDirectory, "--config", missingConfig], output, error);
+
+        exitCode.Should().Be(ExitCodes.Error);
+        error.ToString().Should().Contain("Configuration file not found");
+        error.ToString().Should().Contain("nonexistent-config.json");
+    }
+
+    [Fact]
+    public async Task RunAsync_ExplicitMissingGlobalConfigFile_ReturnsErrorAndExitsOne()
+    {
+        using var output = new StringWriter();
+        using var error = new StringWriter();
+
+        var missingGlobal = Path.Combine(_testDirectory, "nonexistent-global.json");
+        var exitCode = await Program.RunAsync([_testDirectory, "--global-config", missingGlobal], output, error);
+
+        exitCode.Should().Be(ExitCodes.Error);
+        error.ToString().Should().Contain("Global configuration path not found");
+        error.ToString().Should().Contain("nonexistent-global.json");
+    }
+
+    [Fact]
+    public async Task RunAsync_ApplyMode_WhenNoFilesModified_PrintsNoFilesRequiredModification()
+    {
+        var file = Path.Combine(_testDirectory, "CleanService.cs");
+        await File.WriteAllTextAsync(file, "public class CleanService {}");
+
+        using var output = new StringWriter();
+        using var error = new StringWriter();
+
+        var exitCode = await Program.RunAsync(
+            [_testDirectory, "--apply", "--no-color"],
+            output,
+            error);
+
+        exitCode.Should().Be(0);
+        output.ToString().Should().Contain("No source files required modification.");
+        output.ToString().Should().NotContain("Successfully updated comments across modified source file(s).");
+    }
+
+    [Fact]
+    public async Task RunAsync_SingleFileTarget_FormatsRelativePathCorrectly()
+    {
+        var file = Path.Combine(_testDirectory, "SingleService.cs");
+        await File.WriteAllTextAsync(file, """
+        public class SingleService
+        {
+            // This is an extremely long and verbose explanation that easily exceeds the default threshold of one hundred characters in total length
+            public void Run() {}
+        }
+        """);
+
+        using var output = new StringWriter();
+        using var error = new StringWriter();
+
+        var mockSummarizer = new MockSummarizer();
+        var engine = new CodeCondenserEngine(
+            snapshotStore: new JsonSnapshotStore(),
+            commentSummarizer: mockSummarizer);
+
+        var exitCode = await Program.RunAsync(
+            [file, "--apply", "--no-color"],
+            output,
+            error,
+            customEngine: engine);
+
+        exitCode.Should().Be(0);
+        output.ToString().Should().Contain("Applied: SingleService.cs");
+        output.ToString().Should().NotContain("Applied: .");
+    }
+
+    [Fact]
     public async Task RunAsync_DryRunAnalysis_DetectsClonesAndCommentsWithoutModifyingFiles()
     {
         // Arrange

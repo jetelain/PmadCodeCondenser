@@ -146,9 +146,17 @@ public sealed class CodeCondenserEngine : ICodeCondenserEngine
         if (_summarizedCommentsStore != null)
         {
             var storedSummaries = await _summarizedCommentsStore.LoadAsync(summarizedPath, cancellationToken).ConfigureAwait(false);
-            foreach (var hash in storedSummaries.Keys)
+            foreach (var (hash, summaryText) in storedSummaries)
             {
                 effectiveSettings.IgnoredCommentHashes.Add(hash);
+                if (!string.IsNullOrWhiteSpace(summaryText))
+                {
+                    var xmlText = XmlDocumentationParser.ExtractXmlText(summaryText).Trim();
+                    if (!string.IsNullOrWhiteSpace(xmlText))
+                    {
+                        effectiveSettings.IgnoredCommentHashes.Add(VerboseComment.ComputeSha256(xmlText));
+                    }
+                }
             }
         }
 
@@ -158,6 +166,14 @@ public sealed class CodeCondenserEngine : ICodeCondenserEngine
             {
                 var summaryHash = VerboseComment.ComputeSha256(summaryText.Trim());
                 effectiveSettings.IgnoredCommentHashes.Add(summaryHash);
+                if (!string.IsNullOrWhiteSpace(summaryText))
+                {
+                    var xmlText = XmlDocumentationParser.ExtractXmlText(summaryText).Trim();
+                    if (!string.IsNullOrWhiteSpace(xmlText))
+                    {
+                        effectiveSettings.IgnoredCommentHashes.Add(VerboseComment.ComputeSha256(xmlText));
+                    }
+                }
             }
         }
 
@@ -615,6 +631,16 @@ public sealed class CodeCondenserEngine : ICodeCondenserEngine
                     {
                         var appliedHash = VerboseComment.ComputeSha256(summaryText.Trim());
                         merged[appliedHash] = summaryText.Trim();
+
+                        if (comment.Kind == CommentKind.XmlDocumentation)
+                        {
+                            var xmlText = XmlDocumentationParser.ExtractXmlText(summaryText).Trim();
+                            if (!string.IsNullOrWhiteSpace(xmlText))
+                            {
+                                var xmlHash = VerboseComment.ComputeSha256(xmlText);
+                                merged[xmlHash] = summaryText.Trim();
+                            }
+                        }
                     }
                 }
             }
@@ -701,6 +727,11 @@ public sealed class CodeCondenserEngine : ICodeCondenserEngine
             currentFileHashes,
             methodsForSnapshot,
             commentCache);
+
+        if (settings.EnableDuplicationDetection)
+        {
+            newSnapshot.NormalizerVersion = AnalysisSnapshot.CurrentNormalizerVersion;
+        }
 
         if (!settings.EnableDuplicationDetection && baseline?.MethodHashes != null)
         {

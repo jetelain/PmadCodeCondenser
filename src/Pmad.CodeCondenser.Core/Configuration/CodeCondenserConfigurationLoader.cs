@@ -394,25 +394,48 @@ public static class CodeCondenserConfigurationLoader
                 {
                     return Path.GetFullPath(targetPathOrConfigFile);
                 }
-
-                var parentDir = Path.GetDirectoryName(targetPathOrConfigFile);
-                if (!string.IsNullOrEmpty(parentDir))
-                {
-                    var candidateInParent = Path.Combine(parentDir, DefaultConfigFileName);
-                    if (File.Exists(candidateInParent))
-                    {
-                        return Path.GetFullPath(candidateInParent);
-                    }
-                }
             }
+        }
 
-            if (Directory.Exists(targetPathOrConfigFile))
+        string? startDir = null;
+        if (!string.IsNullOrWhiteSpace(targetPathOrConfigFile))
+        {
+            if (File.Exists(targetPathOrConfigFile))
             {
-                var candidate = Path.Combine(targetPathOrConfigFile, DefaultConfigFileName);
+                startDir = Path.GetDirectoryName(targetPathOrConfigFile);
+            }
+            else if (Directory.Exists(targetPathOrConfigFile))
+            {
+                startDir = targetPathOrConfigFile;
+            }
+        }
+
+        if (startDir != null)
+        {
+            var dir = new DirectoryInfo(startDir);
+            while (dir != null)
+            {
+                var candidate = Path.Combine(dir.FullName, DefaultConfigFileName);
                 if (File.Exists(candidate))
                 {
                     return Path.GetFullPath(candidate);
                 }
+
+                var dotDirCandidate = Path.Combine(dir.FullName, ".codecondenser", DefaultConfigFileName);
+                if (File.Exists(dotDirCandidate))
+                {
+                    return Path.GetFullPath(dotDirCandidate);
+                }
+
+                // Stop walking up if we reach repository boundary (.git, .sln, .slnx)
+                if (Directory.Exists(Path.Combine(dir.FullName, ".git")) ||
+                    dir.EnumerateFiles("*.sln").Any() ||
+                    dir.EnumerateFiles("*.slnx").Any())
+                {
+                    break;
+                }
+
+                dir = dir.Parent;
             }
         }
 
@@ -420,6 +443,12 @@ public static class CodeCondenserConfigurationLoader
         if (File.Exists(currentDirCandidate))
         {
             return Path.GetFullPath(currentDirCandidate);
+        }
+
+        var currentDirDotCandidate = Path.Combine(Directory.GetCurrentDirectory(), ".codecondenser", DefaultConfigFileName);
+        if (File.Exists(currentDirDotCandidate))
+        {
+            return Path.GetFullPath(currentDirDotCandidate);
         }
 
         return null;
