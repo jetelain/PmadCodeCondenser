@@ -413,6 +413,8 @@ public static class CodeCondenserConfigurationLoader
         if (startDir != null)
         {
             var dir = new DirectoryInfo(startDir);
+            var userProfile = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+            var appData = Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData);
             while (dir != null)
             {
                 var candidate = Path.Combine(dir.FullName, DefaultConfigFileName);
@@ -421,14 +423,21 @@ public static class CodeCondenserConfigurationLoader
                     return Path.GetFullPath(candidate);
                 }
 
-                var dotDirCandidate = Path.Combine(dir.FullName, ".codecondenser", DefaultConfigFileName);
-                if (File.Exists(dotDirCandidate))
+                var isSpecialBoundary = (!string.IsNullOrEmpty(userProfile) && string.Equals(dir.FullName, userProfile, StringComparison.OrdinalIgnoreCase)) ||
+                                        (!string.IsNullOrEmpty(appData) && string.Equals(dir.FullName, appData, StringComparison.OrdinalIgnoreCase));
+
+                if (!isSpecialBoundary)
                 {
-                    return Path.GetFullPath(dotDirCandidate);
+                    var dotDirCandidate = Path.Combine(dir.FullName, ".codecondenser", DefaultConfigFileName);
+                    if (File.Exists(dotDirCandidate))
+                    {
+                        return Path.GetFullPath(dotDirCandidate);
+                    }
                 }
 
-                // Stop walking up if we reach repository boundary (.git, .sln, .slnx)
-                if (Directory.Exists(Path.Combine(dir.FullName, ".git")) ||
+                // Stop walking up if we reach repository boundary (.git, .sln, .slnx) or special user/appdata boundary
+                if (isSpecialBoundary ||
+                    Directory.Exists(Path.Combine(dir.FullName, ".git")) ||
                     dir.EnumerateFiles("*.sln").Any() ||
                     dir.EnumerateFiles("*.slnx").Any())
                 {
@@ -455,8 +464,43 @@ public static class CodeCondenserConfigurationLoader
     }
 
     /// <summary>
+    /// Gets the default expected path for the global configuration file on the current platform.
+    /// On Windows: %APPDATA%\CodeCondenser\codecondenser.json
+    /// On Linux/macOS: ~/.codecondenser/codecondenser.json
+    /// </summary>
+    public static string GetDefaultGlobalConfigFilePath()
+    {
+        if (OperatingSystem.IsWindows())
+        {
+            var appData = Environment.GetEnvironmentVariable("CODECONDENSER_APPDATA");
+            if (string.IsNullOrWhiteSpace(appData))
+            {
+                appData = Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData);
+            }
+            return Path.Combine(appData, "CodeCondenser", DefaultConfigFileName);
+        }
+
+        var userProfile = Environment.GetEnvironmentVariable("CODECONDENSER_USER_PROFILE");
+        if (string.IsNullOrWhiteSpace(userProfile))
+        {
+            userProfile = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+        }
+        return Path.Combine(userProfile, DefaultConfigDirectoryName, DefaultConfigFileName);
+    }
+
+    /// <summary>
+    /// Resolves the absolute path to the global user configuration file if present.
+    /// Alias for <see cref="ResolveUserProfileConfigFile(string?)"/>.
+    /// </summary>
+    /// <param name="customDirectory">Optional directory override (useful for testing).</param>
+    /// <returns>The resolved configuration file path, or null if not found.</returns>
+    public static string? ResolveGlobalConfigFile(string? customDirectory = null) =>
+        ResolveUserProfileConfigFile(customDirectory);
+
+    /// <summary>
     /// Resolves the absolute path to the global user profile configuration file if present.
-    /// Checks ~/.codecondenser/codecondenser.json, ~/.codecondenser/config.json, and ~/.codecondenser.json.
+    /// On Windows, checks %APPDATA%\CodeCondenser\codecondenser.json or config.json (with fallback to ~/.codecondenser).
+    /// On Linux/macOS, checks ~/.codecondenser/codecondenser.json, ~/.codecondenser/config.json, and ~/.codecondenser.json.
     /// </summary>
     /// <param name="userProfileDirectory">Optional user profile root directory override (useful for testing).</param>
     /// <returns>The resolved configuration file path, or null if not found.</returns>
@@ -476,6 +520,35 @@ public static class CodeCondenserConfigurationLoader
             if (!string.IsNullOrWhiteSpace(envGlobalConfig) && File.Exists(envGlobalConfig))
             {
                 return Path.GetFullPath(envGlobalConfig);
+            }
+
+            // On Windows (or when CODECONDENSER_APPDATA is explicitly set), check AppData first (more idiomatic)
+            var envAppData = Environment.GetEnvironmentVariable("CODECONDENSER_APPDATA");
+            var appDataDir = envAppData;
+            if (string.IsNullOrWhiteSpace(appDataDir) && OperatingSystem.IsWindows())
+            {
+                appDataDir = Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData);
+            }
+
+            if (!string.IsNullOrWhiteSpace(appDataDir) && Directory.Exists(appDataDir))
+            {
+                var appDataCandidates = new[]
+                {
+                    Path.Combine(appDataDir, "CodeCondenser", DefaultConfigFileName),
+                    Path.Combine(appDataDir, "CodeCondenser", UserConfigFileName),
+                    Path.Combine(appDataDir, "pmad-codecondenser", DefaultConfigFileName),
+                    Path.Combine(appDataDir, "pmad-codecondenser", UserConfigFileName),
+                    Path.Combine(appDataDir, "PmadCodeCondenser", DefaultConfigFileName),
+                    Path.Combine(appDataDir, "PmadCodeCondenser", UserConfigFileName)
+                };
+
+                foreach (var candidate in appDataCandidates)
+                {
+                    if (File.Exists(candidate))
+                    {
+                        return Path.GetFullPath(candidate);
+                    }
+                }
             }
 
             var envProfile = Environment.GetEnvironmentVariable("CODECONDENSER_USER_PROFILE");
@@ -504,6 +577,25 @@ public static class CodeCondenserConfigurationLoader
             return null;
         }
 
+        // When a custom directory is provided, check AppData layout first, then ~/.codecondenser layout, then direct files
+        var customAppDataCandidates = new[]
+        {
+            Path.Combine(userProfileDirectory, "CodeCondenser", DefaultConfigFileName),
+            Path.Combine(userProfileDirectory, "CodeCondenser", UserConfigFileName),
+            Path.Combine(userProfileDirectory, "pmad-codecondenser", DefaultConfigFileName),
+            Path.Combine(userProfileDirectory, "pmad-codecondenser", UserConfigFileName),
+            Path.Combine(userProfileDirectory, "PmadCodeCondenser", DefaultConfigFileName),
+            Path.Combine(userProfileDirectory, "PmadCodeCondenser", UserConfigFileName)
+        };
+
+        foreach (var candidate in customAppDataCandidates)
+        {
+            if (File.Exists(candidate))
+            {
+                return Path.GetFullPath(candidate);
+            }
+        }
+
         // 1. ~/.codecondenser/codecondenser.json
         var candidate1 = Path.Combine(userProfileDirectory, DefaultConfigDirectoryName, DefaultConfigFileName);
         if (File.Exists(candidate1))
@@ -523,6 +615,19 @@ public static class CodeCondenserConfigurationLoader
         if (File.Exists(candidate3))
         {
             return Path.GetFullPath(candidate3);
+        }
+
+        // 4. Direct file in custom directory: <dir>/codecondenser.json or <dir>/config.json
+        var candidate4 = Path.Combine(userProfileDirectory, DefaultConfigFileName);
+        if (File.Exists(candidate4))
+        {
+            return Path.GetFullPath(candidate4);
+        }
+
+        var candidate5 = Path.Combine(userProfileDirectory, UserConfigFileName);
+        if (File.Exists(candidate5))
+        {
+            return Path.GetFullPath(candidate5);
         }
 
         return null;

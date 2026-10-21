@@ -24,7 +24,9 @@ public class CodeCondenserConfigurationLoaderTests : IDisposable
     [Fact]
     public void Load_ReturnsDefaults_WhenFileDoesNotExist()
     {
-        var settings = CodeCondenserConfigurationLoader.Load(Path.Combine(_tempDirectory, "nonexistent.json"));
+        var settings = CodeCondenserConfigurationLoader.Load(
+            Path.Combine(_tempDirectory, "nonexistent.json"),
+            disableGlobalConfig: true);
 
         settings.Should().NotBeNull();
         settings.CommentLengthThreshold.Should().Be(100);
@@ -343,6 +345,107 @@ public class CodeCondenserConfigurationLoaderTests : IDisposable
     }
 
     [Fact]
+    public void ResolveUserProfileConfigFile_FindsAppDataCodeCondenserJson()
+    {
+        var appData = Path.Combine(_tempDirectory, "AppData1");
+        var configDir = Path.Combine(appData, "CodeCondenser");
+        Directory.CreateDirectory(configDir);
+        var configFile = Path.Combine(configDir, "codecondenser.json");
+        File.WriteAllText(configFile, "{}");
+
+        var resolved = CodeCondenserConfigurationLoader.ResolveUserProfileConfigFile(appData);
+        resolved.Should().NotBeNull();
+        resolved.Should().Be(Path.GetFullPath(configFile));
+    }
+
+    [Fact]
+    public void ResolveUserProfileConfigFile_FindsAppDataConfigJson()
+    {
+        var appData = Path.Combine(_tempDirectory, "AppData2");
+        var configDir = Path.Combine(appData, "CodeCondenser");
+        Directory.CreateDirectory(configDir);
+        var configFile = Path.Combine(configDir, "config.json");
+        File.WriteAllText(configFile, "{}");
+
+        var resolved = CodeCondenserConfigurationLoader.ResolveUserProfileConfigFile(appData);
+        resolved.Should().NotBeNull();
+        resolved.Should().Be(Path.GetFullPath(configFile));
+    }
+
+    [Fact]
+    public void ResolveUserProfileConfigFile_FindsPmadCodeCondenserJson()
+    {
+        var appData = Path.Combine(_tempDirectory, "AppData3");
+        var configDir = Path.Combine(appData, "pmad-codecondenser");
+        Directory.CreateDirectory(configDir);
+        var configFile = Path.Combine(configDir, "codecondenser.json");
+        File.WriteAllText(configFile, "{}");
+
+        var resolved = CodeCondenserConfigurationLoader.ResolveUserProfileConfigFile(appData);
+        resolved.Should().NotBeNull();
+        resolved.Should().Be(Path.GetFullPath(configFile));
+    }
+
+    [Fact]
+    public void ResolveUserProfileConfigFile_PrefersAppDataOverUserProfile_InCustomDir()
+    {
+        var customDir = Path.Combine(_tempDirectory, "CustomCombinedDir");
+        var appDataConfigDir = Path.Combine(customDir, "CodeCondenser");
+        var userProfileConfigDir = Path.Combine(customDir, ".codecondenser");
+        Directory.CreateDirectory(appDataConfigDir);
+        Directory.CreateDirectory(userProfileConfigDir);
+
+        var appDataConfig = Path.Combine(appDataConfigDir, "codecondenser.json");
+        var userProfileConfig = Path.Combine(userProfileConfigDir, "codecondenser.json");
+        File.WriteAllText(appDataConfig, "{\"maxParallelLlmRequests\": 9}");
+        File.WriteAllText(userProfileConfig, "{\"maxParallelLlmRequests\": 1}");
+
+        var resolved = CodeCondenserConfigurationLoader.ResolveUserProfileConfigFile(customDir);
+        resolved.Should().Be(Path.GetFullPath(appDataConfig));
+    }
+
+    [Fact]
+    public void ResolveUserProfileConfigFile_UsesAppDataEnvironmentVariable()
+    {
+        var appDataDir = Path.Combine(_tempDirectory, "EnvAppData");
+        var configDir = Path.Combine(appDataDir, "CodeCondenser");
+        Directory.CreateDirectory(configDir);
+        var configFile = Path.Combine(configDir, "codecondenser.json");
+        File.WriteAllText(configFile, "{}");
+
+        var originalEnv = Environment.GetEnvironmentVariable("CODECONDENSER_APPDATA");
+        try
+        {
+            Environment.SetEnvironmentVariable("CODECONDENSER_APPDATA", appDataDir);
+            var resolved = CodeCondenserConfigurationLoader.ResolveUserProfileConfigFile();
+            resolved.Should().NotBeNull();
+            resolved.Should().Be(Path.GetFullPath(configFile));
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable("CODECONDENSER_APPDATA", originalEnv);
+        }
+    }
+
+    [Fact]
+    public void GetDefaultGlobalConfigFilePath_ReturnsExpectedPlatformPath()
+    {
+        var path = CodeCondenserConfigurationLoader.GetDefaultGlobalConfigFilePath();
+        path.Should().NotBeNullOrWhiteSpace();
+
+        if (OperatingSystem.IsWindows())
+        {
+            path.Should().Contain("CodeCondenser");
+            path.Should().EndWith("codecondenser.json");
+        }
+        else
+        {
+            path.Should().Contain(".codecondenser");
+            path.Should().EndWith("codecondenser.json");
+        }
+    }
+
+    [Fact]
     public void MergeJson_MergesNestedOllamaPropertiesCorrectly()
     {
         var globalJson = """
@@ -543,5 +646,27 @@ public class CodeCondenserConfigurationLoaderTests : IDisposable
 
         resolved.Should().NotBeNull();
         resolved.Should().Be(Path.GetFullPath(configFile));
+    }
+
+    [Fact]
+    public void ResolveConfigFile_DoesNotTreatUserProfileDotCodeCondenserAsProjectConfig()
+    {
+        var userProfile = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+        if (string.IsNullOrEmpty(userProfile)) return;
+
+        var tempSub = Path.Combine(Path.GetTempPath(), "ResolveConfigTest_" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(tempSub);
+        try
+        {
+            var resolved = CodeCondenserConfigurationLoader.ResolveConfigFile(tempSub);
+            if (resolved != null)
+            {
+                resolved.Should().NotContain(Path.Combine(userProfile, ".codecondenser"));
+            }
+        }
+        finally
+        {
+            if (Directory.Exists(tempSub)) Directory.Delete(tempSub, true);
+        }
     }
 }

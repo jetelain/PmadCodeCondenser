@@ -287,7 +287,7 @@ jobs:
 | `-e, --endpoint <url>` | `-e` | Ollama endpoint URL | `http://localhost:11434` |
 | `-cs, --context-size <n>` | `-cs` | Ollama context window size (`num_ctx`) | `24576` |
 | `-c, --config <path>` | `-c` | Explicit path to `codecondenser.json` configuration file | Auto-detected |
-| `-gc, --global-config <path>` | `-gc` | Explicit path to custom global user profile configuration file | Auto-detected (`~/.codecondenser/codecondenser.json`) |
+| `-gc, --global-config <path>` | `-gc` | Explicit path to custom global user profile configuration file | Auto-detected (`%APPDATA%\CodeCondenser\codecondenser.json` on Windows, `~/.codecondenser/codecondenser.json` on Linux/macOS) |
 | `--no-global-config` | | Disable loading of global user profile configuration file | `false` |
 | `-n, --dry-run` | `-n` | Preview actions without writing changes to disk | `false` |
 | `--force` | | Force overwrite skill files even if up to date | `false` |
@@ -442,25 +442,24 @@ Even summarized comments might exceed the character threshold (e.g. 110 characte
 
 CLI options override settings from `codecondenser.json`.
 
-### Global User Profile Configuration (`~/.codecondenser/codecondenser.json`)
+### Global User Profile Configuration
 
 To avoid committing personal LLM endpoints, local ports, or credentials into shared repository configuration files, `Pmad.CodeCondenser` supports a **global user profile configuration file**:
 
 - **Location**:
-  - **Linux / macOS**: `~/.codecondenser/codecondenser.json` or `~/.codecondenser/config.json`
-  - **Windows**: `%USERPROFILE%\.codecondenser\codecondenser.json` or `%USERPROFILE%\.codecondenser\config.json`
-  - Fallback: `~/.codecondenser.json`
-- **Environment Variable Override**: `CODECONDENSER_GLOBAL_CONFIG` or `PMAD_CODECONDENSER_GLOBAL_CONFIG`
+  - **Windows**: `%APPDATA%\CodeCondenser\codecondenser.json` or `%APPDATA%\CodeCondenser\config.json` (fallback: `%USERPROFILE%\.codecondenser\codecondenser.json`)
+  - **Linux / macOS**: `~/.codecondenser/codecondenser.json` or `~/.codecondenser/config.json` (fallback: `~/.codecondenser.json`)
+- **Environment Variable Override**: `CODECONDENSER_GLOBAL_CONFIG` or `PMAD_CODECONDENSER_GLOBAL_CONFIG` (or directory override via `CODECONDENSER_APPDATA` / `CODECONDENSER_USER_PROFILE`)
 - **CLI Flags**: `--global-config <path>` to specify a custom path, or `--no-global-config` to bypass global profile loading entirely.
 
 #### Hierarchical Precedence
 Settings are resolved in the following priority order (highest to lowest):
 1. **CLI Arguments** (`--model`, `--endpoint`, `--summary`, etc.)
 2. **Project Configuration** (`codecondenser.json` in the target or repository root)
-3. **Global User Profile Configuration** (`~/.codecondenser/codecondenser.json`)
+3. **Global User Profile Configuration** (`%APPDATA%\CodeCondenser\codecondenser.json` on Windows, `~/.codecondenser/codecondenser.json` on Linux/macOS)
 4. **Built-in Defaults**
 
-#### Example Global Config (`~/.codecondenser/codecondenser.json`)
+#### Example Global Config (`codecondenser.json`)
 ```json
 {
   "provider": "Ollama",
