@@ -10,7 +10,7 @@ description: >-
 
 `Pmad.CodeCondenser` (`pmad-codecondenser`) is a .NET 10 Roslyn-based static analysis tool designed to:
 1. **Detect Type-2 Structural Code Clones**: Identifies duplicate logic across C# methods (ignoring variable, parameter, and literal renames) without requiring an LLM.
-2. **Compact Repeated Inline Strings**: Detects string literals >= 50 characters used more than once, with estimated character/token savings, minimal constant declaration snippets, and typical usage patterns.
+2. **Compact Repeated Inline Strings**: Detects string literals >= 100 characters used more than once, with estimated character/token savings, minimal constant declaration snippets, and typical usage patterns.
 3. **Condense Verbose Comments**: Shortens oversized single-line, multi-line, and XML documentation comments into clean, concise summaries formatted to 120 columns using an LLM.
 4. **Enforce Duplication & String Guardrails in CI**: Compares changes incrementally against a baseline snapshot and exits with code `2` when new duplication or repeated strings are introduced.
 

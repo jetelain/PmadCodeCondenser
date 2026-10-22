@@ -26,6 +26,11 @@ public class CodeCondenserSettingsTests
         settings.Ollama.Model.Should().Be("gemma4:e4b");
         settings.Ollama.ContextSize.Should().Be(24576);
         settings.SnapshotFilePath.Should().Be(".codecondenser/snapshot.json");
+        settings.EnableRepeatedStringDetection.Should().BeTrue();
+        settings.RepeatedStringLengthThreshold.Should().Be(100);
+        settings.RepeatedStringMinOccurrences.Should().Be(2);
+        settings.RepeatedStringTolerance.Should().BeNull();
+        settings.RepeatedStringExitCode.Should().Be(2);
     }
 
     [Fact]

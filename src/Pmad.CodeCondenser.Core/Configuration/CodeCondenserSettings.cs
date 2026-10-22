@@ -134,9 +134,9 @@ public sealed class CodeCondenserSettings
 
     /// <summary>
     /// Minimum character length of a string literal to be considered for repeated inline string analysis.
-    /// Default is 50 characters.
+    /// Default is 100 characters.
     /// </summary>
-    public int RepeatedStringLengthThreshold { get; set; } = 50;
+    public int RepeatedStringLengthThreshold { get; set; } = 100;
 
     /// <summary>
     /// Alias for <see cref="RepeatedStringLengthThreshold"/>.

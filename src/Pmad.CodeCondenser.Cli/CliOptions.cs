@@ -148,7 +148,7 @@ public sealed class CliOptions
     public bool? EnableRepeatedStrings { get; set; }
 
     /// <summary>
-    /// Override minimum character length for repeated string detection (default: 50).
+    /// Override minimum character length for repeated string detection (default: 100).
     /// </summary>
     public int? ThresholdRepeatedStrings { get; set; }
 

@@ -52,7 +52,7 @@ public static class CliArgumentParser
           -ts, --threshold-statements <n>  Minimum statements for clone detection (default: 8)
           --threshold-submethod-statements <n> Minimum statements for sub-method clone detection (default: 10)
           -tc, --threshold-comments <n>    Minimum character length for verbose comments (default: 100)
-          -tstr, --threshold-strings <n>   Minimum character length for repeated string detection (default: 50)
+          -tstr, --threshold-strings <n>   Minimum character length for repeated string detection (default: 100)
           -so, --string-occurrences <n>    Minimum occurrences for repeated string detection (default: 2)
           -txs, --threshold-xml-summary <n> Minimum content length for XML summary/remarks (default: threshold-comments)
           -txp, --threshold-xml-param <n>   Minimum content length for XML param (default: threshold-comments / 2)
@@ -364,7 +364,7 @@ public static class CliArgumentParser
             };
             ThresholdRepeatedStringsOpt = new Option<int?>("--threshold-strings", "-tstr", "--threshold-repeated-strings")
             {
-                Description = "Minimum character length for repeated string detection (default: 50)",
+                Description = "Minimum character length for repeated string detection (default: 100)",
                 Recursive = true,
                 CustomParser = r =>
                 {
