@@ -30,7 +30,7 @@ public static class CliArgumentParser
           analyze [path]              Analyze C# codebase in dry-run mode (default)
           apply [path]                Apply summarized comments directly to source files on disk
           snapshot [path]             Create or refresh the snapshot baseline
-          skills [path]               Install or update AI agent skills in the workspace (.agents/skills)
+          skills, skill [path]        Install or update AI agent skills in the workspace (.agents/skills)
           measure [path]              Measure code in terms of estimated LLM tokens (total, comments, code)
 
         Arguments:
@@ -59,6 +59,7 @@ public static class CliArgumentParser
           -sc, --summarized-comments <path> Path to summarized comments JSON file stored in git (default: .codecondenser/summarized-comments.json)
           -mll, --max-line-length <n>  Maximum line length for formatted comments (default: 120)
           -m, --model <name>          Specify LLM model name (default: gemma4:e4b)
+          -mr, --max-retries <n>      Maximum number of LLM summarization retries (default: 1)
           -te, --estimator <name>     Token estimator preset: default, qwen, or gemma (default: default)
           -e, --endpoint <url>        Specify Ollama endpoint URL (default: http://localhost:11434)
           -cs, --context-size <n>     Specify context window size in tokens (default: 24576)
@@ -130,6 +131,7 @@ public static class CliArgumentParser
         public Option<int?> MaxLineLengthOpt { get; }
 
         public Option<string?> ModelOpt { get; }
+        public Option<int?> MaxRetriesOpt { get; }
         public Option<string?> TokenEstimatorOpt { get; }
         public Option<string?> EndpointOpt { get; }
         public Option<string?> ConfigOpt { get; }
@@ -480,6 +482,22 @@ public static class CliArgumentParser
                 Description = "Specify LLM model name",
                 Recursive = true
             };
+            MaxRetriesOpt = new Option<int?>("--max-retries", "-mr")
+            {
+                Description = "Maximum number of LLM summarization retries",
+                Recursive = true,
+                CustomParser = r =>
+                {
+                    if (r.Tokens.Count == 0) return null;
+                    var val = r.Tokens[0].Value;
+                    if (!int.TryParse(val, out var mr) || mr < 0)
+                    {
+                        r.AddError($"Invalid value for --max-retries: '{val}'. Must be a non-negative integer.");
+                        return null;
+                    }
+                    return mr;
+                }
+            };
             TokenEstimatorOpt = new Option<string?>("--estimator", "-te", "--token-estimator")
             {
                 Description = "Token estimator preset: default, qwen, or gemma",
@@ -626,6 +644,7 @@ public static class CliArgumentParser
             RootCommand.Add(MaxLineLengthOpt);
 
             RootCommand.Add(ModelOpt);
+            RootCommand.Add(MaxRetriesOpt);
             RootCommand.Add(TokenEstimatorOpt);
             RootCommand.Add(EndpointOpt);
             RootCommand.Add(ConfigOpt);
@@ -765,7 +784,7 @@ public static class CliArgumentParser
             {
                 var cmdName = activeCommand.Name;
                 var parentName = (pr.CommandResult.Parent as CommandResult)?.Command.Name;
-                if (cmdName == "skills" || parentName == "skills")
+                if (cmdName is "skills" or "skill" || parentName is "skills" or "skill")
                 {
                     command = CliOptions.CommandSkills;
                 }
@@ -830,6 +849,7 @@ public static class CliArgumentParser
             if (WasSpecified(pr, MaxLineLengthOpt)) options.MaxLineLength = pr.GetValue(MaxLineLengthOpt);
 
             if (WasSpecified(pr, ModelOpt)) options.Model = pr.GetValue(ModelOpt);
+            if (WasSpecified(pr, MaxRetriesOpt)) options.MaxSummarizationRetries = pr.GetValue(MaxRetriesOpt);
             if (WasSpecified(pr, TokenEstimatorOpt)) options.TokenEstimator = pr.GetValue(TokenEstimatorOpt);
             if (WasSpecified(pr, EndpointOpt)) options.Endpoint = pr.GetValue(EndpointOpt);
             if (WasSpecified(pr, ConfigOpt)) options.ConfigPath = pr.GetValue(ConfigOpt);

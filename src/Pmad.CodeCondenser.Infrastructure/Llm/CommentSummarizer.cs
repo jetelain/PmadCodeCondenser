@@ -167,16 +167,52 @@ public sealed class CommentSummarizer : ICommentSummarizer
             }
         };
 
-        var response = await client.GetResponseAsync(messages, chatOptions, cancellationToken: cancellationToken).ConfigureAwait(false);
-        var rawText = response.Text ?? string.Empty;
-        var cleaned = CommentPrompts.CleanModelResponse(rawText, comment.Kind);
+        int maxRetries = Math.Clamp(settings.MaxSummarizationRetries, 0, 5);
+        string? bestCleaned = null;
+        int bestLength = int.MaxValue;
 
-        if (string.IsNullOrWhiteSpace(cleaned) || CommentVerbosityHelper.IsMoreVerbose(cleaned, comment))
+        for (int attempt = 0; attempt <= maxRetries; attempt++)
         {
-            cleaned = comment.OriginalText.Trim();
+            var response = await client.GetResponseAsync(messages, chatOptions, cancellationToken: cancellationToken).ConfigureAwait(false);
+            var rawText = response.Text ?? string.Empty;
+            var cleaned = CommentPrompts.CleanModelResponse(rawText, comment.Kind);
+
+            if (CommentVerbosityHelper.IsUselessComment(cleaned))
+            {
+                return CommentPrompts.UselessCommentMarker;
+            }
+
+            bool needsRetry = CommentVerbosityHelper.ShouldRetrySummary(cleaned, comment, settings);
+
+            if (!string.IsNullOrWhiteSpace(cleaned) && !CommentVerbosityHelper.IsMoreVerbose(cleaned, comment))
+            {
+                int len = CommentVerbosityHelper.GetCommentContentLength(cleaned, comment.Kind);
+                if (bestCleaned == null || len < bestLength)
+                {
+                    bestCleaned = cleaned;
+                    bestLength = len;
+                }
+            }
+
+            if (!needsRetry)
+            {
+                return cleaned;
+            }
+
+            if (attempt < maxRetries)
+            {
+                messages.Add(new ChatMessage(ChatRole.Assistant, rawText));
+                var retryPrompt = CommentPrompts.BuildRetryPrompt(cleaned, comment, settings);
+                messages.Add(new ChatMessage(ChatRole.User, retryPrompt));
+            }
         }
 
-        return cleaned;
+        if (!string.IsNullOrEmpty(bestCleaned))
+        {
+            return bestCleaned;
+        }
+
+        return comment.OriginalText.Trim();
     }
 }
 

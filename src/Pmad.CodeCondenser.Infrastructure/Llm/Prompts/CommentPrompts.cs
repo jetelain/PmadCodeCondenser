@@ -1,4 +1,5 @@
 using Pmad.CodeCondenser.Core.Comments;
+using Pmad.CodeCondenser.Core.Configuration;
 using Pmad.CodeCondenser.Core.Models;
 
 namespace Pmad.CodeCondenser.Infrastructure.Llm.Prompts;
@@ -8,6 +9,8 @@ namespace Pmad.CodeCondenser.Infrastructure.Llm.Prompts;
 /// </summary>
 public static class CommentPrompts
 {
+    public const string UselessCommentMarker = "Comment is useless";
+
     public const string RegularCommentSystemPrompt =
         """
         You are a concise C# code condenser. Your task is to summarize verbose code comments into concise, high-value explanations.
@@ -15,7 +18,8 @@ public static class CommentPrompts
         1. Focus strictly on the WHY: explain the underlying rationale, non-obvious constraints, edge-case assumptions, or workarounds.
         2. Never restate the WHAT: do not describe what the code syntax already makes obvious.
         3. Be extremely concise: aim for a single punchy, high-density sentence (ideally under 100 characters).
-        4. Output ONLY the summarized comment text. Do NOT wrap in markdown code blocks, and do NOT include preamble or conversational commentary.
+        4. If the comment does not provide a meaningful WHY (it is trivial, obvious, restates what the code syntax already does, or adds no value), output exactly: Comment is useless
+        5. Output ONLY the summarized comment text (or "Comment is useless"). Do NOT wrap in markdown code blocks, and do NOT include preamble or conversational commentary.
         """;
 
     public const string XmlDocumentationSystemPrompt =
@@ -31,7 +35,8 @@ public static class CommentPrompts
         6. Condense the text payload inside each tag to be direct, precise, and succinct.
         7. Format each line of the output starting with C# XML doc comment slashes (///) and wrap lines so that lines do not exceed 100 columns.
         8. Do not add whitespace inside inline tags such as <c> (e.g. write <c>.github/copilot-instructions.md</c>, never <c> .github... </c> or <c>. github... </c>).
-        9. Output ONLY the condensed XML documentation comment. Do NOT wrap in markdown code blocks, and do NOT include preamble or conversational commentary.
+        9. If the XML documentation comment does not provide a meaningful WHAT (it is trivial, redundant, merely restates the symbol identifier like "Gets or sets the foo", or adds no value), output exactly: Comment is useless
+        10. Output ONLY the condensed XML documentation comment (or "Comment is useless"). Do NOT wrap in markdown code blocks, and do NOT include preamble or conversational commentary.
         """;
 
     /// <summary>
@@ -63,6 +68,60 @@ public static class CommentPrompts
     }
 
     /// <summary>
+    /// Builds a follow-up retry prompt when an earlier summary attempt was longer than before,
+    /// or when reduction was above target and above 50% of the initial comment length.
+    /// </summary>
+    public static string BuildRetryPrompt(string? previousSummary, VerboseComment comment, CodeCondenserSettings settings)
+    {
+        ArgumentNullException.ThrowIfNull(comment);
+        ArgumentNullException.ThrowIfNull(settings);
+
+        return BuildRetryPrompt(previousSummary, comment.OriginalText, comment.Kind, settings);
+    }
+
+    /// <summary>
+    /// Builds a follow-up retry prompt when an earlier summary attempt was longer than before,
+    /// or when reduction was above target and above 50% of the initial comment length.
+    /// </summary>
+    public static string BuildRetryPrompt(string? previousSummary, string originalText, CommentKind kind, CodeCondenserSettings settings)
+    {
+        ArgumentNullException.ThrowIfNull(settings);
+
+        int targetThreshold = kind == CommentKind.XmlDocumentation
+            ? settings.GetEffectiveXmlSummaryThreshold()
+            : settings.CommentLengthThreshold;
+
+        if (string.IsNullOrWhiteSpace(previousSummary))
+        {
+            return "The previous summary was empty or invalid. Please produce a concise summary focusing strictly on the primary rationale or contract. You are explicitly allowed to drop secondary details to keep it concise.";
+        }
+
+        int prevLen = CommentVerbosityHelper.GetCommentContentLength(previousSummary, kind);
+
+        if (kind == CommentKind.XmlDocumentation)
+        {
+            return $"""
+                The previous XML documentation summary was too verbose ({prevLen} characters; target is under {targetThreshold} characters or at least 50% reduction).
+                Please condense it more aggressively into a strictly succinct <summary> in active present tense.
+                You are explicitly allowed and encouraged to drop secondary details, implementation nuances, background explanations, or minor caveats.
+                Focus strictly on the primary purpose or contract of the symbol, preserving valid XML structure and /// formatting:
+                """;
+        }
+
+        return $"""
+            The previous summary was too verbose ({prevLen} characters; target is under {targetThreshold} characters or at least 50% reduction).
+            Please condense it more aggressively into a single punchy sentence strictly under {targetThreshold} characters.
+            You are explicitly allowed and encouraged to drop secondary details, implementation nuances, background context, or minor caveats.
+            Focus strictly on the primary rationale (the core 'why'):
+            """;
+    }
+
+    /// <summary>
+    /// Determines whether the given model response indicates that the comment is useless.
+    /// </summary>
+    public static bool IsUselessCommentResponse(string? response) => CommentVerbosityHelper.IsUselessComment(response);
+
+    /// <summary>
     /// Cleans and sanitizes raw model output, removing markdown code fences and ensuring proper formatting.
     /// </summary>
     public static string CleanModelResponse(string rawResponse, CommentKind kind)
@@ -70,6 +129,11 @@ public static class CommentPrompts
         if (string.IsNullOrWhiteSpace(rawResponse))
         {
             return string.Empty;
+        }
+
+        if (IsUselessCommentResponse(rawResponse))
+        {
+            return UselessCommentMarker;
         }
 
         var text = rawResponse.Trim();
@@ -111,6 +175,11 @@ public static class CommentPrompts
             {
                 text = text.Replace("```", string.Empty).Trim();
             }
+        }
+
+        if (IsUselessCommentResponse(text))
+        {
+            return UselessCommentMarker;
         }
 
         if (kind == CommentKind.XmlDocumentation)

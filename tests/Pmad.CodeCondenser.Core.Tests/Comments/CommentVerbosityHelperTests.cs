@@ -1,6 +1,7 @@
 using FluentAssertions;
 using Pmad.AI.Tokens;
 using Pmad.CodeCondenser.Core.Comments;
+using Pmad.CodeCondenser.Core.Configuration;
 using Pmad.CodeCondenser.Core.Models;
 
 namespace Pmad.CodeCondenser.Core.Tests.Comments;
@@ -357,5 +358,201 @@ public class CommentVerbosityHelperTests
         result.CondensedTokens.Should().Be(0);
         result.GainTokens.Should().Be(0);
         result.TokenReductionPercent.Should().Be(0);
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("")]
+    [InlineData("   ")]
+    public void ShouldRetrySummary_NullOrWhiteSpace_ReturnsTrue(string? summary)
+    {
+        var comment = CreateComment("// " + new string('a', 150));
+        var settings = new CodeCondenserSettings { CommentLengthThreshold = 100 };
+
+        CommentVerbosityHelper.ShouldRetrySummary(summary, comment, settings).Should().BeTrue();
+    }
+
+    [Fact]
+    public void ShouldRetrySummary_SummaryLongerThanOriginal_ReturnsTrue()
+    {
+        var comment = CreateComment("// Original text of length 30");
+        var summary = "// This summary is much longer than the original text was";
+        var settings = new CodeCondenserSettings { CommentLengthThreshold = 100 };
+
+        CommentVerbosityHelper.ShouldRetrySummary(summary, comment, settings).Should().BeTrue();
+    }
+
+    [Fact]
+    public void ShouldRetrySummary_SummaryEqualLengthToOriginal_ReturnsTrue()
+    {
+        var comment = CreateComment("// Exactly 25 chars text!");
+        var summary = "// Exactly 25 chars text!";
+        var settings = new CodeCondenserSettings { CommentLengthThreshold = 100 };
+
+        CommentVerbosityHelper.ShouldRetrySummary(summary, comment, settings).Should().BeTrue();
+    }
+
+    [Fact]
+    public void ShouldRetrySummary_ReductionAboveTargetAndAbove50PercentOfInitial_ReturnsTrue()
+    {
+        // Initial = 200, Target = 100
+        // Summary = 130 (> 100 target AND > 100 which is 50% of initial) -> Needs retry!
+        var original = "// " + new string('x', 197);
+        var summary = "// " + new string('y', 127);
+        var comment = CreateComment(original);
+        var settings = new CodeCondenserSettings { CommentLengthThreshold = 100 };
+
+        CommentVerbosityHelper.ShouldRetrySummary(summary, comment, settings).Should().BeTrue();
+    }
+
+    [Fact]
+    public void ShouldRetrySummary_SummaryAboveTargetButBelow50PercentOfInitial_ReturnsFalse()
+    {
+        // Initial = 300, Target = 100
+        // Summary = 140 (> 100 target, but <= 150 which is 50% of initial -> achieved > 50% reduction!) -> No retry!
+        var original = "// " + new string('x', 297);
+        var summary = "// " + new string('y', 137);
+        var comment = CreateComment(original);
+        var settings = new CodeCondenserSettings { CommentLengthThreshold = 100 };
+
+        CommentVerbosityHelper.ShouldRetrySummary(summary, comment, settings).Should().BeFalse();
+    }
+
+    [Fact]
+    public void ShouldRetrySummary_SummaryBelowTargetAndAbove50PercentOfInitial_ReturnsFalse()
+    {
+        // Initial = 120, Target = 100
+        // Summary = 70 (<= 100 target, though > 60 which is 50% of initial) -> reached below target! -> No retry!
+        var original = "// " + new string('x', 117);
+        var summary = "// " + new string('y', 67);
+        var comment = CreateComment(original);
+        var settings = new CodeCondenserSettings { CommentLengthThreshold = 100 };
+
+        CommentVerbosityHelper.ShouldRetrySummary(summary, comment, settings).Should().BeFalse();
+    }
+
+    [Fact]
+    public void ShouldRetrySummary_SummaryBelowTargetAndBelow50PercentOfInitial_ReturnsFalse()
+    {
+        // Initial = 200, Target = 100
+        // Summary = 50 (<= 100 target AND <= 100 50% of initial) -> No retry!
+        var original = "// " + new string('x', 197);
+        var summary = "// " + new string('y', 47);
+        var comment = CreateComment(original);
+        var settings = new CodeCondenserSettings { CommentLengthThreshold = 100 };
+
+        CommentVerbosityHelper.ShouldRetrySummary(summary, comment, settings).Should().BeFalse();
+    }
+
+    [Fact]
+    public void ShouldRetrySummary_XmlDoc_RespectsXmlSummaryThresholdAnd50Percent()
+    {
+        // XML doc: initial content = 200 chars. Target = 100
+        var original = $"/// <summary>\r\n/// {new string('a', 200)}\r\n/// </summary>";
+        var comment = CreateComment(original, CommentKind.XmlDocumentation);
+        var settings = new CodeCondenserSettings { XmlSummaryLengthThreshold = 100 };
+
+        // Attempt 1: 130 chars content (> 100 target and > 100 50% of initial) -> retries!
+        var summary1 = $"/// <summary>\r\n/// {new string('b', 130)}\r\n/// </summary>";
+        CommentVerbosityHelper.ShouldRetrySummary(summary1, comment, settings).Should().BeTrue();
+
+        // Attempt 2: 70 chars content (<= 100 target) -> does not retry!
+        var summary2 = $"/// <summary>\r\n/// {new string('c', 70)}\r\n/// </summary>";
+        CommentVerbosityHelper.ShouldRetrySummary(summary2, comment, settings).Should().BeFalse();
+    }
+
+    [Fact]
+    public void GetCommentContentLength_XmlDoc_ExtractsTagContentLength()
+    {
+        var xml = "/// <summary>\r\n/// Hello world\r\n/// </summary>";
+        int len = CommentVerbosityHelper.GetCommentContentLength(xml, CommentKind.XmlDocumentation);
+        len.Should().Be("Hello world".Length);
+    }
+
+    [Fact]
+    public void GetCommentContentLength_RegularComment_ReturnsTrimmedLength()
+    {
+        var text = "// Hello world  ";
+        int len = CommentVerbosityHelper.GetCommentContentLength(text, CommentKind.SingleLine);
+        len.Should().Be("// Hello world".Length);
+    }
+
+    [Theory]
+    [InlineData("Comment is useless")]
+    [InlineData("Comment is useless.")]
+    [InlineData("Comment is usless")]
+    [InlineData("Comment is usless.")]
+    [InlineData("COMMENT IS USELESS")]
+    [InlineData("  comment is useless  ")]
+    [InlineData("// Comment is useless")]
+    [InlineData("/// Comment is useless")]
+    [InlineData("/* Comment is useless */")]
+    public void IsUselessComment_ValidMarkers_ReturnsTrue(string text)
+    {
+        CommentVerbosityHelper.IsUselessComment(text).Should().BeTrue();
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("")]
+    [InlineData("   ")]
+    [InlineData("This comment is useless")]
+    [InlineData("Useful explanation")]
+    public void IsUselessComment_InvalidOrNormalText_ReturnsFalse(string? text)
+    {
+        CommentVerbosityHelper.IsUselessComment(text).Should().BeFalse();
+    }
+
+    [Fact]
+    public void ShouldRetrySummary_WhenSummaryIsUselessComment_ReturnsFalse()
+    {
+        var comment = CreateComment("// " + new string('a', 150));
+        var settings = new CodeCondenserSettings { CommentLengthThreshold = 100 };
+
+        CommentVerbosityHelper.ShouldRetrySummary("Comment is useless", comment, settings).Should().BeFalse();
+        CommentVerbosityHelper.ShouldRetrySummary("Comment is usless", comment, settings).Should().BeFalse();
+    }
+
+    [Fact]
+    public void CalculateGain_WhenUselessComment_ReturnsFullOriginalLength()
+    {
+        var original = "// This comment is redundant and provides no why.";
+        var comment = CreateComment(original);
+
+        var gain = CommentVerbosityHelper.CalculateGain(comment, "Comment is useless");
+
+        gain.Should().Be(original.Trim().Length);
+    }
+
+    [Fact]
+    public void CalculateGainWithTokens_WhenUselessComment_ReturnsFullOriginalCharsAndTokens()
+    {
+        var original = "// This comment is redundant and provides no why.";
+        var comment = CreateComment(original);
+
+        var (gainChars, gainTokens) = CommentVerbosityHelper.CalculateGainWithTokens(comment, "Comment is useless");
+
+        gainChars.Should().Be(original.Trim().Length);
+        gainTokens.Should().BeGreaterThan(0);
+    }
+
+    [Fact]
+    public void CalculateTotalGain_WhenCommentIsUseless_GivesFullCreditAndReportsZeroCondensedChars()
+    {
+        var comment1 = CreateComment("// " + new string('a', 100)); // 103 chars
+        var comment2 = CreateComment("// " + new string('b', 50));  // 53 chars
+
+        var summaries = new Dictionary<string, string>
+        {
+            [comment1.ContentHash] = "// " + new string('a', 30), // 33 chars (gain: 70)
+            [comment2.ContentHash] = "Comment is useless"         // 0 condensed chars (gain: 53)
+        };
+
+        var result = CommentVerbosityHelper.CalculateTotalGain([comment1, comment2], summaries);
+
+        result.OriginalCharacters.Should().Be(156);
+        result.CondensedCharacters.Should().Be(33);
+        result.GainCharacters.Should().Be(123);
+        result.SummarizedCount.Should().Be(2);
     }
 }

@@ -48,6 +48,25 @@ public sealed class SkillsCliTests : IDisposable
     }
 
     [Fact]
+    public async Task RunAsync_SkillSingularCommand_InstallsSkillsSuccessfully()
+    {
+        var outWriter = new StringWriter();
+        var errWriter = new StringWriter();
+
+        var exitCode = await Program.RunAsync(["skill", _tempDir, "--no-color"], outWriter, errWriter);
+
+        exitCode.Should().Be(0);
+        errWriter.ToString().Should().BeEmpty();
+        var output = outWriter.ToString();
+        output.Should().Contain("[Created]");
+        output.Should().Contain("codecondenser/SKILL.md");
+        output.Should().Contain("Skills successfully synchronized");
+
+        var skillFile = Path.Combine(_tempDir, ".agents", "skills", "codecondenser", "SKILL.md");
+        File.Exists(skillFile).Should().BeTrue();
+    }
+
+    [Fact]
     public async Task RunAsync_SkillsCommand_SecondRunReportsAlreadyUpToDate()
     {
         var outWriter1 = new StringWriter();

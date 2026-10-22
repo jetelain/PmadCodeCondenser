@@ -106,6 +106,12 @@ public sealed class VerboseCommentRewriter : CSharpSyntaxRewriter, ICommentRewri
             return base.VisitTrivia(trivia);
         }
 
+        if (CommentVerbosityHelper.IsUselessComment(replacement))
+        {
+            _appliedTriviaTexts.Add(text);
+            return default;
+        }
+
         var replacementTrivia = CreateReplacementTrivia(trivia, replacement);
         var rewrittenText = replacementTrivia.ToString().Trim();
         if (!string.IsNullOrWhiteSpace(rewrittenText))

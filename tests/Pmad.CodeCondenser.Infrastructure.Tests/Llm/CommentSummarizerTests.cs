@@ -310,6 +310,136 @@ public class CommentSummarizerTests
         result[comment.ContentHash].Should().Be(originalComment.Trim());
     }
 
+    [Fact]
+    public async Task SummarizeAsync_WhenFirstAttemptIsMoreVerbose_RetriesAndReturnsShorterSecondAttempt()
+    {
+        var originalComment = "// Flagged comment that needs summarizing.";
+        var comment = CreateComment(originalComment);
+
+        var callCount = 0;
+        ChatMessage? capturedRetryUserMessage = null;
+
+        var client = new TestChatClient(messages =>
+        {
+            callCount++;
+            if (callCount == 1)
+            {
+                return "// This is an excessively long and unnecessarily wordy first response from LLM.";
+            }
+
+            capturedRetryUserMessage = messages.LastOrDefault(m => m.Role == ChatRole.User);
+            return "// Concise explanation.";
+        });
+
+        var summarizer = new CommentSummarizer(client);
+        var settings = new CodeCondenserSettings { MaxSummarizationRetries = 1 };
+
+        var result = await summarizer.SummarizeAsync([comment], new Dictionary<string, string>(), settings);
+
+        client.TotalCalls.Should().Be(2);
+        capturedRetryUserMessage.Should().NotBeNull();
+        capturedRetryUserMessage!.Text.Should().Contain("drop secondary details");
+        result[comment.ContentHash].Should().Be("// Concise explanation.");
+    }
+
+    [Fact]
+    public async Task SummarizeAsync_WhenReductionAboveTargetAndAbove50Percent_RetriesAndReturnsSecondAttempt()
+    {
+        // Original = 200 chars, Target = 100
+        var originalComment = "// " + new string('x', 197);
+        var comment = CreateComment(originalComment);
+
+        var callCount = 0;
+        var client = new TestChatClient(messages =>
+        {
+            callCount++;
+            if (callCount == 1)
+            {
+                // Attempt 1: 130 chars (> 100 target and > 100 50% of initial) -> Should trigger retry
+                return "// " + new string('y', 127);
+            }
+
+            // Attempt 2: 60 chars (<= 100 target) -> Good summary
+            return "// " + new string('z', 57);
+        });
+
+        var summarizer = new CommentSummarizer(client);
+        var settings = new CodeCondenserSettings { CommentLengthThreshold = 100, MaxSummarizationRetries = 1 };
+
+        var result = await summarizer.SummarizeAsync([comment], new Dictionary<string, string>(), settings);
+
+        client.TotalCalls.Should().Be(2);
+        result[comment.ContentHash].Should().Be("// " + new string('z', 57));
+    }
+
+    [Fact]
+    public async Task SummarizeAsync_WhenLlmAnswersCommentIsUseless_ReturnsUselessMarkerWithoutRetrying()
+    {
+        var comment = CreateComment("// Redundant comment that restates the obvious.");
+
+        var client = new TestChatClient(_ => "Comment is useless");
+        var summarizer = new CommentSummarizer(client);
+        var settings = new CodeCondenserSettings { MaxSummarizationRetries = 2 };
+
+        var result = await summarizer.SummarizeAsync([comment], new Dictionary<string, string>(), settings);
+
+        client.TotalCalls.Should().Be(1);
+        result[comment.ContentHash].Should().Be("Comment is useless");
+    }
+
+    [Fact]
+    public async Task SummarizeAsync_WhenLlmAnswersCommentIsUslessTypo_ReturnsUselessMarkerWithoutRetrying()
+    {
+        var comment = CreateComment("// Redundant comment that restates the obvious.");
+
+        var client = new TestChatClient(_ => "Comment is usless");
+        var summarizer = new CommentSummarizer(client);
+        var settings = new CodeCondenserSettings { MaxSummarizationRetries = 2 };
+
+        var result = await summarizer.SummarizeAsync([comment], new Dictionary<string, string>(), settings);
+
+        client.TotalCalls.Should().Be(1);
+        result[comment.ContentHash].Should().Be("Comment is useless");
+    }
+
+    [Fact]
+    public async Task SummarizeAsync_WhenMaxSummarizationRetriesIsZero_DoesNotRetry()
+    {
+        var originalComment = "// Short comment.";
+        var comment = CreateComment(originalComment);
+
+        var client = new TestChatClient(_ => "// Much longer and more verbose comment produced by LLM.");
+        var summarizer = new CommentSummarizer(client);
+        var settings = new CodeCondenserSettings { MaxSummarizationRetries = 0 };
+
+        var result = await summarizer.SummarizeAsync([comment], new Dictionary<string, string>(), settings);
+
+        client.TotalCalls.Should().Be(1);
+        result[comment.ContentHash].Should().Be(originalComment.Trim());
+    }
+
+    [Fact]
+    public async Task SummarizeAsync_WhenRetriesExhausted_ReturnsBestCandidateOrOriginal()
+    {
+        var originalComment = "// Initial comment length 30 chars";
+        var comment = CreateComment(originalComment);
+
+        var callCount = 0;
+        var client = new TestChatClient(_ =>
+        {
+            callCount++;
+            return $"// Attempt {callCount} is much longer and more verbose than the original comment was.";
+        });
+
+        var summarizer = new CommentSummarizer(client);
+        var settings = new CodeCondenserSettings { MaxSummarizationRetries = 2 };
+
+        var result = await summarizer.SummarizeAsync([comment], new Dictionary<string, string>(), settings);
+
+        // 1 initial attempt + 2 retries = 3 calls
+        client.TotalCalls.Should().Be(3);
+        result[comment.ContentHash].Should().Be(originalComment.Trim());
+    }
 
     private sealed class DirectProgress<T>(Action<T> handler) : IProgress<T>
     {

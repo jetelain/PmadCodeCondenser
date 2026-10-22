@@ -157,4 +157,33 @@ public class CodeCondenserSettingsTests
         var cloned = original.Clone();
         cloned.IsLlmConfiguredGlobally.Should().BeTrue();
     }
+
+    [Fact]
+    public void MaxSummarizationRetries_DefaultsToOne()
+    {
+        var settings = new CodeCondenserSettings();
+        settings.MaxSummarizationRetries.Should().Be(1);
+    }
+
+    [Fact]
+    public void SummarizationRetries_Alias_SetsAndGetsMaxSummarizationRetries()
+    {
+        var settings = new CodeCondenserSettings();
+        settings.SummarizationRetries = 3;
+
+        settings.MaxSummarizationRetries.Should().Be(3);
+        settings.SummarizationRetries.Should().Be(3);
+    }
+
+    [Fact]
+    public void Clone_CopiesMaxSummarizationRetries()
+    {
+        var original = new CodeCondenserSettings
+        {
+            MaxSummarizationRetries = 4
+        };
+
+        var cloned = original.Clone();
+        cloned.MaxSummarizationRetries.Should().Be(4);
+    }
 }

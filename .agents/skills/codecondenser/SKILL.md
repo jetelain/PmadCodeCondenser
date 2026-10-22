@@ -32,7 +32,7 @@ The CLI can be invoked via the global tool `pmad-codecondenser`, local tool `dot
 | **Summarize comments using LLM** | `pmad-codecondenser ./src -m gemma4:e4b` | Yes (Ollama) |
 | **Apply summarized comments to disk** | `pmad-codecondenser ./src --apply` | No (uses cache) |
 | **Refresh baseline snapshot** | `pmad-codecondenser snapshot ./src` | No |
-| **Install/update workspace agent skills** | `pmad-codecondenser skills [path]` | No |
+| **Install/update workspace agent skills** | `pmad-codecondenser skills [path]` or `pmad-codecondenser skill [path]` | No |
 | **Measure code tokens (total, comments, code)** | `pmad-codecondenser measure ./src` | No |
 | **Measure code tokens with specific estimator** | `pmad-codecondenser measure ./src --estimator qwen` | No |
 
@@ -84,7 +84,10 @@ When asked to condense or clean up verbose comments:
    # Or with global config (%APPDATA%\CodeCondenser\codecondenser.json on Windows, ~/.codecondenser/codecondenser.json on Linux/macOS):
    pmad-codecondenser ./src --summary summarize
    ```
-2. **Review proposed summaries**: The dry run saves proposed summaries to `.codecondenser/snapshot.json` without modifying files on disk.
+2. **Review proposed summaries & retry behavior**:
+   - The dry run saves proposed summaries to `.codecondenser/snapshot.json` without modifying files on disk.
+   - **Automated Retry Loop**: If a candidate summary is longer than before, or if reduction is above target threshold and above 50% of the initial comment length, the summarizer automatically retries (configurable via `--max-retries <n>` or `-mr <n>`, default: 1, clamped 0–5). On retry, the model is explicitly instructed to drop secondary details and minor caveats to achieve brevity.
+   - **Useless Comments**: The LLM is instructed to answer `"Comment is useless"` if a regular comment fails to explain 'why' (e.g. merely restates code syntax) or if an XML doc comment fails to explain 'what'. When detected, applying changes removes the comment completely, granting 100% reduction credit.
 3. **Apply changes**:
    ```bash
    pmad-codecondenser ./src --apply

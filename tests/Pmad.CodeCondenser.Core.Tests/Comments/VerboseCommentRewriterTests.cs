@@ -247,5 +247,32 @@ public class VerboseCommentRewriterTests
         var result = _rewriter.Rewrite(tree, replacements!);
         result.ToString().Should().Be(code);
     }
+
+    [Fact]
+    public void Rewrite_WithUselessCommentReplacement_RemovesComment()
+    {
+        var originalComment = "// Trivial comment that adds no value whatsoever";
+        var code = $$"""
+            public class TestClass
+            {
+                {{originalComment}}
+                public void DoWork() {}
+            }
+            """;
+
+        var tree = CSharpSyntaxTree.ParseText(code);
+        var replacements = new Dictionary<string, string>
+        {
+            [Hash(originalComment)] = "Comment is useless"
+        };
+
+        var appliedTrivia = new List<string>();
+        var rewritten = _rewriter.Rewrite(tree, replacements, appliedTrivia);
+        var resultText = rewritten.ToString();
+
+        resultText.Should().NotContain(originalComment);
+        resultText.Should().NotContain("Comment is useless");
+        appliedTrivia.Should().Contain(originalComment);
+    }
 }
 

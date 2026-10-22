@@ -9,6 +9,7 @@ public sealed class CliOptions
     public const string CommandApply = "apply";
     public const string CommandSnapshot = "snapshot";
     public const string CommandSkills = "skills";
+    public const string CommandSkill = "skill";
     public const string CommandMeasure = "measure";
 
     /// <summary>
@@ -71,6 +72,12 @@ public sealed class CliOptions
     /// LLM model name override (e.g. "gemma4:e4b").
     /// </summary>
     public string? Model { get; set; }
+
+    /// <summary>
+    /// Maximum number of retries when an LLM summary is longer than before,
+    /// or when reduction is above target and above 50% of the initial comment length.
+    /// </summary>
+    public int? MaxSummarizationRetries { get; set; }
 
     /// <summary>
     /// Token estimator preset override for measuring code in LLM tokens (e.g. "default", "qwen", "gemma").

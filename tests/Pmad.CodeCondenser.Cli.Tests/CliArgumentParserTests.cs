@@ -897,5 +897,45 @@ public class CliArgumentParserTests
         success.Should().BeFalse();
         error.Should().Contain("Must be a positive integer");
     }
+
+    [Theory]
+    [InlineData("--max-retries", "2")]
+    [InlineData("-mr", "2")]
+    [InlineData("--max-retries", "0")]
+    public void TryParse_MaxRetriesFlags_SetsMaxSummarizationRetries(string flag, string val)
+    {
+        var success = CliArgumentParser.TryParse([flag, val], out var options, out var error);
+
+        success.Should().BeTrue();
+        error.Should().BeNull();
+        options.MaxSummarizationRetries.Should().Be(int.Parse(val));
+    }
+
+    [Fact]
+    public void TryParse_MaxRetriesNegative_ReturnsError()
+    {
+        var success = CliArgumentParser.TryParse(["--max-retries", "-1"], out _, out var error);
+
+        success.Should().BeFalse();
+        error.Should().Contain("Must be a non-negative integer");
+    }
+
+    [Fact]
+    public void TryParse_MaxRetriesMissingValue_ReturnsError()
+    {
+        var success = CliArgumentParser.TryParse(["-mr"], out _, out var error);
+
+        success.Should().BeFalse();
+        error.Should().Contain("Missing required value");
+    }
+
+    [Fact]
+    public void TryParse_MaxRetriesInvalidString_ReturnsError()
+    {
+        var success = CliArgumentParser.TryParse(["--max-retries", "abc"], out _, out var error);
+
+        success.Should().BeFalse();
+        error.Should().Contain("Must be a non-negative integer");
+    }
 }
 

@@ -308,10 +308,21 @@ public sealed class ConsoleFormatter : IConsoleFormatter
             {
                 var trimmedSummary = summary.Trim();
                 var summaryPreview = TruncatePreview(trimmedSummary, 120);
-                bool isKept = string.Equals(trimmedSummary, trimmedOrig, StringComparison.Ordinal) ||
-                              CommentVerbosityHelper.IsMoreVerbose(summary, comment);
+                bool isUseless = CommentVerbosityHelper.IsUselessComment(trimmedSummary);
+                bool isKept = !isUseless && (string.Equals(trimmedSummary, trimmedOrig, StringComparison.Ordinal) ||
+                              CommentVerbosityHelper.IsMoreVerbose(summary, comment));
 
-                if (isKept)
+                if (isUseless)
+                {
+                    writer.WriteLine(Yellow("  x Useless:   Comment is useless (will be removed)"));
+                    writer.WriteLine(Green($"    Diff: {originalLen} -> 0 chars, ~{originalTokens} -> ~0 tokens (100% reduction, comment removed)"));
+                    totalOriginalLen += originalLen;
+                    totalCondensedLen += 0;
+                    totalOriginalTokens += originalTokens;
+                    totalCondensedTokens += 0;
+                    totalSummarized++;
+                }
+                else if (isKept)
                 {
                     writer.WriteLine(Yellow($"  = Kept:      {summaryPreview}"));
                     writer.WriteLine(Dim($"    Diff: {originalLen} -> {originalLen} chars, ~{originalTokens} -> ~{originalTokens} tokens (0% reduction, kept original comment)"));
