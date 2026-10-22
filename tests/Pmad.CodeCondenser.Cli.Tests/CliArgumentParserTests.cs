@@ -815,5 +815,87 @@ public class CliArgumentParserTests
         options.DryRun.Should().BeTrue();
         options.Force.Should().BeTrue();
     }
+
+    [Theory]
+    [InlineData("--no-strings")]
+    [InlineData("--disable-strings")]
+    [InlineData("--no-repeated-strings")]
+    public void TryParse_DisableStringsFlags_SetsEnableRepeatedStringsFalse(string flag)
+    {
+        var success = CliArgumentParser.TryParse([flag], out var options, out var error);
+
+        success.Should().BeTrue();
+        error.Should().BeNull();
+        options.EnableRepeatedStrings.Should().BeFalse();
+    }
+
+    [Theory]
+    [InlineData("--enable-strings")]
+    [InlineData("--enable-repeated-strings")]
+    public void TryParse_EnableStringsFlags_SetsEnableRepeatedStringsTrue(string flag)
+    {
+        var success = CliArgumentParser.TryParse([flag], out var options, out var error);
+
+        success.Should().BeTrue();
+        error.Should().BeNull();
+        options.EnableRepeatedStrings.Should().BeTrue();
+    }
+
+    [Theory]
+    [InlineData("--threshold-strings", "75")]
+    [InlineData("-tstr", "75")]
+    [InlineData("--threshold-repeated-strings", "75")]
+    public void TryParse_ThresholdStringsFlags_SetsThresholdRepeatedStrings(string flag, string val)
+    {
+        var success = CliArgumentParser.TryParse([flag, val], out var options, out var error);
+
+        success.Should().BeTrue();
+        error.Should().BeNull();
+        options.ThresholdRepeatedStrings.Should().Be(75);
+    }
+
+    [Theory]
+    [InlineData("--string-occurrences", "4")]
+    [InlineData("-so", "4")]
+    [InlineData("--threshold-string-occurrences", "4")]
+    public void TryParse_StringOccurrencesFlags_SetsThresholdStringOccurrences(string flag, string val)
+    {
+        var success = CliArgumentParser.TryParse([flag, val], out var options, out var error);
+
+        success.Should().BeTrue();
+        error.Should().BeNull();
+        options.ThresholdStringOccurrences.Should().Be(4);
+    }
+
+    [Theory]
+    [InlineData("--string-tolerance", "3")]
+    [InlineData("-st", "3")]
+    [InlineData("--repeated-string-tolerance", "3")]
+    public void TryParse_StringToleranceFlags_SetsRepeatedStringTolerance(string flag, string val)
+    {
+        var success = CliArgumentParser.TryParse([flag, val], out var options, out var error);
+
+        success.Should().BeTrue();
+        error.Should().BeNull();
+        options.RepeatedStringTolerance.Should().Be(3);
+    }
+
+    [Fact]
+    public void TryParse_StringOccurrencesLessThanTwo_ReturnsError()
+    {
+        var success = CliArgumentParser.TryParse(["-so", "1"], out _, out var error);
+
+        success.Should().BeFalse();
+        error.Should().Contain("Must be an integer >= 2");
+    }
+
+    [Fact]
+    public void TryParse_ThresholdStringsInvalid_ReturnsError()
+    {
+        var success = CliArgumentParser.TryParse(["-tstr", "0"], out _, out var error);
+
+        success.Should().BeFalse();
+        error.Should().Contain("Must be a positive integer");
+    }
 }
 

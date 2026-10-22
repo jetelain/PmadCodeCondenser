@@ -42,14 +42,18 @@ public static class CliArgumentParser
           -u, --update-snapshot       Refresh the snapshot baseline
           -dt, --duplication-tolerance <n> Maximum new clone clusters tolerated in incremental mode (default: 0)
           -ct, --comment-tolerance <n>     Maximum new verbose comments tolerated in incremental mode
+          -st, --string-tolerance <n>      Maximum new repeated string groups tolerated in incremental mode
           --summary <mode>            Comment summary mode: disabled, summarize, or report (default: summarize if LLM configured, report otherwise)
           --report-only               Report-only mode for comments without calling an LLM
           --no-comments               Disable comment extraction and summarization (alias for --summary disabled)
           --no-duplication            Disable structural code clone detection
+          --no-strings                Disable repeated inline string detection
           --sub-method-clones         Enable sliding-window sub-method clone detection
           -ts, --threshold-statements <n>  Minimum statements for clone detection (default: 8)
           --threshold-submethod-statements <n> Minimum statements for sub-method clone detection (default: 10)
           -tc, --threshold-comments <n>    Minimum character length for verbose comments (default: 100)
+          -tstr, --threshold-strings <n>   Minimum character length for repeated string detection (default: 100)
+          -so, --string-occurrences <n>    Minimum occurrences for repeated string detection (default: 2)
           -txs, --threshold-xml-summary <n> Minimum content length for XML summary/remarks (default: threshold-comments)
           -txp, --threshold-xml-param <n>   Minimum content length for XML param (default: threshold-comments / 2)
           -sc, --summarized-comments <path> Path to summarized comments JSON file stored in git (default: .codecondenser/summarized-comments.json)
@@ -102,6 +106,8 @@ public static class CliArgumentParser
         public Option<string?> SummaryOpt { get; }
         public Option<bool> NoDuplicationOpt { get; }
         public Option<bool> EnableDuplicationOpt { get; }
+        public Option<bool> NoStringsOpt { get; }
+        public Option<bool> EnableStringsOpt { get; }
         public Option<bool> ExcludeTestsOpt { get; }
         public Option<bool> EnforceTestDuplicationOpt { get; }
         public Option<bool> IncludeGeneratedOpt { get; }
@@ -112,8 +118,11 @@ public static class CliArgumentParser
 
         public Option<int?> DuplicationToleranceOpt { get; }
         public Option<int?> CommentToleranceOpt { get; }
+        public Option<int?> RepeatedStringToleranceOpt { get; }
         public Option<int?> ThresholdStatementsOpt { get; }
         public Option<int?> ThresholdCommentsOpt { get; }
+        public Option<int?> ThresholdRepeatedStringsOpt { get; }
+        public Option<int?> ThresholdStringOccurrencesOpt { get; }
         public Option<int?> ThresholdXmlSummaryOpt { get; }
         public Option<int?> ThresholdXmlParamOpt { get; }
         public Option<int?> ThresholdSubMethodStatementsOpt { get; }
@@ -227,6 +236,16 @@ public static class CliArgumentParser
                 Description = "Explicitly enable code clone detection",
                 Recursive = true
             };
+            NoStringsOpt = new Option<bool>("--no-strings", "--disable-strings", "--no-repeated-strings")
+            {
+                Description = "Disable repeated inline string detection",
+                Recursive = true
+            };
+            EnableStringsOpt = new Option<bool>("--enable-strings", "--enable-repeated-strings")
+            {
+                Description = "Explicitly enable repeated inline string detection",
+                Recursive = true
+            };
             ExcludeTestsOpt = new Option<bool>("--exclude-tests", "--production-only")
             {
                 Description = "Completely exclude test files",
@@ -295,6 +314,22 @@ public static class CliArgumentParser
                     return ct;
                 }
             };
+            RepeatedStringToleranceOpt = new Option<int?>("--string-tolerance", "-st", "--repeated-string-tolerance")
+            {
+                Description = "Maximum new repeated string groups tolerated in incremental mode",
+                Recursive = true,
+                CustomParser = r =>
+                {
+                    if (r.Tokens.Count == 0) return null;
+                    var val = r.Tokens[0].Value;
+                    if (!int.TryParse(val, out var st) || st < 0)
+                    {
+                        r.AddError($"Invalid value for --string-tolerance: '{val}'. Must be a non-negative integer.");
+                        return null;
+                    }
+                    return st;
+                }
+            };
             ThresholdStatementsOpt = new Option<int?>("--threshold-statements", "-ts")
             {
                 Description = "Minimum statements for clone detection",
@@ -325,6 +360,38 @@ public static class CliArgumentParser
                         return null;
                     }
                     return tc;
+                }
+            };
+            ThresholdRepeatedStringsOpt = new Option<int?>("--threshold-strings", "-tstr", "--threshold-repeated-strings")
+            {
+                Description = "Minimum character length for repeated string detection (default: 100)",
+                Recursive = true,
+                CustomParser = r =>
+                {
+                    if (r.Tokens.Count == 0) return null;
+                    var val = r.Tokens[0].Value;
+                    if (!int.TryParse(val, out var ts) || ts < 1)
+                    {
+                        r.AddError($"Invalid value for --threshold-strings: '{val}'. Must be a positive integer.");
+                        return null;
+                    }
+                    return ts;
+                }
+            };
+            ThresholdStringOccurrencesOpt = new Option<int?>("--string-occurrences", "-so", "--threshold-string-occurrences")
+            {
+                Description = "Minimum occurrences for repeated string detection (default: 2)",
+                Recursive = true,
+                CustomParser = r =>
+                {
+                    if (r.Tokens.Count == 0) return null;
+                    var val = r.Tokens[0].Value;
+                    if (!int.TryParse(val, out var so) || so < 2)
+                    {
+                        r.AddError($"Invalid value for --string-occurrences: '{val}'. Must be an integer >= 2.");
+                        return null;
+                    }
+                    return so;
                 }
             };
             ThresholdXmlSummaryOpt = new Option<int?>("--threshold-xml-summary", "-txs")
@@ -535,6 +602,8 @@ public static class CliArgumentParser
             RootCommand.Add(SummaryOpt);
             RootCommand.Add(NoDuplicationOpt);
             RootCommand.Add(EnableDuplicationOpt);
+            RootCommand.Add(NoStringsOpt);
+            RootCommand.Add(EnableStringsOpt);
             RootCommand.Add(ExcludeTestsOpt);
             RootCommand.Add(EnforceTestDuplicationOpt);
             RootCommand.Add(IncludeGeneratedOpt);
@@ -545,8 +614,11 @@ public static class CliArgumentParser
 
             RootCommand.Add(DuplicationToleranceOpt);
             RootCommand.Add(CommentToleranceOpt);
+            RootCommand.Add(RepeatedStringToleranceOpt);
             RootCommand.Add(ThresholdStatementsOpt);
             RootCommand.Add(ThresholdCommentsOpt);
+            RootCommand.Add(ThresholdRepeatedStringsOpt);
+            RootCommand.Add(ThresholdStringOccurrencesOpt);
             RootCommand.Add(ThresholdXmlSummaryOpt);
             RootCommand.Add(ThresholdXmlParamOpt);
             RootCommand.Add(ThresholdSubMethodStatementsOpt);
@@ -746,8 +818,11 @@ public static class CliArgumentParser
             // Options with values
             if (WasSpecified(pr, DuplicationToleranceOpt)) options.DuplicationTolerance = pr.GetValue(DuplicationToleranceOpt);
             if (WasSpecified(pr, CommentToleranceOpt)) options.CommentTolerance = pr.GetValue(CommentToleranceOpt);
+            if (WasSpecified(pr, RepeatedStringToleranceOpt)) options.RepeatedStringTolerance = pr.GetValue(RepeatedStringToleranceOpt);
             if (WasSpecified(pr, ThresholdStatementsOpt)) options.ThresholdStatements = pr.GetValue(ThresholdStatementsOpt);
             if (WasSpecified(pr, ThresholdCommentsOpt)) options.ThresholdComments = pr.GetValue(ThresholdCommentsOpt);
+            if (WasSpecified(pr, ThresholdRepeatedStringsOpt)) options.ThresholdRepeatedStrings = pr.GetValue(ThresholdRepeatedStringsOpt);
+            if (WasSpecified(pr, ThresholdStringOccurrencesOpt)) options.ThresholdStringOccurrences = pr.GetValue(ThresholdStringOccurrencesOpt);
             if (WasSpecified(pr, ThresholdXmlSummaryOpt)) options.ThresholdXmlSummary = pr.GetValue(ThresholdXmlSummaryOpt);
             if (WasSpecified(pr, ThresholdXmlParamOpt)) options.ThresholdXmlParam = pr.GetValue(ThresholdXmlParamOpt);
             if (WasSpecified(pr, ThresholdSubMethodStatementsOpt)) options.ThresholdSubMethodStatements = pr.GetValue(ThresholdSubMethodStatementsOpt);
@@ -819,6 +894,15 @@ public static class CliArgumentParser
             else if (WasSpecified(pr, EnableDuplicationOpt))
             {
                 options.EnableDuplicationDetection = true;
+            }
+
+            if (WasSpecified(pr, NoStringsOpt))
+            {
+                options.EnableRepeatedStrings = false;
+            }
+            else if (WasSpecified(pr, EnableStringsOpt))
+            {
+                options.EnableRepeatedStrings = true;
             }
 
             // Output format resolution

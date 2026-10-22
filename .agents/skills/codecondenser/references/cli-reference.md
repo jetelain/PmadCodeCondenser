@@ -33,11 +33,16 @@ pmad-codecondenser [command] [path] [options]
 | `--incremental` | `-i` | `switch` | `false` | Use snapshot baseline to analyze only new or modified files |
 | `--update-snapshot` | `-u` | `switch` | `false` | Update or create the snapshot baseline after analysis |
 | `--duplication-tolerance <n>` | `-dt` | `int` | `0` | Max new clone clusters tolerated in incremental mode before failing |
+| `--string-tolerance <n>` | `-st` | `int` | `null` | Max new repeated string groups tolerated in incremental mode |
 | `--no-comments` | | `switch` | `false` | Disable comment extraction and LLM summarization |
 | `--enable-comments` | | `switch` | `true` | Explicitly enable comment extraction and summarization |
 | `--no-duplication` | | `switch` | `false` | Disable structural code clone detection |
 | `--enable-duplication` | | `switch` | `true` | Explicitly enable structural code clone detection |
+| `--no-strings` | | `switch` | `false` | Disable repeated inline string detection |
+| `--enable-strings` | | `switch` | `true` | Explicitly enable repeated inline string detection |
 | `--threshold-statements <n>` | `-ts` | `int` | `8` | Minimum statement count for a method to be analyzed for clones |
+| `--threshold-strings <n>` | `-tstr` | `int` | `100` | Minimum character length for repeated string detection |
+| `--string-occurrences <n>` | `-so` | `int` | `2` | Minimum occurrences for repeated string detection |
 | `--threshold-comments <n>` | `-tc` | `int` | `100` | Minimum character length for comments to be flagged as verbose |
 | `--threshold-xml-summary <n>` | `-txs` | `int` | `100` | Minimum length for XML `<summary>` and `<remarks>` content |
 | `--threshold-xml-param <n>` | `-txp` | `int` | `50` | Minimum length for XML `<param>` and `<typeparam>` content |
@@ -97,8 +102,13 @@ To configure personal LLM defaults (Ollama endpoint, default model, context size
 {
   "enableCommentSummarization": true,
   "enableDuplicationDetection": true,
+  "enableRepeatedStringDetection": true,
   "duplicationTolerance": 0,
   "duplicationExitCode": 2,
+  "repeatedStringTolerance": null,
+  "repeatedStringExitCode": 2,
+  "repeatedStringLengthThreshold": 100,
+  "repeatedStringMinOccurrences": 2,
   "duplicationStatementThreshold": 8,
   "commentLengthThreshold": 100,
   "xmlSummaryLengthThreshold": 100,

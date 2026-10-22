@@ -108,6 +108,95 @@ public sealed class CodeCondenserSettings
     /// </summary>
     public string SubMethodCacheFilePath { get; set; } = ".codecondenser/submethod-cache.json";
 
+    /// <summary>
+    /// When true, enables detection of repeated inline string literals.
+    /// Default is true.
+    /// </summary>
+    public bool EnableRepeatedStringDetection { get; set; } = true;
+
+    /// <summary>
+    /// Alias for <see cref="EnableRepeatedStringDetection"/>.
+    /// </summary>
+    public bool? EnableRepeatedStrings
+    {
+        get => EnableRepeatedStringDetection;
+        set { if (value.HasValue) EnableRepeatedStringDetection = value.Value; }
+    }
+
+    /// <summary>
+    /// Alias for <see cref="EnableRepeatedStringDetection"/>.
+    /// </summary>
+    public bool? RepeatedStrings
+    {
+        get => EnableRepeatedStringDetection;
+        set { if (value.HasValue) EnableRepeatedStringDetection = value.Value; }
+    }
+
+    /// <summary>
+    /// Minimum character length of a string literal to be considered for repeated inline string analysis.
+    /// Default is 100 characters.
+    /// </summary>
+    public int RepeatedStringLengthThreshold { get; set; } = 100;
+
+    /// <summary>
+    /// Alias for <see cref="RepeatedStringLengthThreshold"/>.
+    /// </summary>
+    public int? ThresholdRepeatedStrings
+    {
+        get => RepeatedStringLengthThreshold;
+        set { if (value.HasValue) RepeatedStringLengthThreshold = value.Value; }
+    }
+
+    /// <summary>
+    /// Alias for <see cref="RepeatedStringLengthThreshold"/>.
+    /// </summary>
+    public int? ThresholdStringLength
+    {
+        get => RepeatedStringLengthThreshold;
+        set { if (value.HasValue) RepeatedStringLengthThreshold = value.Value; }
+    }
+
+    /// <summary>
+    /// Minimum number of occurrences across the codebase for a string literal to be flagged as repeated.
+    /// Default is 2.
+    /// </summary>
+    public int RepeatedStringMinOccurrences { get; set; } = 2;
+
+    /// <summary>
+    /// Alias for <see cref="RepeatedStringMinOccurrences"/>.
+    /// </summary>
+    public int? ThresholdStringOccurrences
+    {
+        get => RepeatedStringMinOccurrences;
+        set { if (value.HasValue) RepeatedStringMinOccurrences = value.Value; }
+    }
+
+    /// <summary>
+    /// Maximum number of new repeated string clusters tolerated in incremental mode before failing CI.
+    /// Default is null (does not fail CI on repeated strings unless configured).
+    /// </summary>
+    public int? RepeatedStringTolerance { get; set; }
+
+    /// <summary>
+    /// Alias for <see cref="RepeatedStringTolerance"/>.
+    /// </summary>
+    public int? StringTolerance
+    {
+        get => RepeatedStringTolerance;
+        set => RepeatedStringTolerance = value;
+    }
+
+    /// <summary>
+    /// Exit code returned when additional repeated strings exceed <see cref="RepeatedStringTolerance"/> in incremental mode.
+    /// Default is 2.
+    /// </summary>
+    public int RepeatedStringExitCode { get; set; } = 2;
+
+    /// <summary>
+    /// Set of string literal values that are explicitly ignored from repeated string detection.
+    /// </summary>
+    public ISet<string> IgnoredStrings { get; set; } = new HashSet<string>(StringComparer.Ordinal);
+
 
     /// <summary>
     /// When true, includes XML documentation comments (///) in addition to single-line (//) and multi-line (/* */) comments.
@@ -454,7 +543,13 @@ public sealed class CodeCondenserSettings
             ExcludeGeneratedCode = ExcludeGeneratedCode,
             GeneratedCodePatterns = new List<string>(GeneratedCodePatterns),
             IgnoredCommentHashes = new HashSet<string>(IgnoredCommentHashes, StringComparer.Ordinal),
-            TokenEstimator = TokenEstimator
+            TokenEstimator = TokenEstimator,
+            EnableRepeatedStringDetection = EnableRepeatedStringDetection,
+            RepeatedStringLengthThreshold = RepeatedStringLengthThreshold,
+            RepeatedStringMinOccurrences = RepeatedStringMinOccurrences,
+            RepeatedStringTolerance = RepeatedStringTolerance,
+            RepeatedStringExitCode = RepeatedStringExitCode,
+            IgnoredStrings = new HashSet<string>(IgnoredStrings, StringComparer.Ordinal)
         };
     }
 }

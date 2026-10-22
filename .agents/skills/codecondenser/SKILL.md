@@ -10,8 +10,9 @@ description: >-
 
 `Pmad.CodeCondenser` (`pmad-codecondenser`) is a .NET 10 Roslyn-based static analysis tool designed to:
 1. **Detect Type-2 Structural Code Clones**: Identifies duplicate logic across C# methods (ignoring variable, parameter, and literal renames) without requiring an LLM.
-2. **Condense Verbose Comments**: Shortens oversized single-line, multi-line, and XML documentation comments into clean, concise summaries formatted to 120 columns using an LLM.
-3. **Enforce Duplication Guardrails in CI**: Compares changes incrementally against a baseline snapshot and exits with code `2` when new duplication is introduced.
+2. **Compact Repeated Inline Strings**: Detects string literals >= 100 characters used more than once, with estimated character/token savings, minimal constant declaration snippets, and typical usage patterns.
+3. **Condense Verbose Comments**: Shortens oversized single-line, multi-line, and XML documentation comments into clean, concise summaries formatted to 120 columns using an LLM.
+4. **Enforce Duplication & String Guardrails in CI**: Compares changes incrementally against a baseline snapshot and exits with code `2` when new duplication or repeated strings are introduced.
 
 ---
 
@@ -22,9 +23,9 @@ The CLI can be invoked via the global tool `pmad-codecondenser`, local tool `dot
 | Task | Command | AI Backend Needed? |
 | :--- | :--- | :---: |
 | **Check clones & comments (Report mode - default)** | `pmad-codecondenser ./src` | No |
-| **Check clones only (disable comments)** | `pmad-codecondenser ./src --no-comments` | No |
+| **Check clones only (disable comments & strings)** | `pmad-codecondenser ./src --no-comments --no-strings` | No |
 | **Check production code only (skip tests)** | `pmad-codecondenser ./ --exclude-tests --no-comments` | No |
-| **Incremental CI check (strict duplication + comments)** | `pmad-codecondenser ./ --incremental --duplication-tolerance 0 -ct 0` | No |
+| **Incremental CI check (strict duplication + comments + strings)** | `pmad-codecondenser ./ --incremental --duplication-tolerance 0 -ct 0 -st 0` | No |
 | **Incremental CI check (strict duplication only)** | `pmad-codecondenser ./ --incremental --duplication-tolerance 0` | No |
 | **Export SARIF report for GitHub Actions** | `pmad-codecondenser ./src --format sarif --output results.sarif` | No |
 | **Export structured JSON report** | `pmad-codecondenser ./src --format json --output results.json` | No |
@@ -60,13 +61,14 @@ pmad-codecondenser ./src
 - If clones or verbose comments detected: Review the recommendations. Refactor, condense, or suppress appropriately (see [Managing Suppressions](#managing-suppressions)).
 
 ### Workflow 2: Resolving CI Build Failures (Exit Code `2`)
-When CI fails with exit code `2`, new code duplication or new verbose comments were introduced exceeding policy tolerance:
+When CI fails with exit code `2`, new code duplication, new repeated strings, or new verbose comments were introduced exceeding policy tolerance:
 1. Run the incremental check locally to view the actionable feedback:
    ```bash
-   pmad-codecondenser ./src --incremental --duplication-tolerance 0 -ct 0
+   pmad-codecondenser ./src --incremental --duplication-tolerance 0 -ct 0 -st 0
    ```
 2. The CLI outputs unified **actionable feedback only once at the end** specifying the exact files, lines, and suppress instructions:
    - For duplication: add `[SuppressMessage("CodeCondenser", "Duplication", Justification = "<why>")]` or `// codecondenser:ignore-duplicate`.
+   - For repeated strings: extract into a shared constant (e.g. `internal const string Name = "...";` in a static constants class), or suppress with `[SuppressMessage("CodeCondenser", "RepeatedString")]` or `// codecondenser:ignore-string`.
    - For XML comments: add `condense="no"` (e.g. `<summary condense="no">`).
    - For regular comments: add `// codecondenser:ignore` or `// nocondense`.
 3. Follow the [Handling Duplication Violations](#handling-duplication-violations-exit-code-2) procedure below.
@@ -206,6 +208,26 @@ When comments are summarized and applied via `apply`, their SHA256 hashes are au
 - **Do NOT delete** this file.
 - **Always commit** this file to Git.
 - CodeCondenser reads this file to skip re-flagging previously summarized comments, even if their length still exceeds thresholds.
+
+---
+
+### 3. Repeated Inline String Suppressions
+
+Use repeated string suppressions when a long string literal must intentionally remain inline (e.g. SQL query, test payload, code generation template):
+- **Comment Marker**: Place `// codecondenser:ignore-string` (or `// nocondense`) on the line preceding or inline with the string literal.
+- **Attribute**: Apply `[SuppressMessage("CodeCondenser", "RepeatedString")]` to the enclosing method or class.
+
+Minimal constant declaration pattern recommended:
+```csharp
+namespace ApplicationNamespace;
+
+static class MyConstants
+{
+    internal const string NameOfMyConstant = "...";
+}
+```
+Typical usage:
+`MyConstants.NameOfMyConstant`
 
 ---
 

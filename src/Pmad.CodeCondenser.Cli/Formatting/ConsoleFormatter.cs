@@ -168,6 +168,101 @@ public sealed class ConsoleFormatter : IConsoleFormatter
         }
     }
 
+    public void PrintRepeatedStringGroups(TextWriter writer, IReadOnlyList<RepeatedStringGroup> groups, string baseDirectory, HeuristicTokenEstimator? estimator = null)
+    {
+        ArgumentNullException.ThrowIfNull(writer);
+        ArgumentNullException.ThrowIfNull(groups);
+
+        if (groups.Count == 0)
+        {
+            return;
+        }
+
+        var prodAndCrossGroups = groups.Where(g => g.Category != CloneCategory.Test).ToList();
+        var testGroups = groups.Where(g => g.Category == CloneCategory.Test).ToList();
+
+        if (prodAndCrossGroups.Count > 0)
+        {
+            writer.WriteLine(Yellow(Bold($"Found {prodAndCrossGroups.Count} Repeated Inline String Cluster(s) (Highest Impact):")));
+            writer.WriteLine();
+
+            for (int i = 0; i < prodAndCrossGroups.Count; i++)
+            {
+                var group = prodAndCrossGroups[i];
+                var prefix = group.Category == CloneCategory.CrossBoundary ? "CROSS-BOUNDARY" : "PRODUCTION";
+                var gainChars = group.EstimateGainCharacters(preExistingClass: true);
+                var gainTokens = group.EstimateGainTokens(estimator);
+                var gainParts = new List<string>();
+                if (gainChars > 0) gainParts.Add($"~{gainChars} chars");
+                if (gainTokens > 0) gainParts.Add($"~{gainTokens} tokens");
+                var gainText = gainParts.Count > 0 ? $", Potential Gain: {string.Join(", ", gainParts)}" : string.Empty;
+
+                writer.WriteLine(Yellow($"[{prefix} REPEATED STRING #{i + 1}] ({group.Length} chars, {group.Occurrences.Count} occurrences{gainText}):"));
+                var preview = TruncatePreview(group.Value.Replace("\r\n", " ").Replace("\n", " "), 100);
+                writer.WriteLine($"  Value: \"{Bold(preview)}\"");
+                writer.WriteLine($"  Occurrences ({group.Occurrences.Count}):");
+
+                foreach (var occ in group.Occurrences)
+                {
+                    var relPath = FormatPath(occ.FilePath, baseDirectory);
+                    var memberInfo = !string.IsNullOrEmpty(occ.EnclosingMember) ? $" in {Bold(occ.EnclosingMember)}" : string.Empty;
+                    writer.WriteLine($"    • {Cyan(relPath)}:{occ.StartLine}:{occ.StartColumn}{memberInfo}");
+                }
+
+                writer.WriteLine(Dim($"  Suggested Constant: {group.GenerateTypicalUsage()}"));
+                writer.WriteLine(Dim("  Minimal Declaration:"));
+                writer.WriteLine(Dim($"    namespace {group.TargetNamespace ?? "ApplicationNamespace"};"));
+                writer.WriteLine(Dim($"    static class {group.SuggestedClassName}"));
+                writer.WriteLine(Dim("    {"));
+                writer.WriteLine(Dim($"        internal const string {group.SuggestedConstantName} = \"...\";"));
+                writer.WriteLine(Dim("    }"));
+                writer.WriteLine(Dim("  Recommendation: Extract repeated inline string into a shared constant."));
+                writer.WriteLine(Dim("  To suppress: Add '[SuppressMessage(\"CodeCondenser\", \"RepeatedString\")]' or '// codecondenser:ignore-string'."));
+                writer.WriteLine();
+            }
+        }
+
+        if (testGroups.Count > 0)
+        {
+            if (prodAndCrossGroups.Count > 0)
+            {
+                writer.WriteLine(Dim("------------------------------------------------------------------------"));
+                writer.WriteLine();
+            }
+
+            writer.WriteLine(Yellow(Bold($"Found {testGroups.Count} Test Repeated String Cluster(s):")));
+            writer.WriteLine();
+
+            for (int i = 0; i < testGroups.Count; i++)
+            {
+                var group = testGroups[i];
+                var gainChars = group.EstimateGainCharacters(preExistingClass: true);
+                var gainTokens = group.EstimateGainTokens(estimator);
+                var gainParts = new List<string>();
+                if (gainChars > 0) gainParts.Add($"~{gainChars} chars");
+                if (gainTokens > 0) gainParts.Add($"~{gainTokens} tokens");
+                var gainText = gainParts.Count > 0 ? $", Potential Gain: {string.Join(", ", gainParts)}" : string.Empty;
+
+                writer.WriteLine(Yellow($"[TEST REPEATED STRING #{i + 1}] ({group.Length} chars, {group.Occurrences.Count} occurrences{gainText}):"));
+                var preview = TruncatePreview(group.Value.Replace("\r\n", " ").Replace("\n", " "), 100);
+                writer.WriteLine($"  Value: \"{Bold(preview)}\"");
+                writer.WriteLine($"  Occurrences ({group.Occurrences.Count}):");
+
+                foreach (var occ in group.Occurrences)
+                {
+                    var relPath = FormatPath(occ.FilePath, baseDirectory);
+                    var memberInfo = !string.IsNullOrEmpty(occ.EnclosingMember) ? $" in {Bold(occ.EnclosingMember)}" : string.Empty;
+                    writer.WriteLine($"    • {Cyan(relPath)}:{occ.StartLine}:{occ.StartColumn}{memberInfo}");
+                }
+
+                writer.WriteLine(Dim($"  Suggested Constant: {group.GenerateTypicalUsage()}"));
+                writer.WriteLine(Dim("  Recommendation: Extract repeated inline string into a shared test constant or fixture."));
+                writer.WriteLine(Dim("  To suppress: Add '[SuppressMessage(\"CodeCondenser\", \"RepeatedString\")]' or '// codecondenser:ignore-string'."));
+                writer.WriteLine();
+            }
+        }
+    }
+
     public void PrintVerboseComments(
         TextWriter writer,
         IReadOnlyList<VerboseComment> comments,
@@ -290,7 +385,10 @@ public sealed class ConsoleFormatter : IConsoleFormatter
         int? commentGainChars = null,
         int? commentReductionPercent = null,
         int? commentGainTokens = null,
-        int? cloneGainTokens = null)
+        int? cloneGainTokens = null,
+        int? repeatedStringsCount = null,
+        int? repeatedStringGainChars = null,
+        int? repeatedStringGainTokens = null)
     {
         ArgumentNullException.ThrowIfNull(writer);
 
@@ -332,6 +430,17 @@ public sealed class ConsoleFormatter : IConsoleFormatter
         if (cloneGainTokens.HasValue && cloneGainTokens.Value > 0)
         {
             writer.WriteLine($"  Clone Gain:        {Green($"~{cloneGainTokens.Value} tokens (potential)")}");
+        }
+
+        if (repeatedStringsCount.HasValue)
+        {
+            writer.WriteLine($"  Repeated Strings:  {(repeatedStringsCount.Value > 0 ? Yellow(repeatedStringsCount.Value.ToString()) : Green("0"))}");
+        }
+
+        if (repeatedStringGainChars.HasValue && repeatedStringGainChars.Value > 0)
+        {
+            var tokensSuffix = repeatedStringGainTokens.HasValue ? $", ~{repeatedStringGainTokens.Value} tokens" : string.Empty;
+            writer.WriteLine($"  String Gain:       {Green($"+{repeatedStringGainChars.Value} chars{tokensSuffix} (potential)")}");
         }
 
         writer.WriteLine($"  Verbose Comments:  {(verboseCommentsCount > 0 ? Cyan(verboseCommentsCount.ToString()) : Green("0"))}");
@@ -524,23 +633,63 @@ public sealed class ConsoleFormatter : IConsoleFormatter
         string baseDirectory,
         int duplicationTolerance,
         bool hasDuplicationViolation = true,
-        bool hasCommentViolation = false)
+        bool hasCommentViolation = false,
+        IReadOnlyList<RepeatedStringGroup>? repeatedStrings = null,
+        int? repeatedStringTolerance = null,
+        bool hasRepeatedStringViolation = false)
     {
         ArgumentNullException.ThrowIfNull(writer);
         cloneGroups ??= [];
         subMethodGroups ??= [];
         verboseComments ??= [];
+        repeatedStrings ??= [];
 
         bool hasComments = verboseComments.Count > 0;
+        bool hasStrings = repeatedStrings.Count > 0;
         int totalCloneCount = cloneGroups.Count + subMethodGroups.Count;
 
-        if (hasDuplicationViolation && !hasComments)
+        if (hasRepeatedStringViolation && !hasDuplicationViolation && !hasComments)
+        {
+            writer.WriteLine();
+            writer.WriteLine(Red(Bold("========================================================================")));
+            writer.WriteLine(Red(Bold("[AI AGENT ACTION REQUIRED] Repeated Inline String Policy Violation (Exit Code: 2)")));
+            writer.WriteLine(Red(Bold("========================================================================")));
+            writer.WriteLine($"Incremental analysis detected {Bold(repeatedStrings.Count.ToString())} new repeated string cluster(s) exceeding tolerance margin (allowed: {repeatedStringTolerance ?? 0}).");
+            writer.WriteLine();
+
+            for (int i = 0; i < repeatedStrings.Count; i++)
+            {
+                var group = repeatedStrings[i];
+                writer.WriteLine(Yellow($"Cluster #{i + 1} [{group.Length} chars, {group.Occurrences.Count} occurrences]:"));
+                writer.WriteLine($"  Value: \"{Bold(TruncatePreview(group.Value.Replace("\r\n", " ").Replace("\n", " "), 80))}\"");
+                foreach (var occ in group.Occurrences)
+                {
+                    var relPath = FormatPath(occ.FilePath, baseDirectory);
+                    var memberInfo = !string.IsNullOrEmpty(occ.EnclosingMember) ? $" in {Bold(occ.EnclosingMember)}" : string.Empty;
+                    writer.WriteLine($"  • {Cyan(relPath)}:{occ.StartLine}:{occ.StartColumn}{memberInfo}");
+                }
+                writer.WriteLine(Dim($"  Suggested Constant: {group.GenerateTypicalUsage()}"));
+                writer.WriteLine();
+            }
+
+            writer.WriteLine(Bold("Actionable Instructions for AI Agent:"));
+            writer.WriteLine("  1. Inspect the repeated inline string literals listed above.");
+            writer.WriteLine("  2. Extract duplicate strings into a shared constant (e.g. in a static constants class).");
+            writer.WriteLine("  3. Replace the inline string literals with references to the constant.");
+            writer.WriteLine("  4. To suppress: Add '[SuppressMessage(\"CodeCondenser\", \"RepeatedString\")]' or '// codecondenser:ignore-string'.");
+            writer.WriteLine("  5. Re-run 'pmad-codecondenser --incremental' to confirm the violation is resolved.");
+            writer.WriteLine(Red(Bold("========================================================================")));
+            writer.WriteLine();
+            return;
+        }
+
+        if (hasDuplicationViolation && !hasComments && !hasStrings)
         {
             PrintAiActionableDuplicationFeedback(writer, cloneGroups, subMethodGroups, baseDirectory, duplicationTolerance);
             return;
         }
 
-        if (!hasDuplicationViolation && hasComments)
+        if (!hasDuplicationViolation && hasComments && !hasStrings)
         {
             writer.WriteLine();
             writer.WriteLine(Red(Bold("========================================================================")));
@@ -574,53 +723,81 @@ public sealed class ConsoleFormatter : IConsoleFormatter
             return;
         }
 
-        if (hasDuplicationViolation && hasComments)
+        writer.WriteLine();
+        writer.WriteLine(Red(Bold("========================================================================")));
+        var multiTitle = (hasDuplicationViolation || hasCommentViolation || hasRepeatedStringViolation)
+            ? "[AI AGENT ACTION REQUIRED] Incremental Policy Violations (Exit Code: 2)"
+            : "[AI AGENT ACTION REQUIRED] Incremental Policy Violations";
+        writer.WriteLine(Red(Bold(multiTitle)));
+        writer.WriteLine(Red(Bold("========================================================================")));
+        var counts = new List<string>();
+        if (totalCloneCount > 0) counts.Add($"{Bold(totalCloneCount.ToString())} new duplication cluster(s)");
+        if (verboseComments.Count > 0) counts.Add($"{Bold(verboseComments.Count.ToString())} new verbose comment(s)");
+        if (repeatedStrings.Count > 0) counts.Add($"{Bold(repeatedStrings.Count.ToString())} new repeated string cluster(s)");
+
+        string summaryText = counts.Count switch
         {
-            writer.WriteLine();
-            writer.WriteLine(Red(Bold("========================================================================")));
-            var title = (hasDuplicationViolation || hasCommentViolation)
-                ? "[AI AGENT ACTION REQUIRED] Incremental Policy Violations (Exit Code: 2)"
-                : "[AI AGENT ACTION REQUIRED] Incremental Policy Violations";
-            writer.WriteLine(Red(Bold(title)));
-            writer.WriteLine(Red(Bold("========================================================================")));
-            writer.WriteLine($"Incremental analysis detected {Bold(totalCloneCount.ToString())} new duplication cluster(s) and {Bold(verboseComments.Count.ToString())} new verbose comment(s).");
-            writer.WriteLine();
+            1 => counts[0],
+            2 => $"{counts[0]} and {counts[1]}",
+            _ => $"{string.Join(", ", counts.Take(counts.Count - 1))} and {counts[^1]}"
+        };
+        writer.WriteLine($"Incremental analysis detected {summaryText}.");
+        writer.WriteLine();
 
-            int clusterIdx = 1;
-            if (cloneGroups.Count > 0)
+        int clusterIdx = 1;
+        if (cloneGroups.Count > 0)
+        {
+            writer.WriteLine(Bold("Code Duplication Clusters:"));
+            for (int i = 0; i < cloneGroups.Count; i++)
             {
-                writer.WriteLine(Bold("Code Duplication Clusters:"));
-                for (int i = 0; i < cloneGroups.Count; i++)
+                var group = cloneGroups[i];
+                var shortHash = group.NormalizedHash.Length > 12 ? group.NormalizedHash[..12] : group.NormalizedHash;
+                writer.WriteLine(Yellow($"  Cluster #{clusterIdx++} [Whole-Method, AST Hash: {shortHash}..., {group.StatementCount} statements]:"));
+                foreach (var method in group.Methods)
                 {
-                    var group = cloneGroups[i];
-                    var shortHash = group.NormalizedHash.Length > 12 ? group.NormalizedHash[..12] : group.NormalizedHash;
-                    writer.WriteLine(Yellow($"  Cluster #{clusterIdx++} [Whole-Method, AST Hash: {shortHash}..., {group.StatementCount} statements]:"));
-                    foreach (var method in group.Methods)
-                    {
-                        var relPath = FormatPath(method.FilePath, baseDirectory);
-                        var signature = !string.IsNullOrWhiteSpace(method.Signature) ? method.Signature : method.MethodName;
-                        writer.WriteLine($"    • {Cyan(relPath)}:{method.StartLine}-{method.EndLine} in {Bold(signature)}");
-                    }
+                    var relPath = FormatPath(method.FilePath, baseDirectory);
+                    var signature = !string.IsNullOrWhiteSpace(method.Signature) ? method.Signature : method.MethodName;
+                    writer.WriteLine($"    • {Cyan(relPath)}:{method.StartLine}-{method.EndLine} in {Bold(signature)}");
                 }
-                writer.WriteLine();
             }
+            writer.WriteLine();
+        }
 
-            if (subMethodGroups.Count > 0)
+        if (subMethodGroups.Count > 0)
+        {
+            if (cloneGroups.Count == 0) writer.WriteLine(Bold("Sub-Method Duplication Clusters:"));
+            for (int i = 0; i < subMethodGroups.Count; i++)
             {
-                if (cloneGroups.Count == 0) writer.WriteLine(Bold("Sub-Method Duplication Clusters:"));
-                for (int i = 0; i < subMethodGroups.Count; i++)
+                var group = subMethodGroups[i];
+                writer.WriteLine(Yellow($"  Cluster #{clusterIdx++} [Sub-Method, {group.StatementCount} consecutive statements]:"));
+                foreach (var occ in group.Occurrences)
                 {
-                    var group = subMethodGroups[i];
-                    writer.WriteLine(Yellow($"  Cluster #{clusterIdx++} [Sub-Method, {group.StatementCount} consecutive statements]:"));
-                    foreach (var occ in group.Occurrences)
-                    {
-                        var relPath = FormatPath(occ.FilePath, baseDirectory);
-                        writer.WriteLine($"    • {Cyan(relPath)}:{occ.StartLine}-{occ.EndLine} in {Bold(occ.MethodName)}");
-                    }
+                    var relPath = FormatPath(occ.FilePath, baseDirectory);
+                    writer.WriteLine($"    • {Cyan(relPath)}:{occ.StartLine}-{occ.EndLine} in {Bold(occ.MethodName)}");
                 }
-                writer.WriteLine();
             }
+            writer.WriteLine();
+        }
 
+        if (repeatedStrings.Count > 0)
+        {
+            writer.WriteLine(Bold("Repeated Inline Strings:"));
+            for (int i = 0; i < repeatedStrings.Count; i++)
+            {
+                var strGroup = repeatedStrings[i];
+                writer.WriteLine(Yellow($"  String #{i + 1} [{strGroup.Length} chars, {strGroup.Occurrences.Count} occurrences]:"));
+                writer.WriteLine($"    • Value: \"{TruncatePreview(strGroup.Value.Replace("\r\n", " ").Replace("\n", " "), 80)}\"");
+                foreach (var occ in strGroup.Occurrences)
+                {
+                    var relPath = FormatPath(occ.FilePath, baseDirectory);
+                    writer.WriteLine($"      - {Cyan(relPath)}:{occ.StartLine}:{occ.StartColumn}");
+                }
+            }
+            writer.WriteLine();
+        }
+
+        if (verboseComments.Count > 0)
+        {
             writer.WriteLine(Bold("Verbose Comments:"));
             for (int i = 0; i < verboseComments.Count; i++)
             {
@@ -631,22 +808,36 @@ public sealed class ConsoleFormatter : IConsoleFormatter
                 writer.WriteLine($"      {Red(TruncatePreview(comment.OriginalText.Trim(), 100))}");
             }
             writer.WriteLine();
+        }
 
-            writer.WriteLine(Bold("Actionable Instructions for AI Agent:"));
+        writer.WriteLine(Bold("Actionable Instructions for AI Agent:"));
+        if (totalCloneCount > 0)
+        {
             writer.WriteLine("  Code Duplication:");
             writer.WriteLine("    1. Inspect the duplicate methods / statement blocks listed in each cluster above.");
             writer.WriteLine("    2. Extract the identical structural logic into a shared helper method or service.");
             writer.WriteLine("    3. Replace the duplicate code with a call to the extracted helper.");
             writer.WriteLine("    4. To suppress: Add '[SuppressMessage(\"CodeCondenser\", \"Duplication\", Justification = \"<why>\")]' or '// codecondenser:ignore-duplicate' on the method.");
+        }
+        if (repeatedStrings.Count > 0)
+        {
+            writer.WriteLine("  Repeated Inline Strings:");
+            writer.WriteLine("    1. Inspect the repeated strings listed above.");
+            writer.WriteLine("    2. Extract each into a shared constant (e.g. 'internal const string Name = \"...\";' in a static constants class).");
+            writer.WriteLine("    3. Replace inline occurrences with references to the constant.");
+            writer.WriteLine("    4. To suppress: Add '[SuppressMessage(\"CodeCondenser\", \"RepeatedString\")]' or '// codecondenser:ignore-string'.");
+        }
+        if (verboseComments.Count > 0)
+        {
             writer.WriteLine("  Verbose Comments:");
             writer.WriteLine("    1. Inspect the verbose comment(s) listed above.");
             writer.WriteLine("    2. Condense: Shorten or rewrite comment text concisely to fit within 120 columns.");
             writer.WriteLine("    3. To suppress: Add 'condense=\"no\"' attribute (XML doc) or '// codecondenser:ignore' (preceding/inline).");
-            writer.WriteLine("  Verification:");
-            writer.WriteLine("    • Re-run 'pmad-codecondenser --incremental' to confirm all violations are resolved.");
-            writer.WriteLine(Red(Bold("========================================================================")));
-            writer.WriteLine();
         }
+        writer.WriteLine("  Verification:");
+        writer.WriteLine("    • Re-run 'pmad-codecondenser --incremental' to confirm all violations are resolved.");
+        writer.WriteLine(Red(Bold("========================================================================")));
+        writer.WriteLine();
     }
 
     private string Bold(string text) => _useColor ? $"{AnsiBold}{text}{AnsiReset}" : text;

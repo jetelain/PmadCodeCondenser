@@ -148,7 +148,16 @@ public sealed class ApplyCommand : ICommand
             bool commentViolation = settings.CommentTolerance.HasValue && newVerboseComments.Count > settings.CommentTolerance.Value;
             bool hasCommentIssue = settings.CommentTolerance.HasValue ? commentViolation : newVerboseComments.Count > 0;
 
-            if (duplicationViolation || hasCommentIssue)
+            var gatedRepeatedStrings = settings.EnableRepeatedStringDetection
+                ? result.RepeatedStringGroups
+                    .Where(g => g.Category != CloneCategory.Test || settings.EnforceTestDuplication)
+                    .ToList()
+                : [];
+
+            bool repeatedStringViolation = settings.RepeatedStringTolerance.HasValue && gatedRepeatedStrings.Count > settings.RepeatedStringTolerance.Value;
+            bool hasRepeatedStringIssue = settings.RepeatedStringTolerance.HasValue ? repeatedStringViolation : gatedRepeatedStrings.Count > 0;
+
+            if (duplicationViolation || hasCommentIssue || hasRepeatedStringIssue)
             {
                 formatter.PrintAiActionableIncrementalFeedback(
                     output,
@@ -158,7 +167,10 @@ public sealed class ApplyCommand : ICommand
                     baseDirectory,
                     settings.DuplicationTolerance,
                     hasDuplicationViolation: duplicationViolation,
-                    hasCommentViolation: commentViolation);
+                    hasCommentViolation: commentViolation,
+                    repeatedStrings: gatedRepeatedStrings,
+                    repeatedStringTolerance: settings.RepeatedStringTolerance,
+                    hasRepeatedStringViolation: repeatedStringViolation);
 
                 if (duplicationViolation)
                 {
@@ -168,6 +180,11 @@ public sealed class ApplyCommand : ICommand
                 if (commentViolation)
                 {
                     return settings.CommentExitCode;
+                }
+
+                if (repeatedStringViolation)
+                {
+                    return settings.RepeatedStringExitCode;
                 }
             }
         }

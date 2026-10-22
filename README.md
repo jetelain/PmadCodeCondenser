@@ -8,9 +8,10 @@
 A static analysis developer utility and .NET tool built on **.NET 10** and Roslyn (`Microsoft.CodeAnalysis.CSharp`). It analyzes C# codebases to:
 
 1. **Detect Structural Code Clones (Type-2 Clones)**: Identify methods sharing identical AST logic structures (ignoring variable, parameter, and constant renames) and provide actionable refactoring advice.
-2. **Condense Verbose Comments**: Scan overly verbose regular comments (`//`, `/* */`) and XML documentation comments (`/// <summary>`, `<remarks>`, `<param>`) and condense them into clear, concise summaries using local or cloud LLMs via `Microsoft.Extensions.AI` and Ollama.
-3. **WYSIWYG Guarantee & Incremental Snapshots**: Cache generated comment summaries and AST hashes so that dry-run reviews match applied code without LLM drift, while incremental runs only analyze changed code.
-4. **CI/CD & AI Agent Guardrails**: Enforce strict duplication tolerance in CI pipelines and AI coding agent workflows (exit code `2` on new duplication).
+2. **Compact Repeated Inline Strings**: Detect string literals >= 100 characters used more than once, with estimated character/token savings, minimal constant declaration snippets, and typical usage patterns.
+3. **Condense Verbose Comments**: Scan overly verbose regular comments (`//`, `/* */`) and XML documentation comments (`/// <summary>`, `<remarks>`, `<param>`) and condense them into clear, concise summaries using local or cloud LLMs via `Microsoft.Extensions.AI` and Ollama.
+4. **WYSIWYG Guarantee & Incremental Snapshots**: Cache generated comment summaries and AST hashes so that dry-run reviews match applied code without LLM drift, while incremental runs only analyze changed code.
+5. **CI/CD & AI Agent Guardrails**: Enforce strict duplication and repeated string tolerance in CI pipelines and AI coding agent workflows (exit code `2` on new violations).
 
 ---
 
@@ -266,6 +267,7 @@ jobs:
 | `-u, --update-snapshot` | `-u` | Refresh the snapshot baseline | `false` |
 | `-dt, --duplication-tolerance <n>` | `-dt` | Maximum new clone clusters tolerated in incremental mode | `0` |
 | `-ct, --comment-tolerance <n>` | `-ct` | Maximum new verbose comments tolerated in incremental mode | `null` |
+| `-st, --string-tolerance <n>` | `-st` | Maximum new repeated string groups tolerated in incremental mode | `null` |
 | `--summary <mode>` | | Comment summary mode: `disabled`, `summarize`, or `report` | Auto (`summarize` if LLM configured, `report` otherwise) |
 | `--report-only` | | Report-only mode for comments without calling an LLM (alias for `--summary report`) | `false` |
 | `--include <pattern>` | | Add glob pattern of files/directories to include (multi-value) | `[]` *(all .cs files)* |
@@ -277,7 +279,11 @@ jobs:
 | `--enable-comments` | | Explicitly enable comment extraction and summarization | `true` |
 | `--no-duplication` | | Disable structural code clone detection | `false` |
 | `--enable-duplication` | | Explicitly enable structural code clone detection | `true` |
+| `--no-strings` | `--disable-strings` | Disable repeated inline string detection | `false` |
+| `--enable-strings` | | Explicitly enable repeated inline string detection | `true` |
 | `-ts, --threshold-statements <n>` | `-ts` | Minimum statement count to analyze a method for clones | `8` |
+| `-tstr, --threshold-strings <n>` | `-tstr` | Minimum character length for repeated string detection | `100` |
+| `-so, --string-occurrences <n>` | `-so` | Minimum occurrences for repeated string detection | `2` |
 | `-tc, --threshold-comments <n>` | `-tc` | Minimum character length for comments to be flagged as verbose | `100` |
 | `-txs, --threshold-xml-summary <n>` | `-txs` | Minimum content length for XML `<summary>` / `<remarks>` tags | `threshold-comments` (`100`) |
 | `-txp, --threshold-xml-param <n>` | `-txp` | Minimum content length for XML `<param>` tags | `threshold-comments / 2` (`50`) |
@@ -306,7 +312,7 @@ jobs:
 | :---: | :--- | :--- |
 | `0` | **Success** | Analysis clean; no policy violations. |
 | `1` | **General Error** | Invalid arguments, missing file, or unhandled exception. |
-| `2` | **Duplication / Comment Violation** | In incremental mode, newly introduced code clones exceed `duplicationTolerance` or new verbose comments exceed `commentTolerance`. Outputs refactoring and suppression advice for developers and AI agents. |
+| `2` | **Policy Violation** | In incremental mode, newly introduced code clones exceed `duplicationTolerance`, new verbose comments exceed `commentTolerance`, or new repeated strings exceed `repeatedStringTolerance`. Outputs refactoring and suppression advice for developers and AI agents. |
 | `130` | **Canceled** | Execution canceled by user (`Ctrl+C`). |
 
 ---
@@ -327,6 +333,7 @@ Generates standard OASIS SARIF 2.1.0 compatible with GitHub Code Scanning, GitLa
   - `CC003` (`note`): `VerboseComment`
   - `CC004` (`warning`): `CrossBoundaryDuplication`
   - `CC005` (`warning`): `SubMethodCodeDuplication`
+  - `CC006` (`warning`): `RepeatedInlineString`
 
 ```bash
 # Export SARIF to file
@@ -377,6 +384,9 @@ Even summarized comments might exceed the character threshold (e.g. 110 characte
 - **Ignore Code Duplication on a Method**:
   - Comment above or inside method: `// codecondenser:ignore-duplicate` or `// codecondenser:ignore`
   - Attribute on method: `[SuppressMessage("CodeCondenser", "Duplication")]` or `[CodeCondenserIgnore]`
+- **Ignore a Repeated Inline String**:
+  - Comment on the line preceding or inline: `// codecondenser:ignore-string` or `// nocondense`
+  - Attribute on enclosing member or class: `[SuppressMessage("CodeCondenser", "RepeatedString")]`
 - **Standalone Ignore File (`.codecondenserignore`)**:
   Add glob patterns (like `.gitignore`) to a `.codecondenserignore` file in the repository root to exclude directories or files without modifying `codecondenser.json`.
 
@@ -418,10 +428,15 @@ Even summarized comments might exceed the character threshold (e.g. 110 characte
   "summaryMode": "Report",
   "enableCommentSummarization": true,
   "enableDuplicationDetection": true,
+  "enableRepeatedStringDetection": true,
   "duplicationTolerance": 0,
   "duplicationExitCode": 2,
   "commentTolerance": null,
   "commentExitCode": 2,
+  "repeatedStringTolerance": null,
+  "repeatedStringExitCode": 2,
+  "repeatedStringLengthThreshold": 100,
+  "repeatedStringMinOccurrences": 2,
   "commentLengthThreshold": 100,
   "xmlSummaryLengthThreshold": 100,
   "xmlParamLengthThreshold": 50,

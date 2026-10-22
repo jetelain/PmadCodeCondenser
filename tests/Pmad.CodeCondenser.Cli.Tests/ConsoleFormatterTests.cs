@@ -603,4 +603,58 @@ public class ConsoleFormatterTests
         output.Should().Contain("3,500");
         output.Should().Contain("26,500");
     }
+
+    [Fact]
+    public void PrintRepeatedStringGroups_OutputsFormattedSnippetAndUsage()
+    {
+        var formatter = new ConsoleFormatter(enableColor: false);
+        using var writer = new StringWriter();
+
+        var longStr = "SELECT CustomerId, OrderId, TotalAmount FROM Orders WHERE Status = 'Pending'";
+        var group = new RepeatedStringGroup
+        {
+            Value = longStr,
+            Occurrences =
+            [
+                new()
+                {
+                    FilePath = "src/Services/OrderService.cs",
+                    StartLine = 15,
+                    EndLine = 15,
+                    StartColumn = 20,
+                    EndColumn = 20 + longStr.Length,
+                    StringValue = longStr,
+                    EnclosingMember = "GetPendingOrders",
+                    Category = FileCategory.Production
+                },
+                new()
+                {
+                    FilePath = "src/Repositories/OrderRepo.cs",
+                    StartLine = 45,
+                    EndLine = 45,
+                    StartColumn = 25,
+                    EndColumn = 25 + longStr.Length,
+                    StringValue = longStr,
+                    EnclosingMember = "QueryOrders",
+                    Category = FileCategory.Production
+                }
+            ],
+            Category = CloneCategory.Production,
+            SuggestedConstantName = "PendingOrdersQuery",
+            SuggestedClassName = "MyConstants",
+            TargetNamespace = "ApplicationNamespace"
+        };
+
+        formatter.PrintRepeatedStringGroups(writer, [group], ".");
+
+        var output = writer.ToString();
+        output.Should().Contain("Found 1 Repeated Inline String Cluster(s)");
+        output.Should().Contain($"[PRODUCTION REPEATED STRING #1] ({longStr.Length} chars, 2 occurrences");
+        output.Should().Contain("OrderService.cs:15:20 in GetPendingOrders");
+        output.Should().Contain("OrderRepo.cs:45:25 in QueryOrders");
+        output.Should().Contain("Suggested Constant: MyConstants.PendingOrdersQuery");
+        output.Should().Contain("Minimal Declaration:");
+        output.Should().Contain("static class MyConstants");
+        output.Should().Contain("internal const string PendingOrdersQuery = \"...\";");
+    }
 }
