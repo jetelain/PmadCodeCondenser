@@ -32,6 +32,23 @@ public static class CommentHashHelper
             yield return rawHash;
         }
 
+        if (trimmed.Contains('\r') || trimmed.Contains('\n'))
+        {
+            var lfText = trimmed.Replace("\r\n", "\n");
+            var lfHash = VerboseComment.ComputeSha256(lfText);
+            if (seen.Add(lfHash))
+            {
+                yield return lfHash;
+            }
+
+            var crlfText = lfText.Replace("\n", "\r\n");
+            var crlfHash = VerboseComment.ComputeSha256(crlfText);
+            if (seen.Add(crlfHash))
+            {
+                yield return crlfHash;
+            }
+        }
+
         if (!trimmed.StartsWith("//") && !trimmed.StartsWith("/*") && !trimmed.StartsWith("///"))
         {
             if (trimmed.Contains('\n') || trimmed.Contains('\r'))
@@ -41,6 +58,38 @@ public static class CommentHashHelper
                 if (seen.Add(blockHash))
                 {
                     yield return blockHash;
+                }
+
+                var lines = trimmed.Replace("\r\n", "\n").Split('\n');
+                var strippedLines = lines.Select(l => l.Trim()).ToList();
+                var multilineStripped = string.Join("\n", strippedLines).Trim();
+                if (!string.IsNullOrEmpty(multilineStripped))
+                {
+                    var multilineHash = VerboseComment.ComputeSha256(multilineStripped);
+                    if (seen.Add(multilineHash))
+                    {
+                        yield return multilineHash;
+                    }
+
+                    var multilineCrlfHash = VerboseComment.ComputeSha256(string.Join("\r\n", strippedLines).Trim());
+                    if (seen.Add(multilineCrlfHash))
+                    {
+                        yield return multilineCrlfHash;
+                    }
+                }
+
+                var singleLineCommentLf = string.Join("\n", strippedLines.Select(l => $"// {l}"));
+                var singleLineHashLf = VerboseComment.ComputeSha256(singleLineCommentLf);
+                if (seen.Add(singleLineHashLf))
+                {
+                    yield return singleLineHashLf;
+                }
+
+                var singleLineCommentCrlf = string.Join("\r\n", strippedLines.Select(l => $"// {l}"));
+                var singleLineHashCrlf = VerboseComment.ComputeSha256(singleLineCommentCrlf);
+                if (seen.Add(singleLineHashCrlf))
+                {
+                    yield return singleLineHashCrlf;
                 }
             }
             else
@@ -61,13 +110,36 @@ public static class CommentHashHelper
         }
         else if (trimmed.StartsWith("//"))
         {
-            var stripped = trimmed.TrimStart('/').Trim();
-            if (!string.IsNullOrEmpty(stripped))
+            var lines = trimmed.Replace("\r\n", "\n").Split('\n');
+            if (lines.Length == 1)
             {
-                var strippedHash = VerboseComment.ComputeSha256(stripped);
-                if (seen.Add(strippedHash))
+                var stripped = trimmed.TrimStart('/').Trim();
+                if (!string.IsNullOrEmpty(stripped))
                 {
-                    yield return strippedHash;
+                    var strippedHash = VerboseComment.ComputeSha256(stripped);
+                    if (seen.Add(strippedHash))
+                    {
+                        yield return strippedHash;
+                    }
+                }
+            }
+            else
+            {
+                var strippedLines = lines.Select(l => l.Trim().TrimStart('/').Trim()).ToList();
+                var multilineStripped = string.Join("\n", strippedLines).Trim();
+                if (!string.IsNullOrEmpty(multilineStripped))
+                {
+                    var multilineHash = VerboseComment.ComputeSha256(multilineStripped);
+                    if (seen.Add(multilineHash))
+                    {
+                        yield return multilineHash;
+                    }
+
+                    var multilineCrlfHash = VerboseComment.ComputeSha256(string.Join("\r\n", strippedLines).Trim());
+                    if (seen.Add(multilineCrlfHash))
+                    {
+                        yield return multilineCrlfHash;
+                    }
                 }
             }
         }
@@ -175,8 +247,19 @@ public static class CommentHashHelper
             return true;
         }
 
+        if (trimmed.Contains('\r') || trimmed.Contains('\n'))
+        {
+            var lfTrimmed = trimmed.Replace("\r\n", "\n");
+            if (ignoredHashes.Contains(VerboseComment.ComputeSha256(lfTrimmed)) ||
+                ignoredHashes.Contains(VerboseComment.ComputeSha256(lfTrimmed.Replace("\n", "\r\n"))))
+            {
+                return true;
+            }
+        }
+
         var fullTrimmed = trivia.ToFullString().Trim();
-        if (!string.Equals(trimmed, fullTrimmed, StringComparison.Ordinal))
+        if (!string.Equals(trimmed, fullTrimmed, StringComparison.Ordinal) &&
+            trivia.Span.Length >= trimmed.Length)
         {
             var fullHash = VerboseComment.ComputeSha256(fullTrimmed);
             if (ignoredHashes.Contains(fullHash))
@@ -187,11 +270,26 @@ public static class CommentHashHelper
 
         if (kind == CommentKind.SingleLine && trimmed.StartsWith("//"))
         {
-            var stripped = trimmed.TrimStart('/').Trim();
-            if (!string.IsNullOrEmpty(stripped) &&
-                ignoredHashes.Contains(VerboseComment.ComputeSha256(stripped)))
+            var lines = trimmed.Replace("\r\n", "\n").Split('\n');
+            if (lines.Length == 1)
             {
-                return true;
+                var stripped = trimmed.TrimStart('/').Trim();
+                if (!string.IsNullOrEmpty(stripped) &&
+                    ignoredHashes.Contains(VerboseComment.ComputeSha256(stripped)))
+                {
+                    return true;
+                }
+            }
+            else
+            {
+                var strippedLines = lines.Select(l => l.Trim().TrimStart('/').Trim()).ToList();
+                var multilineStripped = string.Join("\n", strippedLines).Trim();
+                if (!string.IsNullOrEmpty(multilineStripped) &&
+                    (ignoredHashes.Contains(VerboseComment.ComputeSha256(multilineStripped)) ||
+                     ignoredHashes.Contains(VerboseComment.ComputeSha256(string.Join("\r\n", strippedLines).Trim()))))
+                {
+                    return true;
+                }
             }
         }
         else if (kind == CommentKind.MultiLine && trimmed.StartsWith("/*") && trimmed.EndsWith("*/"))

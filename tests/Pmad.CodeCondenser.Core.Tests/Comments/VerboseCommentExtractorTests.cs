@@ -504,4 +504,196 @@ public class VerboseCommentExtractorTests
 
         comments.Should().BeEmpty();
     }
+
+    [Fact]
+    public void Extract_ConsecutiveSingleLineComments_WhenCombinedLengthExceedsThreshold_IsExtractedAsSingleComment()
+    {
+        var code = """
+            public class TestClass
+            {
+                    // 4 — Aesthetic → anchors/style.md (write-if-absent; the body is the
+                    //      only content — no front-matter keys are invented; a re-run over an
+                    //      identical aesthetic keeps the file byte-identical).
+                    public void Generate() {}
+            }
+            """;
+
+        var tree = CSharpSyntaxTree.ParseText(code);
+        var settings = new CodeCondenserSettings { CommentLengthThreshold = 100 };
+
+        var comments = _extractor.Extract(tree, "TestClass.cs", settings);
+
+        comments.Should().HaveCount(1);
+        var comment = comments[0];
+        comment.FilePath.Should().Be("TestClass.cs");
+        comment.Kind.Should().Be(CommentKind.SingleLine);
+        comment.StartLine.Should().Be(3);
+        comment.EndLine.Should().Be(5);
+        comment.LeadingWhitespace.Should().Be("        ");
+        comment.OriginalText.Should().Contain("4 — Aesthetic");
+        comment.OriginalText.Should().Contain("only content");
+        comment.OriginalText.Should().Contain("identical aesthetic keeps the file byte-identical).");
+        comment.SpanLength.Should().Be(comment.OriginalText.Length);
+    }
+
+    [Fact]
+    public void Extract_ConsecutiveSingleLineComments_BelowThreshold_IsIgnored()
+    {
+        var code = """
+            public class TestClass
+            {
+                    // Line 1 short.
+                    // Line 2 short.
+                    public void Generate() {}
+            }
+            """;
+
+        var tree = CSharpSyntaxTree.ParseText(code);
+        var settings = new CodeCondenserSettings { CommentLengthThreshold = 100 };
+
+        var comments = _extractor.Extract(tree, "TestClass.cs", settings);
+
+        comments.Should().BeEmpty();
+    }
+
+    [Fact]
+    public void Extract_SingleLineComments_SeparatedByBlankLine_AreNotGrouped()
+    {
+        var code = """
+            public class TestClass
+            {
+                    // Short line 1 under threshold.
+
+                    // Short line 2 under threshold.
+                    public void Generate() {}
+            }
+            """;
+
+        var tree = CSharpSyntaxTree.ParseText(code);
+        var settings = new CodeCondenserSettings { CommentLengthThreshold = 50 };
+
+        var comments = _extractor.Extract(tree, "TestClass.cs", settings);
+
+        // Neither line exceeds 50, and they should not be grouped across the blank line
+        comments.Should().BeEmpty();
+    }
+
+    [Fact]
+    public void Extract_ConsecutiveSingleLineComments_WithPrecedingIgnoreMarker_IsIgnored()
+    {
+        var code = """
+            public class TestClass
+            {
+                    // codecondenser:ignore
+                    // 4 — Aesthetic → anchors/style.md (write-if-absent; the body is the
+                    //      only content — no front-matter keys are invented; a re-run over an
+                    //      identical aesthetic keeps the file byte-identical).
+                    public void Generate() {}
+            }
+            """;
+
+        var tree = CSharpSyntaxTree.ParseText(code);
+        var settings = new CodeCondenserSettings { CommentLengthThreshold = 100 };
+
+        var comments = _extractor.Extract(tree, "TestClass.cs", settings);
+
+        comments.Should().BeEmpty();
+    }
+
+    [Fact]
+    public void Extract_ConsecutiveSingleLineComments_WithInlineNocondenseMarker_IsIgnored()
+    {
+        var code = """
+            public class TestClass
+            {
+                    // 4 — Aesthetic → anchors/style.md (write-if-absent; the body is the nocondense
+                    //      only content — no front-matter keys are invented; a re-run over an
+                    //      identical aesthetic keeps the file byte-identical).
+                    public void Generate() {}
+            }
+            """;
+
+        var tree = CSharpSyntaxTree.ParseText(code);
+        var settings = new CodeCondenserSettings { CommentLengthThreshold = 100 };
+
+        var comments = _extractor.Extract(tree, "TestClass.cs", settings);
+
+        comments.Should().BeEmpty();
+    }
+
+    [Fact]
+    public void Extract_ConsecutiveSingleLineComments_AtEndOfFile_IsExtracted()
+    {
+        var code = """
+            public class TestClass {}
+            // Part 1 of comment exceeding threshold when combined with following line.
+            // Part 2 of comment providing detailed instructions at the end of the file.
+            """;
+
+        var tree = CSharpSyntaxTree.ParseText(code);
+        var settings = new CodeCondenserSettings { CommentLengthThreshold = 100 };
+
+        var comments = _extractor.Extract(tree, "TestClass.cs", settings);
+
+        comments.Should().HaveCount(1);
+        comments[0].StartLine.Should().Be(2);
+        comments[0].EndLine.Should().Be(3);
+    }
+
+    [Fact]
+    public void Extract_ConsecutiveSingleLineComments_InIgnoredCommentHashes_IsIgnored()
+    {
+        var code = """
+            public class TestClass
+            {
+                    // 4 — Aesthetic → anchors/style.md (write-if-absent; the body is the
+                    //      only content — no front-matter keys are invented; a re-run over an
+                    //      identical aesthetic keeps the file byte-identical).
+                    public void Generate() {}
+            }
+            """;
+
+        var tree = CSharpSyntaxTree.ParseText(code);
+        // Pre-extract without ignored hashes to get content hash
+        var initialComments = _extractor.Extract(tree, "TestClass.cs", new() { CommentLengthThreshold = 100 });
+        initialComments.Should().HaveCount(1);
+
+        var settings = new CodeCondenserSettings
+        {
+            CommentLengthThreshold = 100,
+            IgnoredCommentHashes = new HashSet<string> { initialComments[0].ContentHash }
+        };
+
+        var comments = _extractor.Extract(tree, "TestClass.cs", settings);
+
+        comments.Should().BeEmpty();
+    }
+
+    [Fact]
+    public void Extract_ConsecutiveSingleLineComments_WhenOnlyFirstLineIsWhitelisted_IsStillExtracted()
+    {
+        var code = """
+            public class TestClass
+            {
+                    // Line 1 is a common comment restated elsewhere.
+                    // Line 2 continues with very long elaborate reasoning that easily exceeds the length threshold for verbosity.
+                    public void Generate() {}
+            }
+            """;
+
+        var tree = CSharpSyntaxTree.ParseText(code);
+        var firstLineOnlyHash = VerboseComment.ComputeSha256("// Line 1 is a common comment restated elsewhere.");
+
+        var settings = new CodeCondenserSettings
+        {
+            CommentLengthThreshold = 100,
+            IgnoredCommentHashes = new HashSet<string> { firstLineOnlyHash }
+        };
+
+        var comments = _extractor.Extract(tree, "TestClass.cs", settings);
+
+        // The group as a whole should still be extracted because only line 1 was whitelisted
+        comments.Should().HaveCount(1);
+    }
 }
+

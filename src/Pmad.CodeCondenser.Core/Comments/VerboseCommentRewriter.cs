@@ -1,3 +1,4 @@
+using System.Diagnostics.CodeAnalysis;
 using System.Security.Cryptography;
 using System.Text;
 using Microsoft.CodeAnalysis;
@@ -83,6 +84,166 @@ public sealed class VerboseCommentRewriter : CSharpSyntaxRewriter, ICommentRewri
     }
 
     /// <inheritdoc />
+    public override SyntaxToken VisitToken(SyntaxToken token)
+    {
+        if (_replacements.Count == 0 || (!token.HasLeadingTrivia && !token.HasTrailingTrivia))
+        {
+            return base.VisitToken(token);
+        }
+
+        var leadingTrivia = token.HasLeadingTrivia ? RewriteTriviaList(token.LeadingTrivia) : token.LeadingTrivia;
+        var trailingTrivia = token.HasTrailingTrivia ? RewriteTriviaList(token.TrailingTrivia) : token.TrailingTrivia;
+
+        return token.WithLeadingTrivia(leadingTrivia).WithTrailingTrivia(trailingTrivia);
+    }
+
+    private SyntaxTriviaList RewriteTriviaList(SyntaxTriviaList triviaList)
+    {
+        if (triviaList.Count == 0 || _replacements.Count == 0)
+        {
+            return triviaList;
+        }
+
+        var newTrivia = new List<SyntaxTrivia>(triviaList.Count);
+
+        for (int i = 0; i < triviaList.Count; i++)
+        {
+            var trivia = triviaList[i];
+
+            if (trivia.IsKind(SyntaxKind.SingleLineCommentTrivia))
+            {
+                int groupEndIndex = VerboseCommentExtractor.FindContiguousSingleLineCommentEndIndex(triviaList, i);
+
+                if (groupEndIndex > i)
+                {
+                    var groupText = GetTriviaRangeText(triviaList, i, groupEndIndex);
+                    var trimmed = groupText.Trim();
+                    var hash = ComputeSha256(trimmed);
+
+                    if (TryGetReplacement(hash, groupText, trimmed, out var replacement))
+                    {
+                        if (string.IsNullOrWhiteSpace(replacement))
+                        {
+                            for (int k = i; k <= groupEndIndex; k++)
+                            {
+                                newTrivia.Add(triviaList[k]);
+                            }
+                            i = groupEndIndex;
+                            continue;
+                        }
+
+                        if (CommentVerbosityHelper.IsUselessComment(replacement))
+                        {
+                            _appliedTriviaTexts.Add(groupText);
+                            _appliedTriviaTexts.Add(trimmed);
+                            i = groupEndIndex;
+                            continue;
+                        }
+
+                        var replacementTrivia = CreateSingleLineCommentTrivia(replacement);
+                        RecordAppliedText(replacementTrivia);
+                        newTrivia.Add(replacementTrivia);
+                        i = groupEndIndex;
+                        continue;
+                    }
+                }
+            }
+
+            if (IsComment(trivia))
+            {
+                var text = trivia.ToString();
+                var trimmed = text.Trim();
+                var hash = ComputeSha256(trimmed);
+
+                if (TryGetReplacement(hash, text, trimmed, out var replacement))
+                {
+                    if (string.IsNullOrWhiteSpace(replacement))
+                    {
+                        newTrivia.Add(trivia);
+                        continue;
+                    }
+
+                    if (CommentVerbosityHelper.IsUselessComment(replacement))
+                    {
+                        _appliedTriviaTexts.Add(text);
+                        continue;
+                    }
+
+                    var replacementTrivia = CreateReplacementTrivia(trivia, replacement);
+                    RecordAppliedText(replacementTrivia);
+                    newTrivia.Add(replacementTrivia);
+                    continue;
+                }
+            }
+
+            newTrivia.Add(trivia);
+        }
+
+        return SyntaxFactory.TriviaList(newTrivia);
+    }
+
+    private bool TryGetReplacement(string hash, string text, string trimmed, [NotNullWhen(true)] out string? replacement)
+    {
+        if (_replacements.TryGetValue(hash, out replacement) ||
+            _replacements.TryGetValue(text, out replacement) ||
+            _replacements.TryGetValue(trimmed, out replacement))
+        {
+            return true;
+        }
+
+        if (trimmed.Contains('\r') || trimmed.Contains('\n'))
+        {
+            var lfTrimmed = trimmed.Replace("\r\n", "\n");
+            var lfHash = ComputeSha256(lfTrimmed);
+            if (_replacements.TryGetValue(lfHash, out replacement) ||
+                _replacements.TryGetValue(lfTrimmed, out replacement))
+            {
+                return true;
+            }
+
+            var crlfTrimmed = lfTrimmed.Replace("\n", "\r\n");
+            var crlfHash = ComputeSha256(crlfTrimmed);
+            if (_replacements.TryGetValue(crlfHash, out replacement) ||
+                _replacements.TryGetValue(crlfTrimmed, out replacement))
+            {
+                return true;
+            }
+        }
+
+        replacement = null;
+        return false;
+    }
+
+    private static string GetTriviaRangeText(SyntaxTriviaList triviaList, int startIndex, int endIndex)
+    {
+        if (startIndex == endIndex)
+        {
+            return triviaList[startIndex].ToString();
+        }
+
+        var sb = new StringBuilder();
+        for (int k = startIndex; k <= endIndex; k++)
+        {
+            sb.Append(triviaList[k].ToFullString());
+        }
+        return sb.ToString();
+    }
+
+    private void RecordAppliedText(SyntaxTrivia replacementTrivia)
+    {
+        var rewrittenText = replacementTrivia.ToString().Trim();
+        if (!string.IsNullOrWhiteSpace(rewrittenText))
+        {
+            _appliedTriviaTexts.Add(rewrittenText);
+        }
+        var fullRewrittenText = replacementTrivia.ToFullString().Trim();
+        if (!string.IsNullOrWhiteSpace(fullRewrittenText) && !string.Equals(rewrittenText, fullRewrittenText, StringComparison.Ordinal))
+        {
+            _appliedTriviaTexts.Add(fullRewrittenText);
+        }
+    }
+
+    /// <inheritdoc />
     public override SyntaxTrivia VisitTrivia(SyntaxTrivia trivia)
     {
         if (!IsComment(trivia))
@@ -94,14 +255,8 @@ public sealed class VerboseCommentRewriter : CSharpSyntaxRewriter, ICommentRewri
         var trimmed = text.Trim();
         var hash = ComputeSha256(trimmed);
 
-        if (!_replacements.TryGetValue(hash, out var replacement) &&
-            !_replacements.TryGetValue(text, out replacement) &&
-            !_replacements.TryGetValue(trimmed, out replacement))
-        {
-            return base.VisitTrivia(trivia);
-        }
-
-        if (string.IsNullOrWhiteSpace(replacement))
+        if (!TryGetReplacement(hash, text, trimmed, out var replacement) ||
+            string.IsNullOrWhiteSpace(replacement))
         {
             return base.VisitTrivia(trivia);
         }
@@ -113,16 +268,7 @@ public sealed class VerboseCommentRewriter : CSharpSyntaxRewriter, ICommentRewri
         }
 
         var replacementTrivia = CreateReplacementTrivia(trivia, replacement);
-        var rewrittenText = replacementTrivia.ToString().Trim();
-        if (!string.IsNullOrWhiteSpace(rewrittenText))
-        {
-            _appliedTriviaTexts.Add(rewrittenText);
-        }
-        var fullRewrittenText = replacementTrivia.ToFullString().Trim();
-        if (!string.IsNullOrWhiteSpace(fullRewrittenText) && !string.Equals(rewrittenText, fullRewrittenText, StringComparison.Ordinal))
-        {
-            _appliedTriviaTexts.Add(fullRewrittenText);
-        }
+        RecordAppliedText(replacementTrivia);
 
         return replacementTrivia;
     }
