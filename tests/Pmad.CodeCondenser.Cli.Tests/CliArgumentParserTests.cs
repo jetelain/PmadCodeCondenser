@@ -764,5 +764,56 @@ public class CliArgumentParserTests
         options.TokenEstimator.Should().BeNull();
         options.TargetPath.Should().Be("./src");
     }
+
+    [Fact]
+    public void TryParse_OptionsAfterPositionalPath_ParsesCorrectly()
+    {
+        var success = CliArgumentParser.TryParse(["analyze", "src/MyApp", "--incremental", "-ts", "15"], out var options, out var error);
+
+        success.Should().BeTrue();
+        error.Should().BeNull();
+        options.Command.Should().Be(CliOptions.CommandAnalyze);
+        options.TargetPath.Should().Be("src/MyApp");
+        options.Incremental.Should().BeTrue();
+        options.ThresholdStatements.Should().Be(15);
+    }
+
+    [Fact]
+    public void TryParse_OptionsBeforeAndAfterPositionalPath_ParsesCorrectly()
+    {
+        var success = CliArgumentParser.TryParse(["--incremental", "src/MyApp", "-tc", "80"], out var options, out var error);
+
+        success.Should().BeTrue();
+        error.Should().BeNull();
+        options.Command.Should().Be(CliOptions.CommandAnalyze);
+        options.TargetPath.Should().Be("src/MyApp");
+        options.Incremental.Should().BeTrue();
+        options.ThresholdComments.Should().Be(80);
+    }
+
+    [Fact]
+    public void TryParse_MeasureCommand_WithOptionsEqualsSyntax_ParsesCorrectly()
+    {
+        var success = CliArgumentParser.TryParse(["measure", "--estimator=qwen", "src/Core"], out var options, out var error);
+
+        success.Should().BeTrue();
+        error.Should().BeNull();
+        options.Command.Should().Be(CliOptions.CommandMeasure);
+        options.TargetPath.Should().Be("src/Core");
+        options.TokenEstimator.Should().Be("qwen");
+    }
+
+    [Fact]
+    public void TryParse_SkillsSubVerbsWithFlags_SetsOptionsCorrectly()
+    {
+        var success = CliArgumentParser.TryParse(["skills", "install", "my-repo", "--dry-run", "--force"], out var options, out var error);
+
+        success.Should().BeTrue();
+        error.Should().BeNull();
+        options.Command.Should().Be(CliOptions.CommandSkills);
+        options.TargetPath.Should().Be("my-repo");
+        options.DryRun.Should().BeTrue();
+        options.Force.Should().BeTrue();
+    }
 }
 
