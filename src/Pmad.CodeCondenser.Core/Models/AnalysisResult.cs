@@ -30,12 +30,18 @@ public sealed class AnalysisResult
     public int TotalCommentReductionPercent => CalculateCommentGain().ReductionPercent;
 
     /// <summary>
-    /// Calculates the total original characters, condensed characters, character gain, and reduction percentage
-    /// for all verbose comments that have summaries.
+    /// Gets the total estimated token gain achieved by replacing all verbose comments with their summaries.
+    /// Returns 0 if no comments were summarized.
     /// </summary>
-    public (int OriginalCharacters, int CondensedCharacters, int GainCharacters, int ReductionPercent, int SummarizedCount) CalculateCommentGain()
+    public int TotalCommentGainTokens => CalculateCommentGain().GainTokens;
+
+    /// <summary>
+    /// Calculates the total original characters, condensed characters, character gain, and reduction percentage
+    /// for all verbose comments that have summaries, along with estimated token metrics.
+    /// </summary>
+    public CommentGainResult CalculateCommentGain(Pmad.AI.Tokens.HeuristicTokenEstimator? estimator = null)
     {
-        return CommentVerbosityHelper.CalculateTotalGain(VerboseComments, SummarizedComments);
+        return CommentVerbosityHelper.CalculateTotalGain(VerboseComments, SummarizedComments, estimator);
     }
 }
 

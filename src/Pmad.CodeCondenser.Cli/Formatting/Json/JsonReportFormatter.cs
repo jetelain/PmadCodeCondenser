@@ -1,7 +1,9 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using Pmad.CodeCondenser.Core.Clones;
 using Pmad.CodeCondenser.Core.Comments;
 using Pmad.CodeCondenser.Core.Configuration;
+using Pmad.CodeCondenser.Core.Engine;
 using Pmad.CodeCondenser.Core.Models;
 
 namespace Pmad.CodeCondenser.Cli.Formatting.Json;
@@ -46,11 +48,13 @@ public sealed class JsonReportFormatter : IReportFormatter
         ArgumentNullException.ThrowIfNull(result);
         settings ??= new CodeCondenserSettings();
 
+        var estimator = CodeCondenserEngine.ResolveEstimator(settings);
+
         int prodClones = result.CloneGroups.Count(g => g.Category == CloneCategory.Production);
         int testClones = result.CloneGroups.Count(g => g.Category == CloneCategory.Test);
         int crossClones = result.CloneGroups.Count(g => g.Category == CloneCategory.CrossBoundary);
 
-        var (_, _, gainChars, reductionPercent, count) = result.CalculateCommentGain();
+        var commentGainResult = result.CalculateCommentGain(estimator);
 
         var summary = new JsonReportSummary
         {
@@ -66,8 +70,10 @@ public sealed class JsonReportFormatter : IReportFormatter
             SubMethodClustersCount = result.SubMethodCloneGroups.Count,
             VerboseCommentsCount = result.VerboseComments.Count,
             SummaryMode = settings.GetEffectiveSummaryMode().ToString(),
-            TotalCommentGainCharacters = count > 0 ? gainChars : null,
-            TotalCommentReductionPercent = count > 0 ? reductionPercent : null
+            TotalCommentGainCharacters = commentGainResult.SummarizedCount > 0 ? commentGainResult.GainCharacters : null,
+            TotalCommentReductionPercent = commentGainResult.SummarizedCount > 0 ? commentGainResult.ReductionPercent : null,
+            TotalCommentGainTokens = commentGainResult.SummarizedCount > 0 ? commentGainResult.GainTokens : null,
+            TotalCloneGainTokens = CloneGainEstimator.EstimateTotalGainTokens(result.CloneGroups, result.SubMethodCloneGroups, estimator, baseDirectory) is > 0 and var cloneGain ? cloneGain : null
         };
 
         var cloneClusters = new List<JsonCloneCluster>();
@@ -95,7 +101,8 @@ public sealed class JsonReportFormatter : IReportFormatter
                 AstHash = group.NormalizedHash,
                 StatementCount = group.StatementCount,
                 Methods = methods,
-                Recommendation = recommendation
+                Recommendation = recommendation,
+                PotentialGainTokens = CloneGainEstimator.EstimateGainTokens(group, estimator, baseDirectory) is > 0 and var methodGain ? methodGain : null
             });
         }
 
@@ -120,7 +127,8 @@ public sealed class JsonReportFormatter : IReportFormatter
                 Category = subGroup.Category.ToString(),
                 StatementCount = subGroup.StatementCount,
                 Occurrences = occurrences,
-                Recommendation = recommendation
+                Recommendation = recommendation,
+                PotentialGainTokens = CloneGainEstimator.EstimateGainTokens(subGroup, estimator, baseDirectory) is > 0 and var subGain ? subGain : null
             });
         }
 
@@ -131,11 +139,17 @@ public sealed class JsonReportFormatter : IReportFormatter
                 ? "Condense XML doc comment, or add condense=\"no\" attribute to tag to suppress."
                 : "Condense comment text to max 120 columns, or add '// codecondenser:ignore' to suppress.";
 
-            int? gain = null;
+            int? gainChars = null;
+            int? gainTokens = null;
             if (!string.IsNullOrWhiteSpace(summaryText))
             {
-                gain = CommentVerbosityHelper.CalculateGain(c, summaryText);
+                var (gc, gt) = CommentVerbosityHelper.CalculateGainWithTokens(c, summaryText, estimator);
+                gainChars = gc;
+                gainTokens = gt;
             }
+
+            var trimmedOrig = c.OriginalText.Replace("\r\n", "\n").Trim();
+            int estimatedTokens = estimator.Estimate(trimmedOrig.AsSpan());
 
             return new JsonVerboseComment
             {
@@ -143,10 +157,12 @@ public sealed class JsonReportFormatter : IReportFormatter
                 StartLine = c.StartLine,
                 EndLine = c.EndLine,
                 CharacterCount = c.OriginalText.Length,
+                EstimatedTokens = estimatedTokens,
                 Kind = c.Kind.ToString(),
                 Summary = summaryText,
                 Recommendation = recommendation,
-                GainCharacters = gain
+                GainCharacters = gainChars,
+                GainTokens = gainTokens
             };
         }).ToList();
 

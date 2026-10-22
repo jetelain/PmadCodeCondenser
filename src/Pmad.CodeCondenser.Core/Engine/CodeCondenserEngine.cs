@@ -1,8 +1,10 @@
 using Microsoft.CodeAnalysis.CSharp;
+using Pmad.AI.Tokens;
 using Pmad.CodeCondenser.Core.Clones;
 using Pmad.CodeCondenser.Core.Comments;
 using Pmad.CodeCondenser.Core.Configuration;
 using Pmad.CodeCondenser.Core.Filtering;
+using Pmad.CodeCondenser.Core.Measuring;
 using Pmad.CodeCondenser.Core.Models;
 using Pmad.CodeCondenser.Core.Snapshots;
 
@@ -24,6 +26,7 @@ public sealed class CodeCondenserEngine : ICodeCondenserEngine
     private readonly IFileHasher _fileHasher;
     private readonly IProjectLocator _projectLocator;
     private readonly ISubMethodCacheStore? _subMethodCacheStore;
+    private readonly ICodeMeasurer _codeMeasurer;
     private string? _lastBaseDirectory;
 
     /// <summary>
@@ -52,7 +55,8 @@ public sealed class CodeCondenserEngine : ICodeCondenserEngine
         IFileHasher? fileHasher = null,
         ISummarizedCommentsStore? summarizedCommentsStore = null,
         IProjectLocator? projectLocator = null,
-        ISubMethodCacheStore? subMethodCacheStore = null)
+        ISubMethodCacheStore? subMethodCacheStore = null,
+        ICodeMeasurer? codeMeasurer = null)
     {
         _cloneDetector = cloneDetector ?? new CloneDetector();
         _commentExtractor = commentExtractor ?? new VerboseCommentExtractor();
@@ -64,6 +68,7 @@ public sealed class CodeCondenserEngine : ICodeCondenserEngine
         _fileHasher = fileHasher ?? new FileHasher();
         _projectLocator = projectLocator ?? new ProjectLocator();
         _subMethodCacheStore = subMethodCacheStore;
+        _codeMeasurer = codeMeasurer ?? new CodeMeasurer();
     }
 
     /// <inheritdoc />
@@ -652,6 +657,114 @@ public sealed class CodeCondenserEngine : ICodeCondenserEngine
 
         return modifiedFiles;
     }
+
+    /// <inheritdoc />
+    public async Task<CodeMeasurementResult> MeasureAsync(
+        string targetPath,
+        CodeCondenserSettings settings,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(targetPath);
+        var effectiveSettings = (settings ?? new CodeCondenserSettings()).Clone();
+        var (baseDirectory, discoveredFiles, fileCategories, skippedGeneratedCount) = ResolveFiles(targetPath, effectiveSettings);
+        _lastBaseDirectory = baseDirectory;
+
+        var estimator = ResolveEstimator(effectiveSettings);
+
+        var parallelOptions = new ParallelOptions
+        {
+            MaxDegreeOfParallelism = Math.Max(1, Environment.ProcessorCount),
+            CancellationToken = cancellationToken
+        };
+
+        var fileMeasurements = new FileMeasurement[discoveredFiles.Count];
+
+        await Parallel.ForEachAsync(
+            discoveredFiles.Select((f, idx) => (f, idx)),
+            parallelOptions,
+            async (item, ct) =>
+            {
+                var file = item.f;
+                var relPath = _fileHasher.NormalizeRelativePath(baseDirectory, file);
+                if (!fileCategories.TryGetValue(relPath, out var category))
+                {
+                    category = FileCategory.Production;
+                }
+
+                var sourceText = await File.ReadAllTextAsync(file, ct).ConfigureAwait(false);
+                var measurement = _codeMeasurer.MeasureFile(relPath, category, sourceText, estimator);
+                fileMeasurements[item.idx] = measurement;
+            }).ConfigureAwait(false);
+
+        int prodFiles = 0, prodCode = 0, prodComments = 0, prodTotal = 0;
+        int testFiles = 0, testCode = 0, testComments = 0, testTotal = 0;
+
+        foreach (var m in fileMeasurements)
+        {
+            if (m.Category == FileCategory.Test)
+            {
+                testFiles++;
+                testCode += m.CodeTokens;
+                testComments += m.CommentTokens;
+                testTotal += m.TotalTokens;
+            }
+            else
+            {
+                prodFiles++;
+                prodCode += m.CodeTokens;
+                prodComments += m.CommentTokens;
+                prodTotal += m.TotalTokens;
+            }
+        }
+
+        return new CodeMeasurementResult
+        {
+            Production = new CategoryMeasurement
+            {
+                FilesCount = prodFiles,
+                CodeTokens = prodCode,
+                CommentTokens = prodComments,
+                TotalTokens = prodTotal
+            },
+            Tests = new CategoryMeasurement
+            {
+                FilesCount = testFiles,
+                CodeTokens = testCode,
+                CommentTokens = testComments,
+                TotalTokens = testTotal
+            },
+            Total = new CategoryMeasurement
+            {
+                FilesCount = prodFiles + testFiles,
+                CodeTokens = prodCode + testCode,
+                CommentTokens = prodComments + testComments,
+                TotalTokens = prodTotal + testTotal
+            },
+            Files = fileMeasurements,
+            SkippedGeneratedFilesCount = skippedGeneratedCount
+        };
+    }
+
+    /// <summary>
+    /// Resolves the fine-tuned <see cref="HeuristicTokenEstimator"/> preset corresponding to configured settings.
+    /// </summary>
+    public static HeuristicTokenEstimator ResolveEstimator(CodeCondenserSettings? settings)
+    {
+        var estimator = settings?.TokenEstimator;
+        if (!string.IsNullOrWhiteSpace(estimator))
+        {
+            if (estimator.Contains("qwen", StringComparison.OrdinalIgnoreCase))
+            {
+                return HeuristicTokenEstimator.Qwen;
+            }
+            if (estimator.Contains("gemma", StringComparison.OrdinalIgnoreCase))
+            {
+                return HeuristicTokenEstimator.Gemma;
+            }
+        }
+        return HeuristicTokenEstimator.Default;
+    }
+
 
     /// <summary>
     /// Forces a snapshot baseline update for the given target path and current settings.

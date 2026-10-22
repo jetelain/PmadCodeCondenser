@@ -55,6 +55,10 @@ public sealed record JsonReportSummary
     public int? TotalCommentGainCharacters { get; init; }
 
     public int? TotalCommentReductionPercent { get; init; }
+
+    public int? TotalCommentGainTokens { get; init; }
+
+    public int? TotalCloneGainTokens { get; init; }
 }
 
 /// <summary>
@@ -75,6 +79,8 @@ public sealed record JsonCloneCluster
     public List<JsonCloneMethod> Methods { get; init; } = [];
 
     public string Recommendation { get; init; } = string.Empty;
+
+    public int? PotentialGainTokens { get; init; }
 }
 
 /// <summary>
@@ -107,6 +113,8 @@ public sealed record JsonSubMethodCluster
     public List<JsonSubMethodOccurrence> Occurrences { get; init; } = [];
 
     public string Recommendation { get; init; } = string.Empty;
+
+    public int? PotentialGainTokens { get; init; }
 }
 
 /// <summary>
@@ -136,6 +144,8 @@ public sealed record JsonVerboseComment
 
     public int CharacterCount { get; init; }
 
+    public int EstimatedTokens { get; init; }
+
     public string Kind { get; init; } = string.Empty;
 
     public string? Summary { get; init; }
@@ -143,4 +153,6 @@ public sealed record JsonVerboseComment
     public string? Recommendation { get; init; }
 
     public int? GainCharacters { get; init; }
+
+    public int? GainTokens { get; init; }
 }

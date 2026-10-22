@@ -29,4 +29,13 @@ public interface ICodeCondenserEngine
         AnalysisResult analysisResult,
         CodeCondenserSettings settings,
         CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Measures codebase tokens in terms of LLM tokens (total, comments, code) per category (production, tests).
+    /// </summary>
+    Task<CodeMeasurementResult> MeasureAsync(
+        string targetPath,
+        CodeCondenserSettings settings,
+        CancellationToken cancellationToken = default);
 }
+

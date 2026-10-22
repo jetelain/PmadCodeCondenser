@@ -1,3 +1,6 @@
+using System.Globalization;
+using Pmad.AI.Tokens;
+using Pmad.CodeCondenser.Core.Clones;
 using Pmad.CodeCondenser.Core.Comments;
 using Pmad.CodeCondenser.Core.Models;
 
@@ -32,7 +35,9 @@ public sealed class ConsoleFormatter : IConsoleFormatter
         writer.WriteLine();
     }
 
-    public void PrintCloneGroups(TextWriter writer, IReadOnlyList<CodeCloneGroup> cloneGroups, string baseDirectory)
+    private static string CloneGainText(int tokens) => tokens > 0 ? $", Potential Gain: ~{tokens} tokens" : string.Empty;
+
+    public void PrintCloneGroups(TextWriter writer, IReadOnlyList<CodeCloneGroup> cloneGroups, string baseDirectory, HeuristicTokenEstimator? estimator = null)
     {
         ArgumentNullException.ThrowIfNull(writer);
         ArgumentNullException.ThrowIfNull(cloneGroups);
@@ -57,7 +62,8 @@ public sealed class ConsoleFormatter : IConsoleFormatter
                 var shortHash = group.NormalizedHash.Length > 12 ? group.NormalizedHash[..12] : group.NormalizedHash;
                 var prefix = group.Category == CloneCategory.CrossBoundary ? "CROSS-BOUNDARY" : "PRODUCTION";
 
-                writer.WriteLine(Yellow($"[{prefix} CLUSTER #{i + 1}] (Impact: {group.ImpactScore}, AST Hash: {shortHash}...)"));
+                var gainText = CloneGainText(CloneGainEstimator.EstimateGainTokens(group, estimator, baseDirectory));
+                writer.WriteLine(Yellow($"[{prefix} CLUSTER #{i + 1}] (Impact: {group.ImpactScore}{gainText}, AST Hash: {shortHash}...)"));
                 writer.WriteLine($"  Methods ({group.Methods.Count}):");
 
                 foreach (var method in group.Methods)
@@ -99,7 +105,8 @@ public sealed class ConsoleFormatter : IConsoleFormatter
                 var group = testGroups[i];
                 var shortHash = group.NormalizedHash.Length > 12 ? group.NormalizedHash[..12] : group.NormalizedHash;
 
-                writer.WriteLine(Yellow($"[TEST CLUSTER #{i + 1}] (Impact: {group.ImpactScore}, AST Hash: {shortHash}...)"));
+                var gainText = CloneGainText(CloneGainEstimator.EstimateGainTokens(group, estimator, baseDirectory));
+                writer.WriteLine(Yellow($"[TEST CLUSTER #{i + 1}] (Impact: {group.ImpactScore}{gainText}, AST Hash: {shortHash}...)"));
                 writer.WriteLine($"  Methods ({group.Methods.Count}):");
 
                 foreach (var method in group.Methods)
@@ -126,7 +133,7 @@ public sealed class ConsoleFormatter : IConsoleFormatter
         }
     }
 
-    public void PrintSubMethodCloneGroups(TextWriter writer, IReadOnlyList<SubMethodCloneGroup> groups, string baseDirectory)
+    public void PrintSubMethodCloneGroups(TextWriter writer, IReadOnlyList<SubMethodCloneGroup> groups, string baseDirectory, HeuristicTokenEstimator? estimator = null)
     {
         ArgumentNullException.ThrowIfNull(writer);
         ArgumentNullException.ThrowIfNull(groups);
@@ -142,7 +149,8 @@ public sealed class ConsoleFormatter : IConsoleFormatter
         for (int i = 0; i < groups.Count; i++)
         {
             var group = groups[i];
-            writer.WriteLine(Yellow($"[SUB-METHOD DUPLICATION CLUSTER #{i + 1}] ({group.StatementCount} consecutive statements, Impact: {group.ImpactScore})"));
+            var gainText = CloneGainText(CloneGainEstimator.EstimateGainTokens(group, estimator, baseDirectory));
+            writer.WriteLine(Yellow($"[SUB-METHOD DUPLICATION CLUSTER #{i + 1}] ({group.StatementCount} consecutive statements, Impact: {group.ImpactScore}{gainText})"));
             writer.WriteLine($"  Occurrences ({group.Occurrences.Count}):");
 
             foreach (var occ in group.Occurrences)
@@ -164,7 +172,8 @@ public sealed class ConsoleFormatter : IConsoleFormatter
         TextWriter writer,
         IReadOnlyList<VerboseComment> comments,
         IReadOnlyDictionary<string, string> summaries,
-        string baseDirectory)
+        string baseDirectory,
+        HeuristicTokenEstimator? estimator = null)
     {
         ArgumentNullException.ThrowIfNull(writer);
         ArgumentNullException.ThrowIfNull(comments);
@@ -179,45 +188,57 @@ public sealed class ConsoleFormatter : IConsoleFormatter
         writer.WriteLine(Cyan(Bold($"Found {comments.Count} verbose comment(s) exceeding threshold:")));
         writer.WriteLine();
 
+        var effEstimator = estimator ?? HeuristicTokenEstimator.Default;
+
         int totalOriginalLen = 0;
         int totalCondensedLen = 0;
+        int totalOriginalTokens = 0;
+        int totalCondensedTokens = 0;
         int totalSummarized = 0;
 
         for (int i = 0; i < comments.Count; i++)
         {
             var comment = comments[i];
             var relPath = FormatPath(comment.FilePath, baseDirectory);
-            var originalLen = comment.OriginalText.Trim().Length;
+            var trimmedOrig = comment.OriginalText.Trim();
+            var originalLen = trimmedOrig.Length;
+            var originalTokens = effEstimator.Estimate(trimmedOrig.AsSpan());
 
-            writer.WriteLine(Cyan($"[VERBOSE COMMENT #{i + 1}] {relPath}:{comment.StartLine}-{comment.EndLine} [{comment.Kind}] ({originalLen} chars)"));
+            writer.WriteLine(Cyan($"[VERBOSE COMMENT #{i + 1}] {relPath}:{comment.StartLine}-{comment.EndLine} [{comment.Kind}] ({originalLen} chars, ~{originalTokens} tokens)"));
 
-            var originalPreview = TruncatePreview(comment.OriginalText.Trim(), 120);
+            var originalPreview = TruncatePreview(trimmedOrig, 120);
             writer.WriteLine(Red($"  - Original:  {originalPreview}"));
 
             if (summaries.TryGetValue(comment.ContentHash, out var summary) && !string.IsNullOrWhiteSpace(summary))
             {
-                var summaryPreview = TruncatePreview(summary.Trim(), 120);
-                bool isKept = string.Equals(summary.Trim(), comment.OriginalText.Trim(), StringComparison.Ordinal) ||
+                var trimmedSummary = summary.Trim();
+                var summaryPreview = TruncatePreview(trimmedSummary, 120);
+                bool isKept = string.Equals(trimmedSummary, trimmedOrig, StringComparison.Ordinal) ||
                               CommentVerbosityHelper.IsMoreVerbose(summary, comment);
 
                 if (isKept)
                 {
                     writer.WriteLine(Yellow($"  = Kept:      {summaryPreview}"));
-                    writer.WriteLine(Dim($"    Diff: {originalLen} -> {originalLen} chars (0% reduction, kept original comment)"));
+                    writer.WriteLine(Dim($"    Diff: {originalLen} -> {originalLen} chars, ~{originalTokens} -> ~{originalTokens} tokens (0% reduction, kept original comment)"));
                     totalOriginalLen += originalLen;
                     totalCondensedLen += originalLen;
+                    totalOriginalTokens += originalTokens;
+                    totalCondensedTokens += originalTokens;
                     totalSummarized++;
                 }
                 else
                 {
-                    var condensedLen = summary.Trim().Length;
+                    var condensedLen = trimmedSummary.Length;
+                    var condensedTokens = effEstimator.Estimate(trimmedSummary.AsSpan());
                     int reduction = originalLen > 0 ? (int)Math.Round((1.0 - (double)condensedLen / originalLen) * 100) : 0;
                     reduction = Math.Clamp(reduction, 0, 100);
 
                     writer.WriteLine(Green($"  + Condensed: {summaryPreview}"));
-                    writer.WriteLine(Dim($"    Diff: {originalLen} -> {condensedLen} chars ({reduction}% reduction)"));
+                    writer.WriteLine(Dim($"    Diff: {originalLen} -> {condensedLen} chars, ~{originalTokens} -> ~{condensedTokens} tokens ({reduction}% reduction)"));
                     totalOriginalLen += originalLen;
                     totalCondensedLen += condensedLen;
+                    totalOriginalTokens += originalTokens;
+                    totalCondensedTokens += condensedTokens;
                     totalSummarized++;
                 }
             }
@@ -240,12 +261,13 @@ public sealed class ConsoleFormatter : IConsoleFormatter
         if (totalSummarized > 0)
         {
             int totalGain = Math.Max(0, totalOriginalLen - totalCondensedLen);
+            int totalTokenGain = Math.Max(0, totalOriginalTokens - totalCondensedTokens);
             int totalReduction = totalOriginalLen > 0 ? (int)Math.Round((1.0 - (double)totalCondensedLen / totalOriginalLen) * 100) : 0;
             totalReduction = Math.Clamp(totalReduction, 0, 100);
 
             var gainText = totalGain > 0
-                ? Green($"Total Gain: {totalGain} chars ({totalReduction}% reduction, {totalOriginalLen} -> {totalCondensedLen} chars across {totalSummarized} comment(s))")
-                : Dim($"Total Gain: 0 chars (0% reduction across {totalSummarized} comment(s))");
+                ? Green($"Total Gain: {totalGain} chars, ~{totalTokenGain} tokens ({totalReduction}% reduction, {totalOriginalLen} -> {totalCondensedLen} chars across {totalSummarized} comment(s))")
+                : Dim($"Total Gain: 0 chars, ~0 tokens (0% reduction across {totalSummarized} comment(s))");
 
             writer.WriteLine(Bold(gainText));
             writer.WriteLine();
@@ -266,7 +288,9 @@ public sealed class ConsoleFormatter : IConsoleFormatter
         int testClones = 0,
         int subMethodClones = 0,
         int? commentGainChars = null,
-        int? commentReductionPercent = null)
+        int? commentReductionPercent = null,
+        int? commentGainTokens = null,
+        int? cloneGainTokens = null)
     {
         ArgumentNullException.ThrowIfNull(writer);
 
@@ -305,12 +329,18 @@ public sealed class ConsoleFormatter : IConsoleFormatter
             writer.WriteLine($"  Sub-Method Clones: {Yellow(subMethodClones.ToString())}");
         }
 
+        if (cloneGainTokens.HasValue && cloneGainTokens.Value > 0)
+        {
+            writer.WriteLine($"  Clone Gain:        {Green($"~{cloneGainTokens.Value} tokens (potential)")}");
+        }
+
         writer.WriteLine($"  Verbose Comments:  {(verboseCommentsCount > 0 ? Cyan(verboseCommentsCount.ToString()) : Green("0"))}");
 
         if (commentGainChars.HasValue)
         {
+            var tokensSuffix = commentGainTokens.HasValue ? $", ~{commentGainTokens.Value} tokens" : string.Empty;
             var gainDisplay = commentGainChars.Value > 0
-                ? Green($"+{commentGainChars.Value} chars ({commentReductionPercent ?? 0}% reduction)")
+                ? Green($"+{commentGainChars.Value} chars{tokensSuffix} ({commentReductionPercent ?? 0}% reduction)")
                 : Dim("0 chars (0% reduction)");
             writer.WriteLine($"  Comment Gain:      {gainDisplay}");
         }
@@ -705,5 +735,39 @@ public sealed class ConsoleFormatter : IConsoleFormatter
             writer.WriteLine(Green($"✓ Skills successfully {(dryRun ? "evaluated" : "synchronized")} ({summaryText})."));
         }
     }
+
+    public void PrintMeasurementResult(
+        TextWriter writer,
+        CodeMeasurementResult result,
+        string targetPath,
+        string estimatorName)
+    {
+        ArgumentNullException.ThrowIfNull(writer);
+        ArgumentNullException.ThrowIfNull(result);
+
+        writer.WriteLine(Dim("--------------------------------------------------------------------------------"));
+        writer.WriteLine(Bold($"Code Token Measurement (Estimator: {estimatorName}):"));
+        writer.WriteLine($"  Target:            {Path.GetFullPath(targetPath)}");
+        if (result.SkippedGeneratedFilesCount > 0)
+        {
+            writer.WriteLine($"  Skipped Generated: {result.SkippedGeneratedFilesCount}");
+        }
+        writer.WriteLine();
+
+        writer.WriteLine(Bold($"{"Category".PadRight(16)} {"Files".PadLeft(8)} {"Code Tokens".PadLeft(16)} {"Comment Tokens".PadLeft(18)} {"Total Tokens".PadLeft(16)}"));
+        writer.WriteLine(Dim("--------------------------------------------------------------------------------"));
+
+        var inv = CultureInfo.InvariantCulture;
+        writer.WriteLine($"{Cyan("Production".PadRight(16))} {result.Production.FilesCount.ToString("N0", inv).PadLeft(8)} {result.Production.CodeTokens.ToString("N0", inv).PadLeft(16)} {result.Production.CommentTokens.ToString("N0", inv).PadLeft(18)} {Bold(result.Production.TotalTokens.ToString("N0", inv).PadLeft(16))}");
+
+        writer.WriteLine($"{Cyan("Tests".PadRight(16))} {result.Tests.FilesCount.ToString("N0", inv).PadLeft(8)} {result.Tests.CodeTokens.ToString("N0", inv).PadLeft(16)} {result.Tests.CommentTokens.ToString("N0", inv).PadLeft(18)} {Bold(result.Tests.TotalTokens.ToString("N0", inv).PadLeft(16))}");
+
+        writer.WriteLine(Dim("--------------------------------------------------------------------------------"));
+
+        writer.WriteLine($"{Bold("Total".PadRight(16))} {Bold(result.Total.FilesCount.ToString("N0", inv).PadLeft(8))} {Bold(result.Total.CodeTokens.ToString("N0", inv).PadLeft(16))} {Bold(result.Total.CommentTokens.ToString("N0", inv).PadLeft(18))} {Green(Bold(result.Total.TotalTokens.ToString("N0", inv).PadLeft(16)))}");
+
+        writer.WriteLine(Dim("--------------------------------------------------------------------------------"));
+    }
 }
+
 

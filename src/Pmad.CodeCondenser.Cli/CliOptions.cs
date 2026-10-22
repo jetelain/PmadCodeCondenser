@@ -9,9 +9,10 @@ public sealed class CliOptions
     public const string CommandApply = "apply";
     public const string CommandSnapshot = "snapshot";
     public const string CommandSkills = "skills";
+    public const string CommandMeasure = "measure";
 
     /// <summary>
-    /// Active command verb: "analyze" (default), "apply", "snapshot", or "skills".
+    /// Active command verb: "analyze" (default), "apply", "snapshot", "skills", or "measure".
     /// </summary>
     public string Command { get; set; } = CommandAnalyze;
 
@@ -70,6 +71,11 @@ public sealed class CliOptions
     /// LLM model name override (e.g. "gemma4:e4b").
     /// </summary>
     public string? Model { get; set; }
+
+    /// <summary>
+    /// Token estimator preset override for measuring code in LLM tokens (e.g. "default", "qwen", "gemma").
+    /// </summary>
+    public string? TokenEstimator { get; set; }
 
     /// <summary>
     /// Specifies the report output format: "console" (default), "sarif", or "json".

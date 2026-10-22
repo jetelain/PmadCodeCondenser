@@ -1,10 +1,11 @@
+using Pmad.AI.Tokens;
 using Pmad.CodeCondenser.Core.Models;
 
 namespace Pmad.CodeCondenser.Core.Comments;
 
 /// <summary>
 /// Provides utilities for analyzing comment verbosity, guarding against LLM summaries that are
-/// more verbose than original comments, and calculating character gains from condensation.
+/// more verbose than original comments, and calculating character and token gains from condensation.
 /// </summary>
 public static class CommentVerbosityHelper
 {
@@ -79,25 +80,72 @@ public static class CommentVerbosityHelper
     }
 
     /// <summary>
-    /// Calculates the aggregated comment gain across a set of comments and summaries.
+    /// Calculates both character and estimated token gains from replacing a comment with its summary.
+    /// Returns (0, 0) if no summary exists, or if the summary was more verbose than or identical to the original comment.
+    /// </summary>
+    /// <param name="comment">The original verbose comment.</param>
+    /// <param name="summary">The summarized comment text.</param>
+    /// <param name="estimator">The token estimator to use. Defaults to <see cref="HeuristicTokenEstimator.Default"/>.</param>
+    /// <returns>A tuple containing the character gain and estimated token gain.</returns>
+    public static (int GainCharacters, int GainTokens) CalculateGainWithTokens(
+        VerboseComment comment,
+        string? summary,
+        HeuristicTokenEstimator? estimator = null)
+    {
+        ArgumentNullException.ThrowIfNull(comment);
+
+        if (string.IsNullOrWhiteSpace(summary))
+        {
+            return (0, 0);
+        }
+
+        if (IsMoreVerbose(summary, comment))
+        {
+            return (0, 0);
+        }
+
+        var effEstimator = estimator ?? HeuristicTokenEstimator.Default;
+        var trimmedOrig = comment.OriginalText.Replace("\r\n", "\n").Trim();
+        var trimmedSummary = summary.Replace("\r\n", "\n").Trim();
+
+        int originalLen = trimmedOrig.Length;
+        int condensedLen = trimmedSummary.Length;
+        int gainChars = Math.Max(0, originalLen - condensedLen);
+
+        int originalTokens = effEstimator.Estimate(trimmedOrig.AsSpan());
+        int condensedTokens = effEstimator.Estimate(trimmedSummary.AsSpan());
+        int gainTokens = Math.Max(0, originalTokens - condensedTokens);
+
+        return (gainChars, gainTokens);
+    }
+
+    /// <summary>
+    /// Calculates the aggregated comment gain across a set of comments and summaries,
+    /// evaluating both character gains and estimated token gains.
     /// </summary>
     /// <param name="comments">The list of verbose comments.</param>
     /// <param name="summaries">The dictionary of summarized comment replacements.</param>
-    /// <returns>A tuple containing total original characters, condensed characters, character gain, reduction percentage, and summarized count.</returns>
-    public static (int OriginalCharacters, int CondensedCharacters, int GainCharacters, int ReductionPercent, int SummarizedCount) CalculateTotalGain(
+    /// <param name="estimator">The token estimator to use. Defaults to <see cref="HeuristicTokenEstimator.Default"/>.</param>
+    /// <returns>A <see cref="CommentGainResult"/> containing character and token gain metrics.</returns>
+    public static CommentGainResult CalculateTotalGain(
         IReadOnlyList<VerboseComment> comments,
-        IReadOnlyDictionary<string, string> summaries)
+        IReadOnlyDictionary<string, string> summaries,
+        HeuristicTokenEstimator? estimator = null)
     {
         ArgumentNullException.ThrowIfNull(comments);
         ArgumentNullException.ThrowIfNull(summaries);
 
         if (comments.Count == 0 || summaries.Count == 0)
         {
-            return (0, 0, 0, 0, 0);
+            return CommentGainResult.Empty;
         }
 
-        int totalOriginal = 0;
-        int totalCondensed = 0;
+        var effEstimator = estimator ?? HeuristicTokenEstimator.Default;
+
+        int totalOriginalChars = 0;
+        int totalCondensedChars = 0;
+        int totalOriginalTokens = 0;
+        int totalCondensedTokens = 0;
         int summarizedCount = 0;
 
         foreach (var comment in comments)
@@ -105,28 +153,56 @@ public static class CommentVerbosityHelper
             if (summaries.TryGetValue(comment.ContentHash, out var summary) &&
                 !string.IsNullOrWhiteSpace(summary))
             {
-                int origLen = comment.OriginalText.Replace("\r\n", "\n").Trim().Length;
-                int condLen = IsMoreVerbose(summary, comment)
-                    ? origLen
-                    : summary.Replace("\r\n", "\n").Trim().Length;
+                var trimmedOrig = comment.OriginalText.Replace("\r\n", "\n").Trim();
+                int origLen = trimmedOrig.Length;
+                int origTokens = effEstimator.Estimate(trimmedOrig.AsSpan());
 
-                totalOriginal += origLen;
-                totalCondensed += condLen;
+                bool kept = IsMoreVerbose(summary, comment);
+                int condLen;
+                int condTokens;
+
+                if (kept)
+                {
+                    condLen = origLen;
+                    condTokens = origTokens;
+                }
+                else
+                {
+                    var trimmedSummary = summary.Replace("\r\n", "\n").Trim();
+                    condLen = trimmedSummary.Length;
+                    condTokens = effEstimator.Estimate(trimmedSummary.AsSpan());
+                }
+
+                totalOriginalChars += origLen;
+                totalCondensedChars += condLen;
+                totalOriginalTokens += origTokens;
+                totalCondensedTokens += condTokens;
                 summarizedCount++;
             }
         }
 
         if (summarizedCount == 0)
         {
-            return (0, 0, 0, 0, 0);
+            return CommentGainResult.Empty;
         }
 
-        int gain = Math.Max(0, totalOriginal - totalCondensed);
-        int percent = totalOriginal > 0
-            ? (int)Math.Round((1.0 - (double)totalCondensed / totalOriginal) * 100)
+        int gainChars = Math.Max(0, totalOriginalChars - totalCondensedChars);
+        int gainTokens = Math.Max(0, totalOriginalTokens - totalCondensedTokens);
+        int percent = totalOriginalChars > 0
+            ? (int)Math.Round((1.0 - (double)totalCondensedChars / totalOriginalChars) * 100)
             : 0;
         percent = Math.Clamp(percent, 0, 100);
 
-        return (totalOriginal, totalCondensed, gain, percent, summarizedCount);
+        return new CommentGainResult
+        {
+            OriginalCharacters = totalOriginalChars,
+            CondensedCharacters = totalCondensedChars,
+            GainCharacters = gainChars,
+            ReductionPercent = percent,
+            SummarizedCount = summarizedCount,
+            OriginalTokens = totalOriginalTokens,
+            CondensedTokens = totalCondensedTokens,
+            GainTokens = gainTokens
+        };
     }
 }

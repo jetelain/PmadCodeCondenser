@@ -1,4 +1,6 @@
+using Pmad.CodeCondenser.Core.Clones;
 using Pmad.CodeCondenser.Core.Configuration;
+using Pmad.CodeCondenser.Core.Engine;
 using Pmad.CodeCondenser.Core.Models;
 
 namespace Pmad.CodeCondenser.Cli.Formatting;
@@ -28,20 +30,23 @@ public sealed class ConsoleReportFormatter : IReportFormatter
         ArgumentNullException.ThrowIfNull(settings);
         ArgumentNullException.ThrowIfNull(output);
 
-        _consoleFormatter.PrintCloneGroups(output, result.CloneGroups, baseDirectory);
+        var estimator = CodeCondenserEngine.ResolveEstimator(settings);
+
+        _consoleFormatter.PrintCloneGroups(output, result.CloneGroups, baseDirectory, estimator);
         if (result.SubMethodCloneGroups.Count > 0)
         {
-            _consoleFormatter.PrintSubMethodCloneGroups(output, result.SubMethodCloneGroups, baseDirectory);
+            _consoleFormatter.PrintSubMethodCloneGroups(output, result.SubMethodCloneGroups, baseDirectory, estimator);
         }
-        _consoleFormatter.PrintVerboseComments(output, result.VerboseComments, result.SummarizedComments, baseDirectory);
+        _consoleFormatter.PrintVerboseComments(output, result.VerboseComments, result.SummarizedComments, baseDirectory, estimator);
 
         var mode = _isIncremental ? "Dry-Run (Incremental)" : "Dry-Run";
         int prodClones = result.CloneGroups.Count(g => g.Category != CloneCategory.Test);
         int testClones = result.CloneGroups.Count(g => g.Category == CloneCategory.Test);
 
-        var (_, _, gainChars, reductionPercent, count) = result.CalculateCommentGain();
-        int? commentGain = count > 0 ? gainChars : null;
-        int? commentReduction = count > 0 ? reductionPercent : null;
+        var commentGainResult = result.CalculateCommentGain(estimator);
+        int? commentGain = commentGainResult.SummarizedCount > 0 ? commentGainResult.GainCharacters : null;
+        int? commentReduction = commentGainResult.SummarizedCount > 0 ? commentGainResult.ReductionPercent : null;
+        int? commentGainTokens = commentGainResult.SummarizedCount > 0 ? commentGainResult.GainTokens : null;
 
         _consoleFormatter.PrintSummary(
             output,
@@ -57,7 +62,9 @@ public sealed class ConsoleReportFormatter : IReportFormatter
             testClones,
             result.SubMethodCloneGroups.Count,
             commentGain,
-            commentReduction);
+            commentReduction,
+            commentGainTokens,
+            CloneGainEstimator.EstimateTotalGainTokens(result.CloneGroups, result.SubMethodCloneGroups, estimator, baseDirectory));
 
         return Task.CompletedTask;
     }
