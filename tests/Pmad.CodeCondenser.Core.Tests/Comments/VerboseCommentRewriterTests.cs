@@ -274,5 +274,143 @@ public class VerboseCommentRewriterTests
         resultText.Should().NotContain("Comment is useless");
         appliedTrivia.Should().Contain(originalComment);
     }
+
+    [Fact]
+    public void Rewrite_ConsecutiveSingleLineComments_WithSingleLineSummary_ReplacesGroupWithSingleComment()
+    {
+        var code = """
+            public class TestClass
+            {
+                    // 4 — Aesthetic → anchors/style.md (write-if-absent; the body is the
+                    //      only content — no front-matter keys are invented; a re-run over an
+                    //      identical aesthetic keeps the file byte-identical).
+                    public void Generate() {}
+            }
+            """;
+
+        var tree = CSharpSyntaxTree.ParseText(code);
+        var extractor = new VerboseCommentExtractor();
+        var comments = extractor.Extract(tree, "test.cs", new() { CommentLengthThreshold = 50 });
+        comments.Should().HaveCount(1);
+        var originalComment = comments[0];
+
+        var replacements = new Dictionary<string, string>
+        {
+            [originalComment.ContentHash] = "4 — Aesthetic style anchor."
+        };
+
+        var appliedTrivia = new List<string>();
+        var rewritten = _rewriter.Rewrite(tree, replacements, appliedTrivia);
+        var resultText = rewritten.ToString();
+
+        resultText.Should().Contain("// 4 — Aesthetic style anchor.");
+        resultText.Should().NotContain("write-if-absent");
+        resultText.Should().NotContain("only content");
+        resultText.Should().NotContain("identical aesthetic");
+
+        var lines = resultText.Replace("\r\n", "\n").Split('\n');
+        lines.Should().Contain("        // 4 — Aesthetic style anchor.");
+        lines.Should().Contain("        public void Generate() {}");
+
+        var reParsed = CSharpSyntaxTree.ParseText(resultText);
+        reParsed.GetDiagnostics().Should().BeEmpty();
+    }
+
+    [Fact]
+    public void Rewrite_ConsecutiveSingleLineComments_WithMultiLineSummary_WrapsInBlockComment()
+    {
+        var code = """
+            public class TestClass
+            {
+                    // Line 1 of long comment explaining complex logic and requirements.
+                    // Line 2 of long comment continuing the elaborate technical reasoning.
+                    public void Run() {}
+            }
+            """;
+
+        var tree = CSharpSyntaxTree.ParseText(code);
+        var extractor = new VerboseCommentExtractor();
+        var comments = extractor.Extract(tree, "test.cs", new() { CommentLengthThreshold = 50 });
+        comments.Should().HaveCount(1);
+        var originalComment = comments[0];
+
+        var replacements = new Dictionary<string, string>
+        {
+            [originalComment.ContentHash] = "Summary line 1.\r\nSummary line 2."
+        };
+
+        var rewritten = _rewriter.Rewrite(tree, replacements);
+        var resultText = rewritten.ToString();
+
+        resultText.Should().Contain("/* Summary line 1.\r\nSummary line 2. */");
+        resultText.Should().NotContain("Line 1 of long comment");
+        resultText.Should().NotContain("Line 2 of long comment");
+
+        var reParsed = CSharpSyntaxTree.ParseText(resultText);
+        reParsed.GetDiagnostics().Should().BeEmpty();
+    }
+
+    [Fact]
+    public void Rewrite_ConsecutiveSingleLineComments_WithUselessComment_RemovesEntireCommentGroup()
+    {
+        var code = """
+            public class TestClass
+            {
+                    // Line 1 of obvious comment restating method name.
+                    // Line 2 of obvious comment explaining nothing useful.
+                    public void Run() {}
+            }
+            """;
+
+        var tree = CSharpSyntaxTree.ParseText(code);
+        var extractor = new VerboseCommentExtractor();
+        var comments = extractor.Extract(tree, "test.cs", new() { CommentLengthThreshold = 50 });
+        comments.Should().HaveCount(1);
+        var originalComment = comments[0];
+
+        var replacements = new Dictionary<string, string>
+        {
+            [originalComment.ContentHash] = "Comment is useless"
+        };
+
+        var appliedTrivia = new List<string>();
+        var rewritten = _rewriter.Rewrite(tree, replacements, appliedTrivia);
+        var resultText = rewritten.ToString();
+
+        resultText.Should().NotContain("Line 1 of obvious");
+        resultText.Should().NotContain("Line 2 of obvious");
+        resultText.Should().NotContain("Comment is useless");
+        appliedTrivia.Should().Contain(originalComment.OriginalText);
+
+        var reParsed = CSharpSyntaxTree.ParseText(resultText);
+        reParsed.GetDiagnostics().Should().BeEmpty();
+    }
+
+    [Fact]
+    public void Rewrite_ConsecutiveSingleLineComments_WithLfReplacementHashOnCrlfSource_Succeeds()
+    {
+        // Source text explicitly formatted with CRLF
+        var code = "public class TestClass\r\n{\r\n    // Line 1 of comment to be summarized\r\n    // Line 2 of comment to be summarized\r\n    public void Run() {}\r\n}";
+
+        var tree = CSharpSyntaxTree.ParseText(code);
+        // Compute hash using LF normalized text as might happen across OS / git
+        var lfText = "// Line 1 of comment to be summarized\n    // Line 2 of comment to be summarized";
+        var lfHash = Hash(lfText);
+
+        var replacements = new Dictionary<string, string>
+        {
+            [lfHash] = "Summarized comment."
+        };
+
+        var rewritten = _rewriter.Rewrite(tree, replacements);
+        var resultText = rewritten.ToString();
+
+        resultText.Should().Contain("// Summarized comment.");
+        resultText.Should().NotContain("Line 1 of comment to be summarized");
+
+        var reParsed = CSharpSyntaxTree.ParseText(resultText);
+        reParsed.GetDiagnostics().Should().BeEmpty();
+    }
 }
+
 

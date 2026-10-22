@@ -1,3 +1,4 @@
+using System.Text;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Pmad.CodeCondenser.Core.Configuration;
@@ -109,57 +110,180 @@ public sealed class VerboseCommentExtractor : CSharpSyntaxWalker, ICommentExtrac
                     {
                         continue;
                     }
-                }
-                else if (trivia.Span.Length < _settings.CommentLengthThreshold)
-                {
-                    continue;
-                }
 
-                var text = trivia.ToString();
-                if (CommentIgnoreMarker.IsIgnored(text) ||
-                    CommentIgnoreMarker.IsPrecedingTriviaIgnored(triviaList, i))
-                {
-                    continue;
-                }
-
-                if (CommentHashHelper.IsCommentIgnored(trivia, text, kind, _settings.IgnoredCommentHashes))
-                {
-                    continue;
-                }
-
-                bool isVerbose = kind == CommentKind.XmlDocumentation
-                    ? XmlDocumentationParser.IsVerbose(trivia, text, _settings)
-                    : text.Length >= _settings.CommentLengthThreshold;
-
-                if (isVerbose)
-                {
-                    string leadingWhitespace = string.Empty;
-                    if (i > 0 && triviaList[i - 1].IsKind(SyntaxKind.WhitespaceTrivia))
+                    var text = trivia.ToString();
+                    if (CommentIgnoreMarker.IsIgnored(text) ||
+                        CommentIgnoreMarker.IsPrecedingTriviaIgnored(triviaList, i))
                     {
-                        leadingWhitespace = triviaList[i - 1].ToString();
+                        continue;
                     }
 
-                    int startLine = 1;
-                    int endLine = 1;
-                    if (tree != null)
+                    if (CommentHashHelper.IsCommentIgnored(trivia, text, kind, _settings.IgnoredCommentHashes))
                     {
-                        var lineSpan = tree.GetLineSpan(trivia.Span);
-                        startLine = lineSpan.StartLinePosition.Line + 1;
-                        endLine = lineSpan.EndLinePosition.Line + 1;
+                        continue;
                     }
 
-                    _comments.Add(new VerboseComment(
-                        FilePath: _filePath,
-                        StartLine: startLine,
-                        EndLine: endLine,
-                        SpanStart: trivia.Span.Start,
-                        SpanLength: trivia.Span.Length,
-                        Kind: kind,
-                        OriginalText: text,
-                        LeadingWhitespace: leadingWhitespace));
+                    if (XmlDocumentationParser.IsVerbose(trivia, text, _settings))
+                    {
+                        AddComment(trivia, trivia, text, kind, i, triviaList, tree);
+                    }
+                }
+                else if (kind == CommentKind.MultiLine)
+                {
+                    if (trivia.Span.Length < _settings.CommentLengthThreshold)
+                    {
+                        continue;
+                    }
+
+                    var text = trivia.ToString();
+                    if (CommentIgnoreMarker.IsIgnored(text) ||
+                        CommentIgnoreMarker.IsPrecedingTriviaIgnored(triviaList, i))
+                    {
+                        continue;
+                    }
+
+                    if (CommentHashHelper.IsCommentIgnored(trivia, text, kind, _settings.IgnoredCommentHashes))
+                    {
+                        continue;
+                    }
+
+                    if (text.Length >= _settings.CommentLengthThreshold)
+                    {
+                        AddComment(trivia, trivia, text, kind, i, triviaList, tree);
+                    }
+                }
+                else if (kind == CommentKind.SingleLine)
+                {
+                    if (CommentIgnoreMarker.IsIgnored(trivia.ToString()))
+                    {
+                        continue;
+                    }
+
+                    int groupEndIndex = FindContiguousSingleLineCommentEndIndex(triviaList, i);
+
+                    var firstTrivia = trivia;
+                    var lastTrivia = triviaList[groupEndIndex];
+
+                    string text;
+                    int spanLength;
+                    if (groupEndIndex == i)
+                    {
+                        text = firstTrivia.ToString();
+                        spanLength = firstTrivia.Span.Length;
+                    }
+                    else
+                    {
+                        var sb = new StringBuilder();
+                        for (int k = i; k <= groupEndIndex; k++)
+                        {
+                            sb.Append(triviaList[k].ToFullString());
+                        }
+                        text = sb.ToString();
+                        spanLength = lastTrivia.Span.End - firstTrivia.Span.Start;
+                    }
+
+                    if (spanLength < _settings.CommentLengthThreshold)
+                    {
+                        i = groupEndIndex;
+                        continue;
+                    }
+
+                    if (CommentIgnoreMarker.IsIgnored(text) ||
+                        CommentIgnoreMarker.IsPrecedingTriviaIgnored(triviaList, i))
+                    {
+                        i = groupEndIndex;
+                        continue;
+                    }
+
+                    if (CommentHashHelper.IsCommentIgnored(firstTrivia, text, kind, _settings.IgnoredCommentHashes))
+                    {
+                        i = groupEndIndex;
+                        continue;
+                    }
+
+                    if (text.Length >= _settings.CommentLengthThreshold)
+                    {
+                        AddComment(firstTrivia, lastTrivia, text, kind, i, triviaList, tree);
+                    }
+
+                    i = groupEndIndex;
                 }
             }
         }
+    }
+
+    private void AddComment(
+        SyntaxTrivia firstTrivia,
+        SyntaxTrivia lastTrivia,
+        string text,
+        CommentKind kind,
+        int firstIndex,
+        SyntaxTriviaList triviaList,
+        SyntaxTree? tree)
+    {
+        string leadingWhitespace = string.Empty;
+        if (firstIndex > 0 && triviaList[firstIndex - 1].IsKind(SyntaxKind.WhitespaceTrivia))
+        {
+            leadingWhitespace = triviaList[firstIndex - 1].ToString();
+        }
+
+        int startLine = 1;
+        int endLine = 1;
+        if (tree != null)
+        {
+            var startSpan = tree.GetLineSpan(firstTrivia.Span);
+            var endSpan = tree.GetLineSpan(lastTrivia.Span);
+            startLine = startSpan.StartLinePosition.Line + 1;
+            endLine = endSpan.EndLinePosition.Line + 1;
+        }
+
+        _comments.Add(new VerboseComment(
+            FilePath: _filePath,
+            StartLine: startLine,
+            EndLine: endLine,
+            SpanStart: firstTrivia.Span.Start,
+            SpanLength: lastTrivia.Span.End - firstTrivia.Span.Start,
+            Kind: kind,
+            OriginalText: text,
+            LeadingWhitespace: leadingWhitespace));
+    }
+
+    /// <summary>
+    /// Finds the ending index of a contiguous group of single-line comments in a trivia list,
+    /// where consecutive single-line comments are separated only by a newline and optional indentation.
+    /// </summary>
+    internal static int FindContiguousSingleLineCommentEndIndex(SyntaxTriviaList triviaList, int startIndex)
+    {
+        int lastCommentIndex = startIndex;
+        int current = startIndex;
+
+        while (current + 1 < triviaList.Count)
+        {
+            int next = current + 1;
+            if (!triviaList[next].IsKind(SyntaxKind.EndOfLineTrivia))
+            {
+                break;
+            }
+
+            next++;
+
+            if (next < triviaList.Count && triviaList[next].IsKind(SyntaxKind.WhitespaceTrivia))
+            {
+                next++;
+            }
+
+            if (next < triviaList.Count && triviaList[next].IsKind(SyntaxKind.SingleLineCommentTrivia))
+            {
+                lastCommentIndex = next;
+                current = next;
+            }
+            else
+            {
+                break;
+            }
+        }
+
+        return lastCommentIndex;
     }
 
     private static bool TryGetCommentKind(SyntaxTrivia trivia, out CommentKind kind)

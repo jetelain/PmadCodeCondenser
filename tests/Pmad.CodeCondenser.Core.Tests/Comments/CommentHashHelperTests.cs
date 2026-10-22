@@ -203,5 +203,93 @@ public class CommentHashHelperTests
 
         isIgnored.Should().BeTrue();
     }
+
+    [Fact]
+    public void GetSummaryHashes_MultiLineSingleLineComments_ReturnsStrippedHash()
+    {
+        var comment = "// Line 1 of comment\r\n// Line 2 of comment";
+        var hashes = CommentHashHelper.GetSummaryHashes(comment, CommentKind.SingleLine).ToList();
+
+        var rawHash = VerboseComment.ComputeSha256(comment.Trim());
+        var strippedText = "Line 1 of comment\nLine 2 of comment";
+        var strippedHash = VerboseComment.ComputeSha256(strippedText);
+
+        hashes.Should().Contain(rawHash);
+        hashes.Should().Contain(strippedHash);
+    }
+
+    [Fact]
+    public void GetSummaryHashes_MultiLineSingleLineComments_DoesNotContainHalfStrippedHash()
+    {
+        var comment = "// Line 1 of comment\r\n// Line 2 of comment";
+        var hashes = CommentHashHelper.GetSummaryHashes(comment, CommentKind.SingleLine).ToList();
+
+        // The half-stripped variation where only line 1 is stripped should NOT be produced
+        var halfStrippedText = "Line 1 of comment\r\n// Line 2 of comment";
+        var halfStrippedHash = VerboseComment.ComputeSha256(halfStrippedText);
+
+        hashes.Should().NotContain(halfStrippedHash);
+    }
+
+    [Fact]
+    public void GetSummaryHashes_BareMultiLineSummary_ReturnsBothSingleLineAndMultiLineVariations()
+    {
+        var summary = "Line 1 of comment\r\nLine 2 of comment";
+        var hashes = CommentHashHelper.GetSummaryHashes(summary, CommentKind.SingleLine).ToList();
+
+        var singleLineVariationLf = "// Line 1 of comment\n// Line 2 of comment";
+        var singleLineVariationCrlf = "// Line 1 of comment\r\n// Line 2 of comment";
+        var strippedVariationLf = "Line 1 of comment\nLine 2 of comment";
+
+        hashes.Should().Contain(VerboseComment.ComputeSha256(singleLineVariationLf));
+        hashes.Should().Contain(VerboseComment.ComputeSha256(singleLineVariationCrlf));
+        hashes.Should().Contain(VerboseComment.ComputeSha256(strippedVariationLf));
+    }
+
+    [Fact]
+    public void GetSummaryHashes_MultilineComment_YieldsBothLfAndCrlfVariations()
+    {
+        var comment = "// Line 1 of comment\r\n// Line 2 of comment";
+        var hashes = CommentHashHelper.GetSummaryHashes(comment).ToList();
+
+        var lfHash = VerboseComment.ComputeSha256("// Line 1 of comment\n// Line 2 of comment");
+        var crlfHash = VerboseComment.ComputeSha256("// Line 1 of comment\r\n// Line 2 of comment");
+
+        hashes.Should().Contain(lfHash);
+        hashes.Should().Contain(crlfHash);
+    }
+
+    [Fact]
+    public void IsCommentIgnored_MultiLineSingleLineComment_MatchesBareSummaryWithCrlf()
+    {
+        var summary = "Line 1 of comment\r\nLine 2 of comment";
+        var ignoredHashes = new HashSet<string>(StringComparer.Ordinal);
+        CommentHashHelper.AddSummaryVariations(ignoredHashes, summary);
+
+        var trivia = SyntaxFactory.Comment("// Line 1 of comment");
+        // Source text has LF
+        var text = "// Line 1 of comment\n// Line 2 of comment";
+
+        bool isIgnored = CommentHashHelper.IsCommentIgnored(trivia, text, CommentKind.SingleLine, ignoredHashes);
+
+        isIgnored.Should().BeTrue();
+    }
+
+    [Fact]
+    public void IsCommentIgnored_MultiLineSingleLineComment_DoesNotIgnoreGroupWhenOnlyFirstLineIsWhitelisted()
+    {
+        var firstLineOnly = "// Line 1 of comment";
+        var ignoredHashes = new HashSet<string>(StringComparer.Ordinal)
+        {
+            VerboseComment.ComputeSha256(firstLineOnly)
+        };
+
+        var trivia = SyntaxFactory.Comment("// Line 1 of comment");
+        var groupText = "// Line 1 of comment\r\n// Line 2 of long verbose comment that must not be ignored";
+
+        bool isIgnored = CommentHashHelper.IsCommentIgnored(trivia, groupText, CommentKind.SingleLine, ignoredHashes);
+
+        isIgnored.Should().BeFalse();
+    }
 }
 
