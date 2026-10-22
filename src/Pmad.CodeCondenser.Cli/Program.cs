@@ -99,6 +99,11 @@ public static class Program
             settings.IsLlmConfiguredGlobally = false;
         }
 
+        if (options.MaxSummarizationRetries.HasValue)
+        {
+            settings.MaxSummarizationRetries = options.MaxSummarizationRetries.Value;
+        }
+
         if (!string.IsNullOrWhiteSpace(options.TokenEstimator))
         {
             settings.TokenEstimator = options.TokenEstimator;

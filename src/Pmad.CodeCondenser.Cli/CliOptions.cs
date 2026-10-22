@@ -73,6 +73,12 @@ public sealed class CliOptions
     public string? Model { get; set; }
 
     /// <summary>
+    /// Maximum number of retries when an LLM summary is longer than before,
+    /// or when reduction is above target and above 50% of the initial comment length.
+    /// </summary>
+    public int? MaxSummarizationRetries { get; set; }
+
+    /// <summary>
     /// Token estimator preset override for measuring code in LLM tokens (e.g. "default", "qwen", "gemma").
     /// </summary>
     public string? TokenEstimator { get; set; }

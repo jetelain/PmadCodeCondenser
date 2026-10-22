@@ -211,6 +211,22 @@ public sealed class CodeCondenserSettings
     public int MaxParallelLlmRequests { get; set; } = 4;
 
     /// <summary>
+    /// Maximum number of retries when an LLM summary is longer than before,
+    /// or when reduction is above target and above 50% of the initial comment length.
+    /// Default is 1 retry (up to 2 total attempts).
+    /// </summary>
+    public int MaxSummarizationRetries { get; set; } = 1;
+
+    /// <summary>
+    /// Alias for <see cref="MaxSummarizationRetries"/>.
+    /// </summary>
+    public int? SummarizationRetries
+    {
+        get => MaxSummarizationRetries;
+        set { if (value.HasValue) MaxSummarizationRetries = value.Value; }
+    }
+
+    /// <summary>
     /// Active LLM provider (e.g. "Ollama").
     /// Default is "Ollama".
     /// </summary>
@@ -515,6 +531,7 @@ public sealed class CodeCondenserSettings
             SubMethodCacheFilePath = SubMethodCacheFilePath,
             IncludeXmlDocumentation = IncludeXmlDocumentation,
             MaxParallelLlmRequests = MaxParallelLlmRequests,
+            MaxSummarizationRetries = MaxSummarizationRetries,
             Provider = Provider,
             Ollama = new OllamaSettings
             {

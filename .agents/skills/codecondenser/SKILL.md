@@ -84,7 +84,10 @@ When asked to condense or clean up verbose comments:
    # Or with global config (%APPDATA%\CodeCondenser\codecondenser.json on Windows, ~/.codecondenser/codecondenser.json on Linux/macOS):
    pmad-codecondenser ./src --summary summarize
    ```
-2. **Review proposed summaries**: The dry run saves proposed summaries to `.codecondenser/snapshot.json` without modifying files on disk.
+2. **Review proposed summaries & retry behavior**:
+   - The dry run saves proposed summaries to `.codecondenser/snapshot.json` without modifying files on disk.
+   - **Automated Retry Loop**: If a candidate summary is longer than before, or if reduction is above target threshold and above 50% of the initial comment length, the summarizer automatically retries (configurable via `--max-retries <n>` or `-mr <n>`, default: 1, clamped 0–5). On retry, the model is explicitly instructed to drop secondary details and minor caveats to achieve brevity.
+   - **Useless Comments**: The LLM is instructed to answer `"Comment is useless"` if a regular comment fails to explain 'why' (e.g. merely restates code syntax) or if an XML doc comment fails to explain 'what'. When detected, applying changes removes the comment completely, granting 100% reduction credit.
 3. **Apply changes**:
    ```bash
    pmad-codecondenser ./src --apply

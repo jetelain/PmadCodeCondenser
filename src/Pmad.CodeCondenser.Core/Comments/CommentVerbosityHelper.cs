@@ -1,4 +1,5 @@
 using Pmad.AI.Tokens;
+using Pmad.CodeCondenser.Core.Configuration;
 using Pmad.CodeCondenser.Core.Models;
 
 namespace Pmad.CodeCondenser.Core.Comments;
@@ -9,6 +10,39 @@ namespace Pmad.CodeCondenser.Core.Comments;
 /// </summary>
 public static class CommentVerbosityHelper
 {
+    /// <summary>
+    /// Determines whether the given text is the marker indicating a comment is useless and should be removed.
+    /// </summary>
+    /// <param name="text">The text to check.</param>
+    /// <returns><c>true</c> if the text matches the useless comment marker; otherwise, <c>false</c>.</returns>
+    public static bool IsUselessComment(string? text)
+    {
+        if (string.IsNullOrWhiteSpace(text))
+        {
+            return false;
+        }
+
+        var trimmed = text.Trim().Trim('`', '"', '\'', ' ', '\t', '\r', '\n');
+
+        if (trimmed.StartsWith("///", StringComparison.Ordinal))
+        {
+            trimmed = trimmed[3..].Trim();
+        }
+        else if (trimmed.StartsWith("//", StringComparison.Ordinal))
+        {
+            trimmed = trimmed[2..].Trim();
+        }
+        else if (trimmed.StartsWith("/*", StringComparison.Ordinal))
+        {
+            trimmed = trimmed[2..].TrimEnd('*', '/').Trim();
+        }
+
+        return trimmed.Equals("Comment is useless", StringComparison.OrdinalIgnoreCase) ||
+               trimmed.Equals("Comment is usless", StringComparison.OrdinalIgnoreCase) ||
+               trimmed.StartsWith("Comment is useless", StringComparison.OrdinalIgnoreCase) ||
+               trimmed.StartsWith("Comment is usless", StringComparison.OrdinalIgnoreCase);
+    }
+
     /// <summary>
     /// Determines whether a suggested summary is more verbose than the original comment.
     /// </summary>
@@ -30,7 +64,7 @@ public static class CommentVerbosityHelper
     /// <returns><c>true</c> if the suggested summary has greater verbosity than the original; otherwise, <c>false</c>.</returns>
     public static bool IsMoreVerbose(string? suggested, string original, CommentKind kind)
     {
-        if (string.IsNullOrWhiteSpace(suggested))
+        if (string.IsNullOrWhiteSpace(suggested) || IsUselessComment(suggested))
         {
             return false;
         }
@@ -68,12 +102,18 @@ public static class CommentVerbosityHelper
             return 0;
         }
 
+        int originalLen = comment.OriginalText.Replace("\r\n", "\n").Trim().Length;
+
+        if (IsUselessComment(summary))
+        {
+            return originalLen;
+        }
+
         if (IsMoreVerbose(summary, comment))
         {
             return 0;
         }
 
-        int originalLen = comment.OriginalText.Replace("\r\n", "\n").Trim().Length;
         int condensedLen = summary.Replace("\r\n", "\n").Trim().Length;
 
         return Math.Max(0, originalLen - condensedLen);
@@ -99,20 +139,24 @@ public static class CommentVerbosityHelper
             return (0, 0);
         }
 
+        var effEstimator = estimator ?? HeuristicTokenEstimator.Default;
+        var trimmedOrig = comment.OriginalText.Replace("\r\n", "\n").Trim();
+        int originalLen = trimmedOrig.Length;
+        int originalTokens = effEstimator.Estimate(trimmedOrig.AsSpan());
+
+        if (IsUselessComment(summary))
+        {
+            return (originalLen, originalTokens);
+        }
+
         if (IsMoreVerbose(summary, comment))
         {
             return (0, 0);
         }
-
-        var effEstimator = estimator ?? HeuristicTokenEstimator.Default;
-        var trimmedOrig = comment.OriginalText.Replace("\r\n", "\n").Trim();
         var trimmedSummary = summary.Replace("\r\n", "\n").Trim();
-
-        int originalLen = trimmedOrig.Length;
         int condensedLen = trimmedSummary.Length;
         int gainChars = Math.Max(0, originalLen - condensedLen);
 
-        int originalTokens = effEstimator.Estimate(trimmedOrig.AsSpan());
         int condensedTokens = effEstimator.Estimate(trimmedSummary.AsSpan());
         int gainTokens = Math.Max(0, originalTokens - condensedTokens);
 
@@ -161,7 +205,12 @@ public static class CommentVerbosityHelper
                 int condLen;
                 int condTokens;
 
-                if (kept)
+                if (IsUselessComment(summary))
+                {
+                    condLen = 0;
+                    condTokens = 0;
+                }
+                else if (kept)
                 {
                     condLen = origLen;
                     condTokens = origTokens;
@@ -204,5 +253,120 @@ public static class CommentVerbosityHelper
             CondensedTokens = totalCondensedTokens,
             GainTokens = gainTokens
         };
+    }
+
+    /// <summary>
+    /// Computes the effective content character length of a comment, extracting tag content
+    /// for XML documentation comments or trimmed text for regular comments.
+    /// </summary>
+    /// <param name="text">The comment text.</param>
+    /// <param name="kind">The comment kind.</param>
+    /// <returns>The non-negative content character length.</returns>
+    public static int GetCommentContentLength(string? text, CommentKind kind)
+    {
+        if (string.IsNullOrWhiteSpace(text) || IsUselessComment(text))
+        {
+            return 0;
+        }
+
+        if (kind == CommentKind.XmlDocumentation)
+        {
+            var xmlText = XmlDocumentationParser.ExtractXmlText(text);
+            if (XmlDocumentationParser.TryParseXmlRootElements(xmlText, out var rootTags, out var outside) && rootTags.Count > 0)
+            {
+                int totalLen = outside.Trim().Length;
+                foreach (var (_, content) in rootTags)
+                {
+                    totalLen += content.Trim().Length;
+                }
+                if (totalLen > 0)
+                {
+                    return totalLen;
+                }
+            }
+
+            var normalizedXml = XmlDocumentationParser.NormalizeXmlText(text);
+            if (!string.IsNullOrEmpty(normalizedXml))
+            {
+                return normalizedXml.Length;
+            }
+        }
+
+        return text.Replace("\r\n", "\n").Trim().Length;
+    }
+
+    /// <summary>
+    /// Determines whether an LLM comment summary requires a retry.
+    /// A retry is needed if the summary is longer than before (or invalid/empty),
+    /// or if the reduction is above target threshold and above 50% of the initial comment length.
+    /// </summary>
+    /// <param name="summary">The suggested comment summary.</param>
+    /// <param name="comment">The original verbose comment.</param>
+    /// <param name="settings">The code condenser settings.</param>
+    /// <returns><c>true</c> if a retry is recommended; otherwise, <c>false</c>.</returns>
+    public static bool ShouldRetrySummary(
+        string? summary,
+        VerboseComment comment,
+        CodeCondenserSettings settings)
+    {
+        ArgumentNullException.ThrowIfNull(comment);
+        ArgumentNullException.ThrowIfNull(settings);
+
+        return ShouldRetrySummary(summary, comment.OriginalText, comment.Kind, settings);
+    }
+
+    /// <summary>
+    /// Determines whether an LLM comment summary requires a retry.
+    /// A retry is needed if the summary is longer than before (or invalid/empty),
+    /// or if the reduction is above target threshold and above 50% of the initial comment length.
+    /// </summary>
+    /// <param name="summary">The suggested comment summary.</param>
+    /// <param name="originalText">The original comment text.</param>
+    /// <param name="kind">The comment kind.</param>
+    /// <param name="settings">The code condenser settings.</param>
+    /// <returns><c>true</c> if a retry is recommended; otherwise, <c>false</c>.</returns>
+    public static bool ShouldRetrySummary(
+        string? summary,
+        string originalText,
+        CommentKind kind,
+        CodeCondenserSettings settings)
+    {
+        ArgumentNullException.ThrowIfNull(settings);
+
+        if (string.IsNullOrWhiteSpace(summary))
+        {
+            return true;
+        }
+
+        if (IsUselessComment(summary))
+        {
+            return false;
+        }
+
+        if (IsMoreVerbose(summary, originalText, kind))
+        {
+            return true;
+        }
+
+        int initialLength = GetCommentContentLength(originalText, kind);
+        int summaryLength = GetCommentContentLength(summary, kind);
+
+        // Retry if summary is longer than before
+        if (summaryLength >= initialLength)
+        {
+            return true;
+        }
+
+        // Retry if reduction is above target and above 50% of the initial
+        int targetThreshold = kind == CommentKind.XmlDocumentation
+            ? settings.GetEffectiveXmlSummaryThreshold()
+            : settings.CommentLengthThreshold;
+
+        if (summaryLength > targetThreshold && summaryLength > 0.5 * initialLength)
+        {
+            return true;
+        }
+
+        return false;
     }
 }
