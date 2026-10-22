@@ -20,6 +20,8 @@ public sealed record CodeCondenserJsonReport
 
     public List<JsonSubMethodCluster> SubMethodClusters { get; init; } = [];
 
+    public List<JsonRepeatedStringCluster> RepeatedStrings { get; init; } = [];
+
     public List<JsonVerboseComment> VerboseComments { get; init; } = [];
 }
 
@@ -48,6 +50,8 @@ public sealed record JsonReportSummary
 
     public int SubMethodClustersCount { get; init; }
 
+    public int RepeatedStringsCount { get; init; }
+
     public int VerboseCommentsCount { get; init; }
 
     public string SummaryMode { get; init; } = string.Empty;
@@ -59,6 +63,10 @@ public sealed record JsonReportSummary
     public int? TotalCommentGainTokens { get; init; }
 
     public int? TotalCloneGainTokens { get; init; }
+
+    public int? TotalRepeatedStringGainCharacters { get; init; }
+
+    public int? TotalRepeatedStringGainTokens { get; init; }
 }
 
 /// <summary>
@@ -155,4 +163,50 @@ public sealed record JsonVerboseComment
     public int? GainCharacters { get; init; }
 
     public int? GainTokens { get; init; }
+}
+
+/// <summary>
+/// Repeated inline string cluster details.
+/// </summary>
+public sealed record JsonRepeatedStringCluster
+{
+    public int ClusterId { get; init; }
+
+    public string Value { get; init; } = string.Empty;
+
+    public int Length { get; init; }
+
+    public int OccurrenceCount { get; init; }
+
+    public string Category { get; init; } = string.Empty;
+
+    public string SuggestedConstantName { get; init; } = string.Empty;
+
+    public string SuggestedClassName { get; init; } = "MyConstants";
+
+    public List<JsonRepeatedStringOccurrence> Occurrences { get; init; } = [];
+
+    public string Recommendation { get; init; } = string.Empty;
+
+    public int? PotentialGainCharacters { get; init; }
+
+    public int? PotentialGainTokens { get; init; }
+}
+
+/// <summary>
+/// Single occurrence of an inline string literal in a repeated string cluster.
+/// </summary>
+public sealed record JsonRepeatedStringOccurrence
+{
+    public string FilePath { get; init; } = string.Empty;
+
+    public int StartLine { get; init; }
+
+    public int EndLine { get; init; }
+
+    public int StartColumn { get; init; }
+
+    public int EndColumn { get; init; }
+
+    public string? EnclosingMember { get; init; }
 }

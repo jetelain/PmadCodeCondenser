@@ -7,6 +7,7 @@ using Pmad.CodeCondenser.Core.Filtering;
 using Pmad.CodeCondenser.Core.Measuring;
 using Pmad.CodeCondenser.Core.Models;
 using Pmad.CodeCondenser.Core.Snapshots;
+using Pmad.CodeCondenser.Core.Strings;
 
 namespace Pmad.CodeCondenser.Core.Engine;
 
@@ -27,6 +28,7 @@ public sealed class CodeCondenserEngine : ICodeCondenserEngine
     private readonly IProjectLocator _projectLocator;
     private readonly ISubMethodCacheStore? _subMethodCacheStore;
     private readonly ICodeMeasurer _codeMeasurer;
+    private readonly IRepeatedStringDetector _repeatedStringDetector;
     private string? _lastBaseDirectory;
 
     /// <summary>
@@ -56,7 +58,8 @@ public sealed class CodeCondenserEngine : ICodeCondenserEngine
         ISummarizedCommentsStore? summarizedCommentsStore = null,
         IProjectLocator? projectLocator = null,
         ISubMethodCacheStore? subMethodCacheStore = null,
-        ICodeMeasurer? codeMeasurer = null)
+        ICodeMeasurer? codeMeasurer = null,
+        IRepeatedStringDetector? repeatedStringDetector = null)
     {
         _cloneDetector = cloneDetector ?? new CloneDetector();
         _commentExtractor = commentExtractor ?? new VerboseCommentExtractor();
@@ -69,6 +72,7 @@ public sealed class CodeCondenserEngine : ICodeCondenserEngine
         _projectLocator = projectLocator ?? new ProjectLocator();
         _subMethodCacheStore = subMethodCacheStore;
         _codeMeasurer = codeMeasurer ?? new CodeMeasurer();
+        _repeatedStringDetector = repeatedStringDetector ?? new RepeatedStringDetector();
     }
 
     /// <inheritdoc />
@@ -212,9 +216,9 @@ public sealed class CodeCondenserEngine : ICodeCondenserEngine
         }
 
         // 5. Parse syntax trees and extract comments & methods in parallel (if features are enabled)
-        var fileResults = new (List<VerboseComment> Comments, List<MethodCloneInfo> Methods, List<SubMethodBlock> SubMethodBlocks)[filesToScan.Count];
+        var fileResults = new (List<VerboseComment> Comments, List<MethodCloneInfo> Methods, List<SubMethodBlock> SubMethodBlocks, List<RepeatedStringOccurrence> StringOccurrences)[filesToScan.Count];
 
-        if (effectiveSummaryMode != SummaryMode.Disabled || effectiveSettings.EnableDuplicationDetection || effectiveSettings.EnableSubMethodCloneDetection)
+        if (effectiveSummaryMode != SummaryMode.Disabled || effectiveSettings.EnableDuplicationDetection || effectiveSettings.EnableSubMethodCloneDetection || effectiveSettings.EnableRepeatedStringDetection)
         {
             await Parallel.ForEachAsync(
                 filesToScan.Select((f, idx) => (f, idx)),
@@ -239,17 +243,24 @@ public sealed class CodeCondenserEngine : ICodeCondenserEngine
                         ? _cloneDetector.ExtractSubMethodBlocks(syntaxTree, normalizedRelPath, effectiveSettings, projectId).ToList()
                         : [];
 
-                    fileResults[item.idx] = (comments, methods, subMethodBlocks);
+                    var fileCat = fileCategories.TryGetValue(normalizedRelPath, out var fc) ? fc : FileCategory.Production;
+                    var stringOccurrences = effectiveSettings.EnableRepeatedStringDetection
+                        ? _repeatedStringDetector.ExtractStringLiterals(syntaxTree, normalizedRelPath, effectiveSettings, projectId, fileCat).ToList()
+                        : [];
+
+                    fileResults[item.idx] = (comments, methods, subMethodBlocks, stringOccurrences);
                 }).ConfigureAwait(false);
         }
 
         var allExtractedComments = new List<VerboseComment>();
         var allAnalyzedMethods = new List<MethodCloneInfo>();
+        var allStringOccurrences = new List<RepeatedStringOccurrence>();
 
-        foreach (var (comments, methods, _) in fileResults)
+        foreach (var (comments, methods, _, stringOccurrences) in fileResults)
         {
             if (comments != null) allExtractedComments.AddRange(comments);
             if (methods != null) allAnalyzedMethods.AddRange(methods);
+            if (stringOccurrences != null) allStringOccurrences.AddRange(stringOccurrences);
         }
 
         // 6. Detect Clones
@@ -429,7 +440,7 @@ public sealed class CodeCondenserEngine : ICodeCondenserEngine
             {
                 var file = filesToScan[i];
                 var relPath = fileToNormalizedPath[file];
-                var (_, _, blocks) = fileResults[i];
+                var (_, _, blocks, _) = fileResults[i];
 
                 if (currentFileHashes.TryGetValue(relPath, out var hash))
                 {
@@ -540,6 +551,27 @@ public sealed class CodeCondenserEngine : ICodeCondenserEngine
             await _snapshotStore.SaveAsync(snapshotPath, newSnapshot, cancellationToken).ConfigureAwait(false);
         }
 
+        IReadOnlyList<RepeatedStringGroup> repeatedStringGroups;
+        if (effectiveSettings.EnableRepeatedStringDetection)
+        {
+            var allGroups = _repeatedStringDetector.GroupRepeatedStrings(allStringOccurrences, effectiveSettings, fileClassifier);
+            if (incremental && baseline != null && fileDiff != null)
+            {
+                var changedSet = new HashSet<string>(fileDiff.AddedFiles.Concat(fileDiff.ModifiedFiles), StringComparer.OrdinalIgnoreCase);
+                repeatedStringGroups = allGroups
+                    .Where(g => g.Occurrences.Any(o => changedSet.Contains(o.FilePath.Replace('\\', '/'))))
+                    .ToList();
+            }
+            else
+            {
+                repeatedStringGroups = allGroups;
+            }
+        }
+        else
+        {
+            repeatedStringGroups = [];
+        }
+
         var resultComments = (incremental && baseline != null)
             ? _snapshotDiffer.FilterNewComments(allExtractedComments, baseline)
             : allExtractedComments;
@@ -549,6 +581,7 @@ public sealed class CodeCondenserEngine : ICodeCondenserEngine
             VerboseComments = resultComments,
             CloneGroups = cloneGroups,
             SubMethodCloneGroups = subMethodGroups,
+            RepeatedStringGroups = repeatedStringGroups,
             SummarizedComments = cache.ToDictionary(),
             AnalyzedFilesCount = filesToScan.Count,
             TotalMethodsScanned = allAnalyzedMethods.Count,

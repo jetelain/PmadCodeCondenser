@@ -68,12 +68,15 @@ public sealed class JsonReportFormatter : IReportFormatter
             TestClustersCount = testClones,
             CrossBoundaryClustersCount = crossClones,
             SubMethodClustersCount = result.SubMethodCloneGroups.Count,
+            RepeatedStringsCount = result.RepeatedStringGroups.Count,
             VerboseCommentsCount = result.VerboseComments.Count,
             SummaryMode = settings.GetEffectiveSummaryMode().ToString(),
             TotalCommentGainCharacters = commentGainResult.SummarizedCount > 0 ? commentGainResult.GainCharacters : null,
             TotalCommentReductionPercent = commentGainResult.SummarizedCount > 0 ? commentGainResult.ReductionPercent : null,
             TotalCommentGainTokens = commentGainResult.SummarizedCount > 0 ? commentGainResult.GainTokens : null,
-            TotalCloneGainTokens = CloneGainEstimator.EstimateTotalGainTokens(result.CloneGroups, result.SubMethodCloneGroups, estimator, baseDirectory) is > 0 and var cloneGain ? cloneGain : null
+            TotalCloneGainTokens = CloneGainEstimator.EstimateTotalGainTokens(result.CloneGroups, result.SubMethodCloneGroups, estimator, baseDirectory) is > 0 and var cloneGain ? cloneGain : null,
+            TotalRepeatedStringGainCharacters = result.RepeatedStringGroups.Count > 0 ? result.TotalRepeatedStringGainCharacters : null,
+            TotalRepeatedStringGainTokens = result.RepeatedStringGroups.Count > 0 ? result.TotalRepeatedStringGainTokens : null
         };
 
         var cloneClusters = new List<JsonCloneCluster>();
@@ -132,6 +135,39 @@ public sealed class JsonReportFormatter : IReportFormatter
             });
         }
 
+        var repeatedStrings = new List<JsonRepeatedStringCluster>();
+        for (int i = 0; i < result.RepeatedStringGroups.Count; i++)
+        {
+            var strGroup = result.RepeatedStringGroups[i];
+            var occurrences = strGroup.Occurrences.Select(occ => new JsonRepeatedStringOccurrence
+            {
+                FilePath = ReportPathHelper.NormalizeRelativePath(occ.FilePath, baseDirectory),
+                StartLine = occ.StartLine,
+                EndLine = occ.EndLine,
+                StartColumn = occ.StartColumn,
+                EndColumn = occ.EndColumn,
+                EnclosingMember = occ.EnclosingMember
+            }).ToList();
+
+            var gainChars = strGroup.EstimateGainCharacters(preExistingClass: true);
+            var gainTokens = strGroup.EstimateGainTokens(estimator);
+
+            repeatedStrings.Add(new JsonRepeatedStringCluster
+            {
+                ClusterId = i + 1,
+                Value = strGroup.Value,
+                Length = strGroup.Length,
+                OccurrenceCount = strGroup.Occurrences.Count,
+                Category = strGroup.Category.ToString(),
+                SuggestedConstantName = strGroup.SuggestedConstantName,
+                SuggestedClassName = strGroup.SuggestedClassName,
+                Occurrences = occurrences,
+                Recommendation = "Extract repeated inline string literal into a shared constant.",
+                PotentialGainCharacters = gainChars > 0 ? gainChars : null,
+                PotentialGainTokens = gainTokens > 0 ? gainTokens : null
+            });
+        }
+
         var verboseComments = result.VerboseComments.Select(c =>
         {
             result.SummarizedComments.TryGetValue(c.ContentHash, out var summaryText);
@@ -171,6 +207,7 @@ public sealed class JsonReportFormatter : IReportFormatter
             Summary = summary,
             CloneClusters = cloneClusters,
             SubMethodClusters = subMethodClusters,
+            RepeatedStrings = repeatedStrings,
             VerboseComments = verboseComments
         };
     }

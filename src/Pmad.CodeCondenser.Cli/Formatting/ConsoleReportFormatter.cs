@@ -37,6 +37,10 @@ public sealed class ConsoleReportFormatter : IReportFormatter
         {
             _consoleFormatter.PrintSubMethodCloneGroups(output, result.SubMethodCloneGroups, baseDirectory, estimator);
         }
+        if (result.RepeatedStringGroups.Count > 0)
+        {
+            _consoleFormatter.PrintRepeatedStringGroups(output, result.RepeatedStringGroups, baseDirectory, estimator);
+        }
         _consoleFormatter.PrintVerboseComments(output, result.VerboseComments, result.SummarizedComments, baseDirectory, estimator);
 
         var mode = _isIncremental ? "Dry-Run (Incremental)" : "Dry-Run";
@@ -47,6 +51,9 @@ public sealed class ConsoleReportFormatter : IReportFormatter
         int? commentGain = commentGainResult.SummarizedCount > 0 ? commentGainResult.GainCharacters : null;
         int? commentReduction = commentGainResult.SummarizedCount > 0 ? commentGainResult.ReductionPercent : null;
         int? commentGainTokens = commentGainResult.SummarizedCount > 0 ? commentGainResult.GainTokens : null;
+
+        int? repeatedStringGainChars = result.RepeatedStringGroups.Count > 0 ? result.TotalRepeatedStringGainCharacters : null;
+        int? repeatedStringGainTokens = result.RepeatedStringGroups.Count > 0 ? result.TotalRepeatedStringGainTokens : null;
 
         _consoleFormatter.PrintSummary(
             output,
@@ -64,7 +71,10 @@ public sealed class ConsoleReportFormatter : IReportFormatter
             commentGain,
             commentReduction,
             commentGainTokens,
-            CloneGainEstimator.EstimateTotalGainTokens(result.CloneGroups, result.SubMethodCloneGroups, estimator, baseDirectory));
+            CloneGainEstimator.EstimateTotalGainTokens(result.CloneGroups, result.SubMethodCloneGroups, estimator, baseDirectory),
+            repeatedStringsCount: result.RepeatedStringGroups.Count,
+            repeatedStringGainChars: repeatedStringGainChars,
+            repeatedStringGainTokens: repeatedStringGainTokens);
 
         return Task.CompletedTask;
     }

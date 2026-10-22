@@ -42,8 +42,8 @@ public class SarifReportFormatterTests
         run.Tool.Driver.Name.Should().Be("Pmad.CodeCondenser");
         run.Tool.Driver.Version.Should().NotBeNullOrWhiteSpace();
         run.Tool.Driver.InformationUri.Should().Be("https://github.com/jetelain/PmadCodeCondenser");
-        run.Tool.Driver.Rules.Should().HaveCount(5);
-        run.Tool.Driver.Rules.Select(r => r.Id).Should().Contain(["CC001", "CC002", "CC003", "CC004", "CC005"]);
+        run.Tool.Driver.Rules.Should().HaveCount(6);
+        run.Tool.Driver.Rules.Select(r => r.Id).Should().Contain(["CC001", "CC002", "CC003", "CC004", "CC005", "CC006"]);
         run.Results.Should().BeEmpty();
     }
 
@@ -222,6 +222,69 @@ public class SarifReportFormatterTests
         res.Locations[0].PhysicalLocation.Region.StartLine.Should().Be(42);
         res.Locations[0].PhysicalLocation.Region.EndLine.Should().Be(50);
         res.PartialFingerprints.Should().ContainKey("commentHash/v1");
+        res.PartialFingerprints.Should().ContainKey("locationKey/v1");
+    }
+
+    [Fact]
+    public async Task FormatAsync_RepeatedInlineStrings_EmitsCC006Results()
+    {
+        var occurrences = new List<RepeatedStringOccurrence>
+        {
+            new()
+            {
+                FilePath = "c:/repo/src/FileA.cs",
+                StartLine = 12,
+                EndLine = 12,
+                StartColumn = 10,
+                EndColumn = 65,
+                StringValue = "This is a repeated string exceeding fifty characters in total length.",
+                Category = FileCategory.Production
+            },
+            new()
+            {
+                FilePath = "c:/repo/src/FileB.cs",
+                StartLine = 24,
+                EndLine = 24,
+                StartColumn = 14,
+                EndColumn = 69,
+                StringValue = "This is a repeated string exceeding fifty characters in total length.",
+                Category = FileCategory.Production
+            }
+        };
+
+        var strGroup = new RepeatedStringGroup
+        {
+            Value = "This is a repeated string exceeding fifty characters in total length.",
+            Occurrences = occurrences,
+            Category = CloneCategory.Production,
+            SuggestedConstantName = "RepeatedMessage"
+        };
+
+        var result = new AnalysisResult
+        {
+            AnalyzedFilesCount = 2,
+            TotalMethodsScanned = 0,
+            CloneGroups = [],
+            VerboseComments = [],
+            SummarizedComments = new Dictionary<string, string>(),
+            RepeatedStringGroups = [strGroup]
+        };
+
+        using var writer = new StringWriter();
+        await _formatter.FormatAsync(result, _settings, writer, "c:/repo");
+
+        var sarif = JsonSerializer.Deserialize<SarifLog>(writer.ToString(), new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase });
+        sarif!.Runs[0].Results.Should().HaveCount(2);
+
+        var res = sarif.Runs[0].Results[0];
+        res.RuleId.Should().Be("CC006");
+        res.Level.Should().Be("warning");
+        res.Locations[0].PhysicalLocation.ArtifactLocation.Uri.Should().Be("src/FileA.cs");
+        res.Locations[0].PhysicalLocation.Region.StartLine.Should().Be(12);
+        res.Locations[0].PhysicalLocation.Region.StartColumn.Should().Be(10);
+        res.RelatedLocations.Should().HaveCount(1);
+        res.RelatedLocations![0].PhysicalLocation.ArtifactLocation.Uri.Should().Be("src/FileB.cs");
+        res.PartialFingerprints.Should().ContainKey("stringHash/v1");
         res.PartialFingerprints.Should().ContainKey("locationKey/v1");
     }
 }

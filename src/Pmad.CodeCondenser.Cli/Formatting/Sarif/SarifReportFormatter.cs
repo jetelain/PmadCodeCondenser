@@ -256,6 +256,90 @@ public sealed class SarifReportFormatter : IReportFormatter
             });
         }
 
+        // 4. Repeated Inline Strings (CC006)
+        foreach (var strGroup in result.RepeatedStringGroups)
+        {
+            var level = strGroup.Category == CloneCategory.Test ? "note" : "warning";
+            var correlationGuid = DeterministicGuid.GenerateCorrelationGuid(strGroup.Value).ToString("D");
+            var stringHash = Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(strGroup.Value)));
+
+            var normalizedOccPaths = strGroup.Occurrences
+                .Select(occ => ReportPathHelper.NormalizeRelativePath(occ.FilePath, baseDirectory))
+                .ToArray();
+
+            for (int i = 0; i < strGroup.Occurrences.Count; i++)
+            {
+                var occ = strGroup.Occurrences[i];
+                var relPath = normalizedOccPaths[i];
+
+                var relatedLocations = new List<SarifRelatedLocation>();
+                int relatedId = 1;
+                for (int j = 0; j < strGroup.Occurrences.Count; j++)
+                {
+                    if (j == i) continue;
+                    var other = strGroup.Occurrences[j];
+                    var otherRelPath = normalizedOccPaths[j];
+
+                    relatedLocations.Add(new SarifRelatedLocation
+                    {
+                        Id = relatedId++,
+                        PhysicalLocation = new SarifPhysicalLocation
+                        {
+                            ArtifactLocation = new SarifArtifactLocation { Uri = otherRelPath },
+                            Region = new SarifRegion
+                            {
+                                StartLine = other.StartLine,
+                                EndLine = other.EndLine,
+                                StartColumn = other.StartColumn,
+                                EndColumn = other.EndColumn
+                            }
+                        },
+                        Message = new SarifMessage
+                        {
+                            Text = $"Duplicate string occurrence in {Path.GetFileName(other.FilePath)} (line {other.StartLine})"
+                        }
+                    });
+                }
+
+                var preview = strGroup.Value.Length > 40 ? strGroup.Value[..37] + "..." : strGroup.Value;
+                var escapedPreview = preview.Replace("\r", " ").Replace("\n", " ");
+
+                run.Results.Add(new SarifResult
+                {
+                    RuleId = SarifRules.RepeatedInlineStringRuleId,
+                    Level = level,
+                    CorrelationGuid = correlationGuid,
+                    PartialFingerprints = new Dictionary<string, string>
+                    {
+                        ["stringHash/v1"] = stringHash,
+                        ["locationKey/v1"] = $"{relPath}:{occ.StartLine}:{occ.StartColumn}"
+                    },
+                    Message = new SarifMessage
+                    {
+                        Text = $"String literal \"{escapedPreview}\" ({strGroup.Length} chars) repeated {strGroup.Occurrences.Count} times. Extract into shared constant '{strGroup.SuggestedClassName}.{strGroup.SuggestedConstantName}'."
+                    },
+                    Locations =
+                    [
+                        new SarifLocation
+                        {
+                            PhysicalLocation = new SarifPhysicalLocation
+                            {
+                                ArtifactLocation = new SarifArtifactLocation { Uri = relPath },
+                                Region = new SarifRegion
+                                {
+                                    StartLine = occ.StartLine,
+                                    EndLine = occ.EndLine,
+                                    StartColumn = occ.StartColumn,
+                                    EndColumn = occ.EndColumn
+                                }
+                            }
+                        }
+                    ],
+                    RelatedLocations = relatedLocations.Count > 0 ? relatedLocations : null
+                });
+            }
+        }
+
         return new SarifLog
         {
             Runs = [run]

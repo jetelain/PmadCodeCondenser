@@ -9,7 +9,8 @@
     "summary": { "type": "object" },
     "cloneClusters": { "type": "array" },
     "subMethodClusters": { "type": "array" },
+    "repeatedStrings": { "type": "array" },
     "verboseComments": { "type": "array" }
   },
-  "required": ["$schema", "schemaVersion", "timestamp", "summary", "cloneClusters", "subMethodClusters", "verboseComments"]
+  "required": ["$schema", "schemaVersion", "timestamp", "summary", "cloneClusters", "subMethodClusters", "repeatedStrings", "verboseComments"]
 }

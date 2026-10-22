@@ -10,6 +10,7 @@ public static class SarifRules
     public const string VerboseCommentRuleId = "CC003";
     public const string CrossBoundaryDuplicationRuleId = "CC004";
     public const string SubMethodCodeDuplicationRuleId = "CC005";
+    public const string RepeatedInlineStringRuleId = "CC006";
 
     public static IReadOnlyList<SarifReportingDescriptor> AllRules { get; } =
     [
@@ -87,6 +88,24 @@ public static class SarifRules
             {
                 Text = "Extract duplicate statement sequence into a shared local function or private helper.",
                 Markdown = "Extract duplicate statement sequence into a shared local function or private helper method."
+            },
+            DefaultConfiguration = new SarifReportingConfiguration
+            {
+                Level = "warning"
+            }
+        },
+        new SarifReportingDescriptor
+        {
+            Id = RepeatedInlineStringRuleId,
+            Name = "RepeatedInlineString",
+            ShortDescription = new SarifMultiformatMessageString
+            {
+                Text = "Repeated inline string literal detected that can be extracted to a shared constant."
+            },
+            Help = new SarifMultiformatMessageString
+            {
+                Text = "Extract repeated string literal into a shared constant (e.g. 'internal const string Name = \"...\";').",
+                Markdown = "Extract repeated string literal into a shared constant (e.g. `internal const string Name = \"...\";`).\n\nTo suppress, add `// codecondenser:ignore-string` or `[SuppressMessage(\"CodeCondenser\", \"RepeatedString\")]`."
             },
             DefaultConfiguration = new SarifReportingConfiguration
             {

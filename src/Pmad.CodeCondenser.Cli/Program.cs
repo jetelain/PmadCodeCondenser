@@ -158,6 +158,26 @@ public static class Program
             settings.CommentTolerance = options.CommentTolerance.Value;
         }
 
+        if (options.EnableRepeatedStrings.HasValue)
+        {
+            settings.EnableRepeatedStringDetection = options.EnableRepeatedStrings.Value;
+        }
+
+        if (options.ThresholdRepeatedStrings.HasValue)
+        {
+            settings.RepeatedStringLengthThreshold = options.ThresholdRepeatedStrings.Value;
+        }
+
+        if (options.ThresholdStringOccurrences.HasValue)
+        {
+            settings.RepeatedStringMinOccurrences = options.ThresholdStringOccurrences.Value;
+        }
+
+        if (options.RepeatedStringTolerance.HasValue)
+        {
+            settings.RepeatedStringTolerance = options.RepeatedStringTolerance.Value;
+        }
+
         if (!string.IsNullOrWhiteSpace(options.SummarizedCommentsPath))
         {
             settings.SummarizedCommentsFilePath = options.SummarizedCommentsPath;

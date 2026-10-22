@@ -16,6 +16,19 @@ public sealed class AnalysisResult
     public int TestFilesCount { get; init; }
     public int SkippedGeneratedFilesCount { get; init; }
     public IReadOnlyList<SubMethodCloneGroup> SubMethodCloneGroups { get; init; } = [];
+    public IReadOnlyList<RepeatedStringGroup> RepeatedStringGroups { get; init; } = [];
+
+    /// <summary>
+    /// Gets the total character gain achieved by compacting repeated inline strings into constants.
+    /// </summary>
+    public int TotalRepeatedStringGainCharacters =>
+        Pmad.CodeCondenser.Core.Strings.RepeatedStringGainEstimator.EstimateTotalGainCharacters(RepeatedStringGroups);
+
+    /// <summary>
+    /// Gets the total estimated token gain achieved by compacting repeated inline strings into constants.
+    /// </summary>
+    public int TotalRepeatedStringGainTokens =>
+        Pmad.CodeCondenser.Core.Strings.RepeatedStringGainEstimator.EstimateTotalGainTokens(RepeatedStringGroups);
 
     /// <summary>
     /// Gets the total character gain (reduction in characters) achieved by replacing all verbose comments with their summaries.

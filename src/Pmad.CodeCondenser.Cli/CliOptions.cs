@@ -143,6 +143,26 @@ public sealed class CliOptions
     public int? CommentTolerance { get; set; }
 
     /// <summary>
+    /// When specified, explicitly enables or disables repeated string detection.
+    /// </summary>
+    public bool? EnableRepeatedStrings { get; set; }
+
+    /// <summary>
+    /// Override minimum character length for repeated string detection (default: 50).
+    /// </summary>
+    public int? ThresholdRepeatedStrings { get; set; }
+
+    /// <summary>
+    /// Override minimum occurrences for repeated string detection (default: 2).
+    /// </summary>
+    public int? ThresholdStringOccurrences { get; set; }
+
+    /// <summary>
+    /// Maximum number of new repeated string groups tolerated in incremental mode before returning an error exit code.
+    /// </summary>
+    public int? RepeatedStringTolerance { get; set; }
+
+    /// <summary>
     /// Path to JSON file stored in git recording summarized comments.
     /// </summary>
     public string? SummarizedCommentsPath { get; set; }

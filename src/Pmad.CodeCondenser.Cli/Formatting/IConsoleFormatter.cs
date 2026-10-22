@@ -21,6 +21,12 @@ public interface IConsoleFormatter
         string baseDirectory,
         HeuristicTokenEstimator? estimator = null);
 
+    void PrintRepeatedStringGroups(
+        TextWriter writer,
+        IReadOnlyList<RepeatedStringGroup> repeatedStrings,
+        string baseDirectory,
+        HeuristicTokenEstimator? estimator = null);
+
     void PrintSummary(
         TextWriter writer,
         int filesAnalyzed,
@@ -37,7 +43,10 @@ public interface IConsoleFormatter
         int? commentGainChars = null,
         int? commentReductionPercent = null,
         int? commentGainTokens = null,
-        int? cloneGainTokens = null);
+        int? cloneGainTokens = null,
+        int? repeatedStringsCount = null,
+        int? repeatedStringGainChars = null,
+        int? repeatedStringGainTokens = null);
 
     void PrintFileApplied(TextWriter writer, string filePath, string baseDirectory);
 
@@ -61,7 +70,10 @@ public interface IConsoleFormatter
         string baseDirectory,
         int duplicationTolerance,
         bool hasDuplicationViolation = true,
-        bool hasCommentViolation = false);
+        bool hasCommentViolation = false,
+        IReadOnlyList<RepeatedStringGroup>? repeatedStrings = null,
+        int? repeatedStringTolerance = null,
+        bool hasRepeatedStringViolation = false);
 
 
     void PrintSkillFile(TextWriter writer, Skills.SkillFileResult fileResult, string baseDirectory);

@@ -194,4 +194,76 @@ public class JsonReportFormatterTests
             }
         }
     }
+
+    [Fact]
+    public async Task FormatAsync_RepeatedStrings_EmitsRepeatedStringClusters()
+    {
+        var longStr = "This is a repeated string that exceeds fifty characters in total length.";
+        var occurrences = new List<RepeatedStringOccurrence>
+        {
+            new()
+            {
+                FilePath = "c:/repo/src/FileA.cs",
+                StartLine = 10,
+                EndLine = 10,
+                StartColumn = 15,
+                EndColumn = 87,
+                StringValue = longStr,
+                Category = FileCategory.Production
+            },
+            new()
+            {
+                FilePath = "c:/repo/src/FileB.cs",
+                StartLine = 20,
+                EndLine = 20,
+                StartColumn = 15,
+                EndColumn = 87,
+                StringValue = longStr,
+                Category = FileCategory.Production
+            }
+        };
+
+        var group = new RepeatedStringGroup
+        {
+            Value = longStr,
+            Occurrences = occurrences,
+            Category = CloneCategory.Production,
+            SuggestedConstantName = "TestMessage",
+            SuggestedClassName = "MyConstants",
+            TargetNamespace = "ApplicationNamespace"
+        };
+
+        var result = new AnalysisResult
+        {
+            AnalyzedFilesCount = 2,
+            TotalMethodsScanned = 0,
+            CloneGroups = [],
+            VerboseComments = [],
+            SummarizedComments = new Dictionary<string, string>(),
+            RepeatedStringGroups = [group]
+        };
+
+        using var writer = new StringWriter();
+        await _formatter.FormatAsync(result, _settings, writer, "c:/repo");
+
+        var json = writer.ToString();
+        var report = JsonSerializer.Deserialize<CodeCondenserJsonReport>(json, new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase });
+
+        report.Should().NotBeNull();
+        report!.Summary.RepeatedStringsCount.Should().Be(1);
+        report.Summary.TotalRepeatedStringGainCharacters.Should().Be(group.EstimateGainCharacters());
+        report.RepeatedStrings.Should().HaveCount(1);
+
+        var cluster = report.RepeatedStrings[0];
+        cluster.ClusterId.Should().Be(1);
+        cluster.Value.Should().Be(longStr);
+        cluster.Length.Should().Be(longStr.Length);
+        cluster.Occurrences.Should().HaveCount(2);
+        cluster.Occurrences[0].FilePath.Should().Be("src/FileA.cs");
+        cluster.Occurrences[0].StartLine.Should().Be(10);
+        cluster.Occurrences[0].StartColumn.Should().Be(15);
+        cluster.SuggestedConstantName.Should().Be("TestMessage");
+        cluster.SuggestedClassName.Should().Be("MyConstants");
+        cluster.Recommendation.Should().Contain("Extract repeated inline string literal");
+    }
 }
