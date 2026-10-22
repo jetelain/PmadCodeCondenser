@@ -53,10 +53,12 @@ public sealed class ApplyCommand : ICommand
 
         var baseDirectory = PathFilter.ResolveBaseDirectory(options.TargetPath);
 
-        formatter.PrintCloneGroups(output, result.CloneGroups, baseDirectory);
+        var estimator = CodeCondenserEngine.ResolveEstimator(settings);
+
+        formatter.PrintCloneGroups(output, result.CloneGroups, baseDirectory, estimator);
         if (result.SubMethodCloneGroups.Count > 0)
         {
-            formatter.PrintSubMethodCloneGroups(output, result.SubMethodCloneGroups, baseDirectory);
+            formatter.PrintSubMethodCloneGroups(output, result.SubMethodCloneGroups, baseDirectory, estimator);
         }
 
         int modifiedCount = 0;
@@ -99,9 +101,10 @@ public sealed class ApplyCommand : ICommand
         }
 
         var mode = options.Incremental ? "Apply (Incremental)" : "Apply";
-        var (_, _, gainChars, reductionPercent, count) = result.CalculateCommentGain();
-        int? commentGain = count > 0 ? gainChars : null;
-        int? commentReduction = count > 0 ? reductionPercent : null;
+        var commentGainResult = result.CalculateCommentGain(estimator);
+        int? commentGain = commentGainResult.SummarizedCount > 0 ? commentGainResult.GainCharacters : null;
+        int? commentReduction = commentGainResult.SummarizedCount > 0 ? commentGainResult.ReductionPercent : null;
+        int? commentGainTokens = commentGainResult.SummarizedCount > 0 ? commentGainResult.GainTokens : null;
 
         formatter.PrintSummary(
             output,
@@ -117,7 +120,9 @@ public sealed class ApplyCommand : ICommand
             result.CloneGroups.Count(g => g.Category == CloneCategory.Test),
             result.SubMethodCloneGroups.Count,
             commentGain,
-            commentReduction);
+            commentReduction,
+            commentGainTokens,
+            Pmad.CodeCondenser.Core.Clones.CloneGainEstimator.EstimateTotalGainTokens(result.CloneGroups, result.SubMethodCloneGroups, estimator));
 
         if (options.Incremental)
         {

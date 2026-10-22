@@ -1,3 +1,4 @@
+using Pmad.AI.Tokens;
 using Pmad.CodeCondenser.Core.Models;
 
 namespace Pmad.CodeCondenser.Cli.Formatting;
@@ -9,11 +10,16 @@ public interface IConsoleFormatter
 {
     void PrintBanner(TextWriter writer);
 
-    void PrintCloneGroups(TextWriter writer, IReadOnlyList<CodeCloneGroup> cloneGroups, string baseDirectory);
+    void PrintCloneGroups(TextWriter writer, IReadOnlyList<CodeCloneGroup> cloneGroups, string baseDirectory, HeuristicTokenEstimator? estimator = null);
 
-    void PrintSubMethodCloneGroups(TextWriter writer, IReadOnlyList<SubMethodCloneGroup> subMethodGroups, string baseDirectory);
+    void PrintSubMethodCloneGroups(TextWriter writer, IReadOnlyList<SubMethodCloneGroup> subMethodGroups, string baseDirectory, HeuristicTokenEstimator? estimator = null);
 
-    void PrintVerboseComments(TextWriter writer, IReadOnlyList<VerboseComment> comments, IReadOnlyDictionary<string, string> summaries, string baseDirectory);
+    void PrintVerboseComments(
+        TextWriter writer,
+        IReadOnlyList<VerboseComment> comments,
+        IReadOnlyDictionary<string, string> summaries,
+        string baseDirectory,
+        HeuristicTokenEstimator? estimator = null);
 
     void PrintSummary(
         TextWriter writer,
@@ -29,7 +35,9 @@ public interface IConsoleFormatter
         int testClones,
         int subMethodClones = 0,
         int? commentGainChars = null,
-        int? commentReductionPercent = null);
+        int? commentReductionPercent = null,
+        int? commentGainTokens = null,
+        int? cloneGainTokens = null);
 
     void PrintFileApplied(TextWriter writer, string filePath, string baseDirectory);
 

@@ -145,7 +145,7 @@ public class ConsoleFormatterTests
         var output = writer.ToString();
         output.Should().Contain("= Kept:      // Original comment text exceeding length threshold");
         output.Should().Contain("0% reduction, kept original comment");
-        output.Should().Contain("Total Gain: 0 chars (0% reduction");
+        output.Should().Contain("Total Gain: 0 chars, ~0 tokens (0% reduction");
     }
 
     [Fact]
@@ -183,6 +183,27 @@ public class ConsoleFormatterTests
 
         var output = writer.ToString();
         output.Should().Contain("Comment Gain:      +150 chars (45% reduction)");
+    }
+
+    [Fact]
+    public void PrintSummary_WithCommentGainAndTokens_OutputsCommentGainWithTokens()
+    {
+        var formatter = new ConsoleFormatter(enableColor: false);
+        using var writer = new StringWriter();
+
+        formatter.PrintSummary(
+            writer,
+            filesAnalyzed: 5,
+            methodsScanned: 12,
+            cloneGroupsCount: 2,
+            verboseCommentsCount: 3,
+            mode: "Dry-Run",
+            commentGainChars: 150,
+            commentReductionPercent: 45,
+            commentGainTokens: 38);
+
+        var output = writer.ToString();
+        output.Should().Contain("Comment Gain:      +150 chars, ~38 tokens (45% reduction)");
     }
 
 

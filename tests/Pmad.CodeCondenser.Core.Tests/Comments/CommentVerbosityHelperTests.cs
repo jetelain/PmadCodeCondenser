@@ -1,4 +1,5 @@
 using FluentAssertions;
+using Pmad.AI.Tokens;
 using Pmad.CodeCondenser.Core.Comments;
 using Pmad.CodeCondenser.Core.Models;
 
@@ -253,5 +254,108 @@ public class CommentVerbosityHelperTests
         var gain = CommentVerbosityHelper.CalculateGain(comment, lfSuggested);
 
         gain.Should().Be(16);
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("")]
+    [InlineData("   ")]
+    public void CalculateGainWithTokens_NullOrWhiteSpace_ReturnsZeroGain(string? summary)
+    {
+        var comment = CreateComment("// A very long comment that exceeds verbosity threshold.");
+        var (gainChars, gainTokens) = CommentVerbosityHelper.CalculateGainWithTokens(comment, summary);
+
+        gainChars.Should().Be(0);
+        gainTokens.Should().Be(0);
+    }
+
+    [Fact]
+    public void CalculateGainWithTokens_MoreVerbose_ReturnsZeroGain()
+    {
+        var comment = CreateComment("// Short comment.");
+        var (gainChars, gainTokens) = CommentVerbosityHelper.CalculateGainWithTokens(comment, "// A much longer and more detailed replacement comment.");
+
+        gainChars.Should().Be(0);
+        gainTokens.Should().Be(0);
+    }
+
+    [Fact]
+    public void CalculateGainWithTokens_ValidSummary_ReturnsCorrectGainCharsAndTokens()
+    {
+        var original = "// " + new string('a', 100);
+        var summary = "// " + new string('a', 40);
+        var comment = CreateComment(original);
+
+        var (gainChars, gainTokens) = CommentVerbosityHelper.CalculateGainWithTokens(comment, summary);
+
+        gainChars.Should().Be(60);
+        gainTokens.Should().BeGreaterThan(0);
+    }
+
+    [Fact]
+    public void CalculateGainWithTokens_CustomEstimator_UsesSpecifiedEstimator()
+    {
+        var original = "// This is an extended comment with descriptive sentences.";
+        var summary = "// Short summary.";
+        var comment = CreateComment(original);
+
+        var (_, defaultTokens) = CommentVerbosityHelper.CalculateGainWithTokens(comment, summary, HeuristicTokenEstimator.Default);
+        var (_, qwenTokens) = CommentVerbosityHelper.CalculateGainWithTokens(comment, summary, HeuristicTokenEstimator.Qwen);
+
+        defaultTokens.Should().BeGreaterThan(0);
+        qwenTokens.Should().BeGreaterThan(0);
+    }
+
+    [Fact]
+    public void CalculateTotalGain_WithTokens_ComputesBothCharacterAndTokenMetrics()
+    {
+        var comment1 = CreateComment("// " + new string('a', 100));
+        var comment2 = CreateComment("// " + new string('b', 200));
+
+        var summaries = new Dictionary<string, string>
+        {
+            [comment1.ContentHash] = "// " + new string('a', 50),
+            [comment2.ContentHash] = "// " + new string('b', 100)
+        };
+
+        var result = CommentVerbosityHelper.CalculateTotalGain([comment1, comment2], summaries);
+
+        result.OriginalCharacters.Should().Be(306);
+        result.CondensedCharacters.Should().Be(156);
+        result.GainCharacters.Should().Be(150);
+        result.ReductionPercent.Should().Be(49);
+        result.SummarizedCount.Should().Be(2);
+
+        result.OriginalTokens.Should().BeGreaterThan(0);
+        result.CondensedTokens.Should().BeGreaterThan(0);
+        result.GainTokens.Should().BeGreaterThan(0);
+        result.TokenReductionPercent.Should().BeGreaterThan(0);
+
+        // Verify 8-parameter deconstruction
+        var (origChars, condChars, gainChars, pctChars, count, origTok, condTok, gainTok) = result;
+        origChars.Should().Be(306);
+        condChars.Should().Be(156);
+        gainChars.Should().Be(150);
+        pctChars.Should().Be(49);
+        count.Should().Be(2);
+        origTok.Should().Be(result.OriginalTokens);
+        condTok.Should().Be(result.CondensedTokens);
+        gainTok.Should().Be(result.GainTokens);
+    }
+
+    [Fact]
+    public void CalculateTotalGain_Empty_ReturnsEmptyResultWithZeroTokens()
+    {
+        var result = CommentVerbosityHelper.CalculateTotalGain([], new Dictionary<string, string>());
+
+        result.OriginalCharacters.Should().Be(0);
+        result.CondensedCharacters.Should().Be(0);
+        result.GainCharacters.Should().Be(0);
+        result.ReductionPercent.Should().Be(0);
+        result.SummarizedCount.Should().Be(0);
+        result.OriginalTokens.Should().Be(0);
+        result.CondensedTokens.Should().Be(0);
+        result.GainTokens.Should().Be(0);
+        result.TokenReductionPercent.Should().Be(0);
     }
 }
