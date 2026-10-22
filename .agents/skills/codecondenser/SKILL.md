@@ -32,7 +32,7 @@ The CLI can be invoked via the global tool `pmad-codecondenser`, local tool `dot
 | **Summarize comments using LLM** | `pmad-codecondenser ./src -m gemma4:e4b` | Yes (Ollama) |
 | **Apply summarized comments to disk** | `pmad-codecondenser ./src --apply` | No (uses cache) |
 | **Refresh baseline snapshot** | `pmad-codecondenser snapshot ./src` | No |
-| **Install/update workspace agent skills** | `pmad-codecondenser skills [path]` or `pmad-codecondenser skill [path]` | No |
+| **Install/update workspace agent skills** | `pmad-codecondenser skills [path]` | No |
 | **Measure code tokens (total, comments, code)** | `pmad-codecondenser measure ./src` | No |
 | **Measure code tokens with specific estimator** | `pmad-codecondenser measure ./src --estimator qwen` | No |
 

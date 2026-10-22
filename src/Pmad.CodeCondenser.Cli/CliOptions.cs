@@ -9,7 +9,6 @@ public sealed class CliOptions
     public const string CommandApply = "apply";
     public const string CommandSnapshot = "snapshot";
     public const string CommandSkills = "skills";
-    public const string CommandSkill = "skill";
     public const string CommandMeasure = "measure";
 
     /// <summary>

@@ -678,7 +678,6 @@ public static class CliArgumentParser
             RootCommand.Add(SnapshotCommand);
 
             SkillsCommand = new Command(CliOptions.CommandSkills, "Install or update AI agent skills in the workspace (.agents/skills)");
-            SkillsCommand.Aliases.Add("skill");
             SkillsCommand.Aliases.Add("install-skills");
             SkillsCommand.Aliases.Add("install-skill");
             SkillsCommand.Add(CreatePathArgument());
@@ -784,7 +783,7 @@ public static class CliArgumentParser
             {
                 var cmdName = activeCommand.Name;
                 var parentName = (pr.CommandResult.Parent as CommandResult)?.Command.Name;
-                if (cmdName is "skills" or "skill" || parentName is "skills" or "skill")
+                if (cmdName == "skills" || parentName == "skills")
                 {
                     command = CliOptions.CommandSkills;
                 }

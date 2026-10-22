@@ -655,7 +655,6 @@ public class CliArgumentParserTests
 
     [Theory]
     [InlineData("skills", "./workspace", CliOptions.CommandSkills, "./workspace")]
-    [InlineData("skill", "./workspace", CliOptions.CommandSkills, "./workspace")]
     [InlineData("install-skills", "./workspace", CliOptions.CommandSkills, "./workspace")]
     [InlineData("install-skill", "./workspace", CliOptions.CommandSkills, "./workspace")]
     [InlineData("skills", null, CliOptions.CommandSkills, ".")]
