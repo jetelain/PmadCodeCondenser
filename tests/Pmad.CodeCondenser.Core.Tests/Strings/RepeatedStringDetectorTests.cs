@@ -214,4 +214,120 @@ public class RepeatedStringDetectorTests
         var usage = group.GenerateTypicalUsage();
         usage.Should().Be("MyConstants.TestConstant");
     }
+
+    [Fact]
+    public void ExtractStringLiterals_WithInlineTrailingComment_AreFilteredOut()
+    {
+        var longString = "This is a very long string that should be ignored by the trailing inline comment.";
+        var code = $$"""
+            public class Service
+            {
+                public void DoWork()
+                {
+                    var msg = "{{longString}}"; // codecondenser:ignore-string
+                }
+            }
+            """;
+        var tree = CSharpSyntaxTree.ParseText(code);
+        var settings = new CodeCondenserSettings { RepeatedStringLengthThreshold = 50 };
+
+        var occurrences = _detector.ExtractStringLiterals(tree, "src/Service.cs", settings);
+
+        occurrences.Should().BeEmpty();
+    }
+
+    [Fact]
+    public void ExtractStringLiterals_WithInlineFieldComment_AreFilteredOut()
+    {
+        var longString = "This is a very long string in a field that should be ignored by the inline nocondense comment.";
+        var code = $$"""
+            public class Service
+            {
+                private string _msg = "{{longString}}"; // nocondense
+            }
+            """;
+        var tree = CSharpSyntaxTree.ParseText(code);
+        var settings = new CodeCondenserSettings { RepeatedStringLengthThreshold = 50 };
+
+        var occurrences = _detector.ExtractStringLiterals(tree, "src/Service.cs", settings);
+
+        occurrences.Should().BeEmpty();
+    }
+
+    [Fact]
+    public void ExtractStringLiterals_WithInlineBlockComment_AreFilteredOut()
+    {
+        var longString = "This is a very long string with a trailing block comment that suppresses analysis.";
+        var code = $$"""
+            public class Service
+            {
+                public void DoWork()
+                {
+                    var msg = "{{longString}}"; /* codecondenser:ignore-string */
+                }
+            }
+            """;
+        var tree = CSharpSyntaxTree.ParseText(code);
+        var settings = new CodeCondenserSettings { RepeatedStringLengthThreshold = 50 };
+
+        var occurrences = _detector.ExtractStringLiterals(tree, "src/Service.cs", settings);
+
+        occurrences.Should().BeEmpty();
+    }
+
+    [Fact]
+    public void ExtractStringLiterals_CapturesEnclosingNamespace()
+    {
+        var longString = "This is a very long string inside a specific namespace declaration.";
+        var code = $$"""
+            namespace Company.Product.Feature;
+
+            public class Service
+            {
+                public void DoWork()
+                {
+                    var msg = "{{longString}}";
+                }
+            }
+            """;
+        var tree = CSharpSyntaxTree.ParseText(code);
+        var settings = new CodeCondenserSettings { RepeatedStringLengthThreshold = 50 };
+
+        var occurrences = _detector.ExtractStringLiterals(tree, "src/Service.cs", settings);
+
+        occurrences.Should().HaveCount(1);
+        occurrences[0].Namespace.Should().Be("Company.Product.Feature");
+
+        var groups = _detector.GroupRepeatedStrings([occurrences[0], occurrences[0]], settings);
+        groups.Should().HaveCount(1);
+        groups[0].TargetNamespace.Should().Be("Company.Product.Feature");
+    }
+
+    [Fact]
+    public void Group_GenerateMinimalDeclaration_EscapesControlCharacters()
+    {
+        var specialString = "Line1\r\nLine2\tTabbed\0Null\bBack\fForm\vVert\"Quotes\"\\Backslash";
+        var occ1 = CreateOccurrence("src/A.cs", specialString, "M1");
+        var occ2 = CreateOccurrence("src/B.cs", specialString, "M2");
+
+        var group = new RepeatedStringGroup
+        {
+            Value = specialString,
+            Occurrences = [occ1, occ2],
+            Category = CloneCategory.Production,
+            SuggestedConstantName = "SpecialConstant",
+            SuggestedClassName = "MyConstants",
+            TargetNamespace = "TestNamespace"
+        };
+
+        var decl = group.GenerateMinimalDeclaration();
+        decl.Should().Contain("\\0");
+        decl.Should().Contain("\\b");
+        decl.Should().Contain("\\f");
+        decl.Should().Contain("\\v");
+        decl.Should().Contain("\\r\\n");
+        decl.Should().Contain("\\t");
+        decl.Should().Contain("\\\"Quotes\\\"");
+        decl.Should().Contain("\\\\Backslash");
+    }
 }

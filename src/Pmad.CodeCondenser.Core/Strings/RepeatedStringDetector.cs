@@ -85,6 +85,8 @@ public sealed class RepeatedStringDetector : IRepeatedStringDetector
 
             var constantName = ConstantNamingHelper.SuggestConstantName(stringValue);
 
+            var targetNamespace = occList.Select(o => o.Namespace).FirstOrDefault(n => !string.IsNullOrEmpty(n)) ?? "ApplicationNamespace";
+
             result.Add(new RepeatedStringGroup
             {
                 Value = stringValue,
@@ -92,7 +94,7 @@ public sealed class RepeatedStringDetector : IRepeatedStringDetector
                 Category = clusterCategory,
                 SuggestedConstantName = constantName,
                 SuggestedClassName = "MyConstants",
-                TargetNamespace = "ApplicationNamespace"
+                TargetNamespace = targetNamespace
             });
         }
 
@@ -178,6 +180,7 @@ public sealed class RepeatedStringDetector : IRepeatedStringDetector
             int endCol = lineSpan.EndLinePosition.Character + 1;
 
             string? enclosingMember = FindEnclosingMember(node);
+            string? enclosingNamespace = FindEnclosingNamespace(node);
 
             _occurrences.Add(new RepeatedStringOccurrence
             {
@@ -187,6 +190,7 @@ public sealed class RepeatedStringDetector : IRepeatedStringDetector
                 StartColumn = startCol,
                 EndColumn = endCol,
                 EnclosingMember = enclosingMember,
+                Namespace = enclosingNamespace,
                 ProjectId = _projectId,
                 Category = _fileCategory,
                 IsConstDeclaration = false,
@@ -244,6 +248,12 @@ public sealed class RepeatedStringDetector : IRepeatedStringDetector
             }
 
             return null;
+        }
+
+        private static string? FindEnclosingNamespace(SyntaxNode node)
+        {
+            var nsNode = node.FirstAncestorOrSelf<BaseNamespaceDeclarationSyntax>();
+            return nsNode?.Name.ToString();
         }
     }
 }

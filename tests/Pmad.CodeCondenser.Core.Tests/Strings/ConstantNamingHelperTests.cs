@@ -20,7 +20,7 @@ public class ConstantNamingHelperTests
     }
 
     [Fact]
-    public void SuggestConstantName_LeadingDigits_PrependsK()
+    public void SuggestConstantName_LeadingDigits_PrependsString()
     {
         var name = ConstantNamingHelper.SuggestConstantName("12345 special error message for testing");
         name.Should().StartWith("String_12345");

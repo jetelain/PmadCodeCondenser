@@ -54,4 +54,9 @@ public sealed record RepeatedStringOccurrence
     /// Indicates whether this occurrence is the initializer of an existing constant declaration.
     /// </summary>
     public bool IsConstDeclaration { get; init; }
+
+    /// <summary>
+    /// Enclosing namespace name if any.
+    /// </summary>
+    public string? Namespace { get; init; }
 }

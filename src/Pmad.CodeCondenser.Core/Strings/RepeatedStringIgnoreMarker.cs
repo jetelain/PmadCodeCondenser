@@ -35,24 +35,29 @@ public static class RepeatedStringIgnoreMarker
     {
         ArgumentNullException.ThrowIfNull(expression);
 
-        // 1. Check leading trivia on the expression itself
-        if (HasIgnoreCommentTrivia(expression.GetLeadingTrivia()))
+        // 1. Check leading and trailing trivia on the expression itself
+        if (HasIgnoreCommentTrivia(expression.GetLeadingTrivia()) ||
+            HasIgnoreCommentTrivia(expression.GetTrailingTrivia()))
         {
             return true;
         }
 
-        // 2. Check enclosing statement leading trivia
+        // 2. Check enclosing statement leading and trailing trivia
         var statement = expression.FirstAncestorOrSelf<StatementSyntax>();
-        if (statement != null && HasIgnoreCommentTrivia(statement.GetLeadingTrivia()))
+        if (statement != null &&
+            (HasIgnoreCommentTrivia(statement.GetLeadingTrivia()) ||
+             HasIgnoreCommentTrivia(statement.GetTrailingTrivia())))
         {
             return true;
         }
 
-        // 3. Check enclosing member (method, property, etc.)
+        // 3. Check enclosing member (method, property, field, etc.)
         var member = expression.FirstAncestorOrSelf<MemberDeclarationSyntax>();
         if (member != null)
         {
-            if (HasIgnoreAttribute(member) || HasIgnoreCommentTrivia(member.GetLeadingTrivia()))
+            if (HasIgnoreAttribute(member) ||
+                HasIgnoreCommentTrivia(member.GetLeadingTrivia()) ||
+                HasIgnoreCommentTrivia(member.GetTrailingTrivia()))
             {
                 return true;
             }
