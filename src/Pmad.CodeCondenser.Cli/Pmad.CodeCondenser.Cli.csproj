@@ -32,4 +32,8 @@
     <EmbeddedResource Include="..\..\.agents\skills\**\*" LogicalName="skills/%(RecursiveDir)%(Filename)%(Extension)" />
   </ItemGroup>
 
+  <ItemGroup>
+    <PackageReference Include="System.CommandLine" Version="2.0.13" />
+  </ItemGroup>
+
 </Project>
