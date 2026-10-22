@@ -162,4 +162,16 @@ public class CalculatorTests
         measurement.Tests.FilesCount.Should().Be(0);
         measurement.Total.FilesCount.Should().Be(1);
     }
+
+    [Fact]
+    public async Task RunAsync_MeasureCommand_WithSarifFormat_ReturnsError()
+    {
+        using var output = new StringWriter();
+        using var error = new StringWriter();
+
+        var exitCode = await Program.RunAsync(["measure", _testDirectory, "--format", "sarif"], output, error);
+
+        exitCode.Should().Be(ExitCodes.Error);
+        error.ToString().Should().Contain("SARIF report format is only supported for code analysis");
+    }
 }

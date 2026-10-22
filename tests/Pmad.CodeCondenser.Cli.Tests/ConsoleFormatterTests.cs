@@ -206,6 +206,92 @@ public class ConsoleFormatterTests
         output.Should().Contain("Comment Gain:      +150 chars, ~38 tokens (45% reduction)");
     }
 
+    [Fact]
+    public void PrintSummary_WithCloneGainTokens_OutputsCloneGain()
+    {
+        var formatter = new ConsoleFormatter(enableColor: false);
+        using var writer = new StringWriter();
+
+        formatter.PrintSummary(
+            writer,
+            filesAnalyzed: 5,
+            methodsScanned: 12,
+            cloneGroupsCount: 2,
+            verboseCommentsCount: 3,
+            mode: "Dry-Run",
+            cloneGainTokens: 250);
+
+        var output = writer.ToString();
+        output.Should().Contain("Clone Gain:        ~250 tokens (potential)");
+    }
+
+    [Fact]
+    public void PrintCloneGroups_WithEstimatorAndBaseDirectory_OutputsPotentialGain()
+    {
+        var tempDir = Path.Combine(Path.GetTempPath(), "CFTests_" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(tempDir);
+        try
+        {
+            var filePath = Path.Combine(tempDir, "A.cs");
+            File.WriteAllLines(filePath, Enumerable.Range(1, 10).Select(i => $"    var x{i} = Compute({i});"));
+
+            var methods = new List<MethodCloneInfo>
+            {
+                new("A.cs", "M1", 1, 10, 10, "hashA", "void M1()"),
+                new("A.cs", "M2", 1, 10, 10, "hashA", "void M2()")
+            };
+            var group = new CodeCloneGroup("hashA", methods, CloneCategory.Production, ImpactScore: 10);
+
+            var formatter = new ConsoleFormatter(enableColor: false);
+            using var writer = new StringWriter();
+            formatter.PrintCloneGroups(writer, [group], tempDir, Pmad.AI.Tokens.HeuristicTokenEstimator.Default);
+
+            var output = writer.ToString();
+            output.Should().Contain("Potential Gain: ~");
+            output.Should().Contain("tokens");
+        }
+        finally
+        {
+            if (Directory.Exists(tempDir))
+            {
+                Directory.Delete(tempDir, recursive: true);
+            }
+        }
+    }
+
+    [Fact]
+    public void PrintSubMethodCloneGroups_WithEstimatorAndBaseDirectory_OutputsPotentialGain()
+    {
+        var tempDir = Path.Combine(Path.GetTempPath(), "CFTests_Sub_" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(tempDir);
+        try
+        {
+            var filePath = Path.Combine(tempDir, "B.cs");
+            File.WriteAllLines(filePath, Enumerable.Range(1, 10).Select(i => $"    var y{i} = Compute({i});"));
+
+            var occurrences = new List<SubMethodCloneOccurrence>
+            {
+                new("B.cs", "M1", 1, 5, 5),
+                new("B.cs", "M2", 1, 5, 5)
+            };
+            var group = new SubMethodCloneGroup("subHash", occurrences, 5, CloneCategory.Production, ImpactScore: 5);
+
+            var formatter = new ConsoleFormatter(enableColor: false);
+            using var writer = new StringWriter();
+            formatter.PrintSubMethodCloneGroups(writer, [group], tempDir, Pmad.AI.Tokens.HeuristicTokenEstimator.Default);
+
+            var output = writer.ToString();
+            output.Should().Contain("Potential Gain: ~");
+            output.Should().Contain("tokens");
+        }
+        finally
+        {
+            if (Directory.Exists(tempDir))
+            {
+                Directory.Delete(tempDir, recursive: true);
+            }
+        }
+    }
 
     [Fact]
     public void PrintStatusMessages_OutputsCorrectly()

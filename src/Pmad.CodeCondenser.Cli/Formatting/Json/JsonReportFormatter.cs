@@ -73,7 +73,7 @@ public sealed class JsonReportFormatter : IReportFormatter
             TotalCommentGainCharacters = commentGainResult.SummarizedCount > 0 ? commentGainResult.GainCharacters : null,
             TotalCommentReductionPercent = commentGainResult.SummarizedCount > 0 ? commentGainResult.ReductionPercent : null,
             TotalCommentGainTokens = commentGainResult.SummarizedCount > 0 ? commentGainResult.GainTokens : null,
-            TotalCloneGainTokens = CloneGainEstimator.EstimateTotalGainTokens(result.CloneGroups, result.SubMethodCloneGroups, estimator) is > 0 and var cloneGain ? cloneGain : null
+            TotalCloneGainTokens = CloneGainEstimator.EstimateTotalGainTokens(result.CloneGroups, result.SubMethodCloneGroups, estimator, baseDirectory) is > 0 and var cloneGain ? cloneGain : null
         };
 
         var cloneClusters = new List<JsonCloneCluster>();
@@ -102,7 +102,7 @@ public sealed class JsonReportFormatter : IReportFormatter
                 StatementCount = group.StatementCount,
                 Methods = methods,
                 Recommendation = recommendation,
-                PotentialGainTokens = CloneGainEstimator.EstimateGainTokens(group, estimator) is > 0 and var methodGain ? methodGain : null
+                PotentialGainTokens = CloneGainEstimator.EstimateGainTokens(group, estimator, baseDirectory) is > 0 and var methodGain ? methodGain : null
             });
         }
 
@@ -128,7 +128,7 @@ public sealed class JsonReportFormatter : IReportFormatter
                 StatementCount = subGroup.StatementCount,
                 Occurrences = occurrences,
                 Recommendation = recommendation,
-                PotentialGainTokens = CloneGainEstimator.EstimateGainTokens(subGroup, estimator) is > 0 and var subGain ? subGain : null
+                PotentialGainTokens = CloneGainEstimator.EstimateGainTokens(subGroup, estimator, baseDirectory) is > 0 and var subGain ? subGain : null
             });
         }
 

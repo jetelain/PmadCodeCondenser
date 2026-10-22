@@ -173,4 +173,10 @@ public class CodeMeasurerTests
         estimator.SymbolFactor.Should().Be(expectedSymbolFactor);
     }
 
+    [Fact]
+    public void ResolveEstimator_NullSettings_ReturnsDefaultEstimator()
+    {
+        var estimator = CodeCondenserEngine.ResolveEstimator(null);
+        estimator.Should().Be(HeuristicTokenEstimator.Default);
+    }
 }

@@ -13,12 +13,13 @@ public static class CloneGainEstimator
     /// Estimates the tokens saved by keeping a single copy of a method clone group.
     /// Returns 0 when source files cannot be read.
     /// </summary>
-    public static int EstimateGainTokens(CodeCloneGroup group, HeuristicTokenEstimator? estimator = null)
+    public static int EstimateGainTokens(CodeCloneGroup group, HeuristicTokenEstimator? estimator = null, string? baseDirectory = null)
     {
         ArgumentNullException.ThrowIfNull(group);
         return EstimateGain(
             group.Methods.Select(m => (m.FilePath, m.StartLine, m.EndLine)),
             estimator,
+            baseDirectory,
             new Dictionary<string, string[]?>(StringComparer.OrdinalIgnoreCase));
     }
 
@@ -26,12 +27,13 @@ public static class CloneGainEstimator
     /// Estimates the tokens saved by keeping a single copy of a sub-method clone group.
     /// Returns 0 when source files cannot be read.
     /// </summary>
-    public static int EstimateGainTokens(SubMethodCloneGroup group, HeuristicTokenEstimator? estimator = null)
+    public static int EstimateGainTokens(SubMethodCloneGroup group, HeuristicTokenEstimator? estimator = null, string? baseDirectory = null)
     {
         ArgumentNullException.ThrowIfNull(group);
         return EstimateGain(
             group.Occurrences.Select(o => (o.FilePath, o.StartLine, o.EndLine)),
             estimator,
+            baseDirectory,
             new Dictionary<string, string[]?>(StringComparer.OrdinalIgnoreCase));
     }
 
@@ -41,7 +43,8 @@ public static class CloneGainEstimator
     public static int EstimateTotalGainTokens(
         IReadOnlyList<CodeCloneGroup> cloneGroups,
         IReadOnlyList<SubMethodCloneGroup> subMethodGroups,
-        HeuristicTokenEstimator? estimator = null)
+        HeuristicTokenEstimator? estimator = null,
+        string? baseDirectory = null)
     {
         ArgumentNullException.ThrowIfNull(cloneGroups);
         ArgumentNullException.ThrowIfNull(subMethodGroups);
@@ -50,11 +53,11 @@ public static class CloneGainEstimator
         int total = 0;
         foreach (var g in cloneGroups)
         {
-            total += EstimateGain(g.Methods.Select(m => (m.FilePath, m.StartLine, m.EndLine)), estimator, cache);
+            total += EstimateGain(g.Methods.Select(m => (m.FilePath, m.StartLine, m.EndLine)), estimator, baseDirectory, cache);
         }
         foreach (var g in subMethodGroups)
         {
-            total += EstimateGain(g.Occurrences.Select(o => (o.FilePath, o.StartLine, o.EndLine)), estimator, cache);
+            total += EstimateGain(g.Occurrences.Select(o => (o.FilePath, o.StartLine, o.EndLine)), estimator, baseDirectory, cache);
         }
         return total;
     }
@@ -62,13 +65,14 @@ public static class CloneGainEstimator
     private static int EstimateGain(
         IEnumerable<(string FilePath, int StartLine, int EndLine)> ranges,
         HeuristicTokenEstimator? estimator,
+        string? baseDirectory,
         Dictionary<string, string[]?> cache)
     {
         var effEstimator = estimator ?? HeuristicTokenEstimator.Default;
         var tokens = new List<int>();
         foreach (var (path, start, end) in ranges)
         {
-            tokens.Add(MeasureRange(path, start, end, effEstimator, cache));
+            tokens.Add(MeasureRange(path, start, end, effEstimator, baseDirectory, cache));
         }
 
         if (tokens.Count < 2)
@@ -85,13 +89,24 @@ public static class CloneGainEstimator
         int startLine,
         int endLine,
         HeuristicTokenEstimator estimator,
+        string? baseDirectory,
         Dictionary<string, string[]?> cache)
     {
         if (!cache.TryGetValue(path, out var lines))
         {
+            var resolvedPath = path;
+            if (!string.IsNullOrEmpty(baseDirectory) && !Path.IsPathRooted(path) && !File.Exists(path))
+            {
+                var combined = Path.Combine(baseDirectory, path);
+                if (File.Exists(combined))
+                {
+                    resolvedPath = combined;
+                }
+            }
+
             try
             {
-                lines = File.Exists(path) ? File.ReadAllLines(path) : null;
+                lines = File.Exists(resolvedPath) ? File.ReadAllLines(resolvedPath) : null;
             }
             catch (IOException)
             {

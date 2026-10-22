@@ -64,7 +64,7 @@ public sealed class ConsoleReportFormatter : IReportFormatter
             commentGain,
             commentReduction,
             commentGainTokens,
-            CloneGainEstimator.EstimateTotalGainTokens(result.CloneGroups, result.SubMethodCloneGroups, estimator));
+            CloneGainEstimator.EstimateTotalGainTokens(result.CloneGroups, result.SubMethodCloneGroups, estimator, baseDirectory));
 
         return Task.CompletedTask;
     }

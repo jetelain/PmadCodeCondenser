@@ -62,7 +62,7 @@ public sealed class ConsoleFormatter : IConsoleFormatter
                 var shortHash = group.NormalizedHash.Length > 12 ? group.NormalizedHash[..12] : group.NormalizedHash;
                 var prefix = group.Category == CloneCategory.CrossBoundary ? "CROSS-BOUNDARY" : "PRODUCTION";
 
-                var gainText = CloneGainText(CloneGainEstimator.EstimateGainTokens(group, estimator));
+                var gainText = CloneGainText(CloneGainEstimator.EstimateGainTokens(group, estimator, baseDirectory));
                 writer.WriteLine(Yellow($"[{prefix} CLUSTER #{i + 1}] (Impact: {group.ImpactScore}{gainText}, AST Hash: {shortHash}...)"));
                 writer.WriteLine($"  Methods ({group.Methods.Count}):");
 
@@ -105,7 +105,7 @@ public sealed class ConsoleFormatter : IConsoleFormatter
                 var group = testGroups[i];
                 var shortHash = group.NormalizedHash.Length > 12 ? group.NormalizedHash[..12] : group.NormalizedHash;
 
-                var gainText = CloneGainText(CloneGainEstimator.EstimateGainTokens(group, estimator));
+                var gainText = CloneGainText(CloneGainEstimator.EstimateGainTokens(group, estimator, baseDirectory));
                 writer.WriteLine(Yellow($"[TEST CLUSTER #{i + 1}] (Impact: {group.ImpactScore}{gainText}, AST Hash: {shortHash}...)"));
                 writer.WriteLine($"  Methods ({group.Methods.Count}):");
 
@@ -149,7 +149,7 @@ public sealed class ConsoleFormatter : IConsoleFormatter
         for (int i = 0; i < groups.Count; i++)
         {
             var group = groups[i];
-            var gainText = CloneGainText(CloneGainEstimator.EstimateGainTokens(group, estimator));
+            var gainText = CloneGainText(CloneGainEstimator.EstimateGainTokens(group, estimator, baseDirectory));
             writer.WriteLine(Yellow($"[SUB-METHOD DUPLICATION CLUSTER #{i + 1}] ({group.StatementCount} consecutive statements, Impact: {group.ImpactScore}{gainText})"));
             writer.WriteLine($"  Occurrences ({group.Occurrences.Count}):");
 

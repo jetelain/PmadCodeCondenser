@@ -125,4 +125,73 @@ public class JsonReportFormatterTests
         verbComment.GainCharacters.Should().Be(96);
         verbComment.GainTokens.Should().Be(report.Summary.TotalCommentGainTokens);
     }
+
+    [Fact]
+    public async Task FormatAsync_WithExistingFiles_PopulatesClonePotentialGainTokens()
+    {
+        var tempDir = Path.Combine(Path.GetTempPath(), "JsonGainTests_" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(tempDir);
+        try
+        {
+            var srcDir = Path.Combine(tempDir, "src");
+            Directory.CreateDirectory(srcDir);
+
+            var fileA = Path.Combine(srcDir, "A.cs");
+            var fileB = Path.Combine(srcDir, "B.cs");
+            File.WriteAllLines(fileA, Enumerable.Range(1, 10).Select(i => $"    var val{i} = ExecuteStep({i});"));
+            File.WriteAllLines(fileB, Enumerable.Range(1, 10).Select(i => $"    var val{i} = ExecuteStep({i});"));
+
+            var methods = new List<MethodCloneInfo>
+            {
+                new("src/A.cs", "DoStep", 1, 10, 10, "astHashA", "void DoStep()"),
+                new("src/B.cs", "DoStep", 1, 10, 10, "astHashA", "void DoStep()")
+            };
+            var cloneGroup = new CodeCloneGroup("astHashA", methods, CloneCategory.Production, ImpactScore: 10);
+
+            var occurrences = new List<SubMethodCloneOccurrence>
+            {
+                new("src/A.cs", "DoStep", 1, 5, 5),
+                new("src/B.cs", "DoStep", 1, 5, 5)
+            };
+            var subGroup = new SubMethodCloneGroup("subHash1", occurrences, 5, CloneCategory.Production, ImpactScore: 5);
+
+            var result = new AnalysisResult
+            {
+                AnalyzedFilesCount = 2,
+                ProductionFilesCount = 2,
+                TestFilesCount = 0,
+                SkippedGeneratedFilesCount = 0,
+                TotalMethodsScanned = 2,
+                CloneGroups = [cloneGroup],
+                SubMethodCloneGroups = [subGroup],
+                VerboseComments = [],
+                SummarizedComments = new Dictionary<string, string>()
+            };
+
+            using var writer = new StringWriter();
+            await _formatter.FormatAsync(result, _settings, writer, tempDir);
+
+            var json = writer.ToString();
+            var report = JsonSerializer.Deserialize<CodeCondenserJsonReport>(json, new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase });
+
+            report.Should().NotBeNull();
+            report!.Summary.TotalCloneGainTokens.Should().NotBeNull();
+            report.Summary.TotalCloneGainTokens.Should().BeGreaterThan(0);
+
+            report.CloneClusters.Should().HaveCount(1);
+            report.CloneClusters[0].PotentialGainTokens.Should().NotBeNull();
+            report.CloneClusters[0].PotentialGainTokens.Should().BeGreaterThan(0);
+
+            report.SubMethodClusters.Should().HaveCount(1);
+            report.SubMethodClusters[0].PotentialGainTokens.Should().NotBeNull();
+            report.SubMethodClusters[0].PotentialGainTokens.Should().BeGreaterThan(0);
+        }
+        finally
+        {
+            if (Directory.Exists(tempDir))
+            {
+                Directory.Delete(tempDir, recursive: true);
+            }
+        }
+    }
 }

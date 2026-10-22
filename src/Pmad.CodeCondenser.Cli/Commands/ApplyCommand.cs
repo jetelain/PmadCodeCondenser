@@ -122,7 +122,7 @@ public sealed class ApplyCommand : ICommand
             commentGain,
             commentReduction,
             commentGainTokens,
-            Pmad.CodeCondenser.Core.Clones.CloneGainEstimator.EstimateTotalGainTokens(result.CloneGroups, result.SubMethodCloneGroups, estimator));
+            Pmad.CodeCondenser.Core.Clones.CloneGainEstimator.EstimateTotalGainTokens(result.CloneGroups, result.SubMethodCloneGroups, estimator, baseDirectory));
 
         if (options.Incremental)
         {

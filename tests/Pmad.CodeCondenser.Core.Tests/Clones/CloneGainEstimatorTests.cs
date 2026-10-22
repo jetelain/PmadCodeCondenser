@@ -71,4 +71,54 @@ public class CloneGainEstimatorTests : IDisposable
 
         total.Should().Be(CloneGainEstimator.EstimateGainTokens(methodGroup) + CloneGainEstimator.EstimateGainTokens(subGroup));
     }
+
+    [Fact]
+    public void EstimateGainTokens_RelativePathWithBaseDirectory_ResolvesFileCorrectly()
+    {
+        var subDir = Path.Combine(_dir, "nested");
+        Directory.CreateDirectory(subDir);
+        var filePath = Path.Combine(subDir, "Service.cs");
+        File.WriteAllLines(filePath, Enumerable.Range(1, 10).Select(i => $"    var step{i} = Execute({i});"));
+
+        var relPath = "nested/Service.cs";
+        var group = new CodeCloneGroup("h",
+        [
+            new MethodCloneInfo(relPath, "M1", 1, 10, 10, "h", "void M1()"),
+            new MethodCloneInfo(relPath, "M2", 1, 10, 10, "h", "void M2()")
+        ]);
+
+        // When baseDirectory is provided, relative paths resolve against baseDirectory
+        var gainWithBase = CloneGainEstimator.EstimateGainTokens(group, baseDirectory: _dir);
+        gainWithBase.Should().BeGreaterThan(0);
+
+        // When baseDirectory is not provided and CWD is not _dir, file is not found and returns 0
+        var gainWithoutBase = CloneGainEstimator.EstimateGainTokens(group);
+        gainWithoutBase.Should().Be(0);
+    }
+
+    [Fact]
+    public void EstimateTotalGainTokens_RelativePathWithBaseDirectory_SumsCorrectly()
+    {
+        var subDir = Path.Combine(_dir, "nested");
+        Directory.CreateDirectory(subDir);
+        var filePath = Path.Combine(subDir, "Service.cs");
+        File.WriteAllLines(filePath, Enumerable.Range(1, 10).Select(i => $"    var step{i} = Execute({i});"));
+
+        var relPath = "nested/Service.cs";
+        var methodGroup = new CodeCloneGroup("h",
+        [
+            new MethodCloneInfo(relPath, "M1", 1, 10, 10, "h", "void M1()"),
+            new MethodCloneInfo(relPath, "M2", 1, 10, 10, "h", "void M2()")
+        ]);
+        var subGroup = new SubMethodCloneGroup("h2",
+        [
+            new SubMethodCloneOccurrence(relPath, "M1", 1, 5, 5),
+            new SubMethodCloneOccurrence(relPath, "M2", 1, 5, 5)
+        ], 5);
+
+        var total = CloneGainEstimator.EstimateTotalGainTokens([methodGroup], [subGroup], baseDirectory: _dir);
+        total.Should().BeGreaterThan(0);
+        total.Should().Be(CloneGainEstimator.EstimateGainTokens(methodGroup, baseDirectory: _dir) +
+                          CloneGainEstimator.EstimateGainTokens(subGroup, baseDirectory: _dir));
+    }
 }

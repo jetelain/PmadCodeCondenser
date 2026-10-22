@@ -35,6 +35,12 @@ public sealed class MeasureCommand : ICommand
         ArgumentNullException.ThrowIfNull(output);
         ArgumentNullException.ThrowIfNull(error);
 
+        if (options.Format == OutputFormat.Sarif)
+        {
+            formatter.PrintError(error, "SARIF report format is only supported for code analysis ('analyze'), not for token measurement. Use '--format json' or console format.");
+            return ExitCodes.Error;
+        }
+
         bool isMachineReadableStdout = options.Format != OutputFormat.Console && string.IsNullOrWhiteSpace(options.OutputFilePath);
         var statusWriter = isMachineReadableStdout ? error : output;
 

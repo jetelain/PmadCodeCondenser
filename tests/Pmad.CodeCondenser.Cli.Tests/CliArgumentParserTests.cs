@@ -753,5 +753,16 @@ public class CliArgumentParserTests
         options.TokenEstimator.Should().Be("qwen");
         options.Model.Should().Be("gemma4:e4b");
     }
+
+    [Fact]
+    public void TryParse_EmptyStringArgument_DoesNotTriggerTokenEstimator()
+    {
+        var success = CliArgumentParser.TryParse(["measure", "./src", ""], out var options, out var error);
+
+        success.Should().BeTrue();
+        error.Should().BeNull();
+        options.TokenEstimator.Should().BeNull();
+        options.TargetPath.Should().Be("./src");
+    }
 }
 

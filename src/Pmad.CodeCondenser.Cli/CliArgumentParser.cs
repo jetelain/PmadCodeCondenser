@@ -500,7 +500,7 @@ public static class CliArgumentParser
         }
 
         if (string.Equals(arg, longName, StringComparison.OrdinalIgnoreCase) ||
-            string.Equals(arg, shortName, StringComparison.OrdinalIgnoreCase))
+            (!string.IsNullOrEmpty(shortName) && string.Equals(arg, shortName, StringComparison.OrdinalIgnoreCase)))
         {
             if (index + 1 < args.Length && (!args[index + 1].StartsWith('-') || int.TryParse(args[index + 1], out _)))
             {

@@ -748,9 +748,9 @@ public sealed class CodeCondenserEngine : ICodeCondenserEngine
     /// <summary>
     /// Resolves the fine-tuned <see cref="HeuristicTokenEstimator"/> preset corresponding to configured settings.
     /// </summary>
-    public static HeuristicTokenEstimator ResolveEstimator(CodeCondenserSettings settings)
+    public static HeuristicTokenEstimator ResolveEstimator(CodeCondenserSettings? settings)
     {
-        var estimator = settings.TokenEstimator;
+        var estimator = settings?.TokenEstimator;
         if (!string.IsNullOrWhiteSpace(estimator))
         {
             if (estimator.Contains("qwen", StringComparison.OrdinalIgnoreCase))
