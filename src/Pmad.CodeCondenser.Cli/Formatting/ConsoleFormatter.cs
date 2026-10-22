@@ -1,3 +1,4 @@
+using System.Globalization;
 using Pmad.CodeCondenser.Core.Comments;
 using Pmad.CodeCondenser.Core.Models;
 
@@ -705,5 +706,39 @@ public sealed class ConsoleFormatter : IConsoleFormatter
             writer.WriteLine(Green($"✓ Skills successfully {(dryRun ? "evaluated" : "synchronized")} ({summaryText})."));
         }
     }
+
+    public void PrintMeasurementResult(
+        TextWriter writer,
+        CodeMeasurementResult result,
+        string targetPath,
+        string estimatorName)
+    {
+        ArgumentNullException.ThrowIfNull(writer);
+        ArgumentNullException.ThrowIfNull(result);
+
+        writer.WriteLine(Dim("--------------------------------------------------------------------------------"));
+        writer.WriteLine(Bold($"Code Token Measurement (Estimator: {estimatorName}):"));
+        writer.WriteLine($"  Target:            {Path.GetFullPath(targetPath)}");
+        if (result.SkippedGeneratedFilesCount > 0)
+        {
+            writer.WriteLine($"  Skipped Generated: {result.SkippedGeneratedFilesCount}");
+        }
+        writer.WriteLine();
+
+        writer.WriteLine(Bold($"{"Category".PadRight(16)} {"Files".PadLeft(8)} {"Code Tokens".PadLeft(16)} {"Comment Tokens".PadLeft(18)} {"Total Tokens".PadLeft(16)}"));
+        writer.WriteLine(Dim("--------------------------------------------------------------------------------"));
+
+        var inv = CultureInfo.InvariantCulture;
+        writer.WriteLine($"{Cyan("Production".PadRight(16))} {result.Production.FilesCount.ToString("N0", inv).PadLeft(8)} {result.Production.CodeTokens.ToString("N0", inv).PadLeft(16)} {result.Production.CommentTokens.ToString("N0", inv).PadLeft(18)} {Bold(result.Production.TotalTokens.ToString("N0", inv).PadLeft(16))}");
+
+        writer.WriteLine($"{Cyan("Tests".PadRight(16))} {result.Tests.FilesCount.ToString("N0", inv).PadLeft(8)} {result.Tests.CodeTokens.ToString("N0", inv).PadLeft(16)} {result.Tests.CommentTokens.ToString("N0", inv).PadLeft(18)} {Bold(result.Tests.TotalTokens.ToString("N0", inv).PadLeft(16))}");
+
+        writer.WriteLine(Dim("--------------------------------------------------------------------------------"));
+
+        writer.WriteLine($"{Bold("Total".PadRight(16))} {Bold(result.Total.FilesCount.ToString("N0", inv).PadLeft(8))} {Bold(result.Total.CodeTokens.ToString("N0", inv).PadLeft(16))} {Bold(result.Total.CommentTokens.ToString("N0", inv).PadLeft(18))} {Green(Bold(result.Total.TotalTokens.ToString("N0", inv).PadLeft(16)))}");
+
+        writer.WriteLine(Dim("--------------------------------------------------------------------------------"));
+    }
 }
+
 

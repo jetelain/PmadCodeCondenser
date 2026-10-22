@@ -24,6 +24,7 @@ public class CliArgumentParserTests
     [InlineData("analyze", CliOptions.CommandAnalyze)]
     [InlineData("apply", CliOptions.CommandApply)]
     [InlineData("snapshot", CliOptions.CommandSnapshot)]
+    [InlineData("measure", CliOptions.CommandMeasure)]
     public void TryParse_CommandVerbs_SetsCommandCorrectly(string verb, string expectedCommand)
     {
         var success = CliArgumentParser.TryParse([verb, "./src"], out var options, out var error);
@@ -712,6 +713,45 @@ public class CliArgumentParserTests
         success.Should().BeTrue();
         error.Should().BeNull();
         options.DryRun.Should().BeTrue();
+    }
+
+    [Fact]
+    public void TryParse_MeasureCommand_SetsCommandAndPath()
+    {
+        var success = CliArgumentParser.TryParse(["measure", "src/Core"], out var options, out var error);
+
+        success.Should().BeTrue();
+        error.Should().BeNull();
+        options.Command.Should().Be(CliOptions.CommandMeasure);
+        options.TargetPath.Should().Be("src/Core");
+    }
+
+    [Theory]
+    [InlineData("--estimator", "qwen")]
+    [InlineData("-te", "gemma")]
+    [InlineData("--token-estimator", "default")]
+    public void TryParse_EstimatorFlags_SetsTokenEstimator(string flag, string expectedValue)
+    {
+        var success = CliArgumentParser.TryParse(["measure", flag, expectedValue], out var options, out var error);
+
+        success.Should().BeTrue();
+        error.Should().BeNull();
+        options.TokenEstimator.Should().Be(expectedValue);
+    }
+
+    [Fact]
+    public void TryParse_EstimatorOption_IsIndependentFromModelOption()
+    {
+        var success = CliArgumentParser.TryParse([
+            "measure",
+            "--estimator", "qwen",
+            "--model", "gemma4:e4b"
+        ], out var options, out var error);
+
+        success.Should().BeTrue();
+        error.Should().BeNull();
+        options.TokenEstimator.Should().Be("qwen");
+        options.Model.Should().Be("gemma4:e4b");
     }
 }
 

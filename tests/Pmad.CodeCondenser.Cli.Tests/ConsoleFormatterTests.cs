@@ -456,4 +456,44 @@ public class ConsoleFormatterTests
         output.Should().Contain("Verbose Comments:");
         output.Should().Contain("To suppress: Add 'condense=\"no\"' attribute (XML doc) or '// codecondenser:ignore'");
     }
+
+    [Fact]
+    public void PrintMeasurementResult_OutputsFormattedTable()
+    {
+        var formatter = new ConsoleFormatter(enableColor: false);
+        using var writer = new StringWriter();
+
+        var result = new CodeMeasurementResult
+        {
+            Production = new CategoryMeasurement { FilesCount = 10, CodeTokens = 15000, CommentTokens = 3000, TotalTokens = 18000 },
+            Tests = new CategoryMeasurement { FilesCount = 5, CodeTokens = 8000, CommentTokens = 500, TotalTokens = 8500 },
+            Total = new CategoryMeasurement { FilesCount = 15, CodeTokens = 23000, CommentTokens = 3500, TotalTokens = 26500 },
+            Files =
+            [
+                new FileMeasurement("src/App.cs", FileCategory.Production, 15000, 3000, 18000),
+                new FileMeasurement("tests/AppTests.cs", FileCategory.Test, 8000, 500, 8500)
+            ],
+            SkippedGeneratedFilesCount = 2
+        };
+
+        formatter.PrintMeasurementResult(writer, result, "C:\\MyProject", "qwen");
+
+        var output = writer.ToString();
+        output.Should().Contain("Estimator: qwen");
+        output.Should().Contain("Category");
+        output.Should().Contain("Code Tokens");
+        output.Should().Contain("Comment Tokens");
+        output.Should().Contain("Total");
+        output.Should().Contain("Production");
+        output.Should().Contain("15,000");
+        output.Should().Contain("3,000");
+        output.Should().Contain("18,000");
+        output.Should().Contain("Tests");
+        output.Should().Contain("8,000");
+        output.Should().Contain("500");
+        output.Should().Contain("8,500");
+        output.Should().Contain("23,000");
+        output.Should().Contain("3,500");
+        output.Should().Contain("26,500");
+    }
 }

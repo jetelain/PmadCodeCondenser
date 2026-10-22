@@ -133,6 +133,22 @@ public sealed class CodeCondenserSettings
     public OllamaSettings Ollama { get; set; } = new();
 
     /// <summary>
+    /// Token estimator preset or model family to use when measuring code in LLM tokens (e.g. "default", "qwen", "gemma").
+    /// Distinct from <see cref="OllamaSettings.Model"/> which is used for comment summarization.
+    /// Default is "default".
+    /// </summary>
+    public string TokenEstimator { get; set; } = "default";
+
+    /// <summary>
+    /// Alias for <see cref="TokenEstimator"/>.
+    /// </summary>
+    public string? Estimator
+    {
+        get => TokenEstimator;
+        set { if (!string.IsNullOrWhiteSpace(value)) TokenEstimator = value; }
+    }
+
+    /// <summary>
     /// When true, indicates that an LLM model, endpoint, or provider was explicitly configured.
     /// </summary>
     public bool IsLlmConfigured { get; set; }
@@ -437,7 +453,8 @@ public sealed class CodeCondenserSettings
             TestPaths = new List<string>(TestPaths),
             ExcludeGeneratedCode = ExcludeGeneratedCode,
             GeneratedCodePatterns = new List<string>(GeneratedCodePatterns),
-            IgnoredCommentHashes = new HashSet<string>(IgnoredCommentHashes, StringComparer.Ordinal)
+            IgnoredCommentHashes = new HashSet<string>(IgnoredCommentHashes, StringComparer.Ordinal),
+            TokenEstimator = TokenEstimator
         };
     }
 }

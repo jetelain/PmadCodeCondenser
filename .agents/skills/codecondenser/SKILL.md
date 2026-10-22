@@ -32,6 +32,8 @@ The CLI can be invoked via the global tool `pmad-codecondenser`, local tool `dot
 | **Apply summarized comments to disk** | `pmad-codecondenser ./src --apply` | No (uses cache) |
 | **Refresh baseline snapshot** | `pmad-codecondenser snapshot ./src` | No |
 | **Install/update workspace agent skills** | `pmad-codecondenser skills [path]` | No |
+| **Measure code tokens (total, comments, code)** | `pmad-codecondenser measure ./src` | No |
+| **Measure code tokens with specific estimator** | `pmad-codecondenser measure ./src --estimator qwen` | No |
 
 > [!NOTE]
 > **Summary Modes**:
@@ -89,6 +91,25 @@ When asked to condense or clean up verbose comments:
 4. **Git hygiene**:
    - Commit `.codecondenser/summarized-comments.json` (prevents re-analyzing already condensed comments).
    - Ensure `.codecondenser/snapshot.json` is ignored in `.gitignore`.
+
+### Workflow 4: Measuring Codebase in LLM Tokens
+When estimating context window usage or assessing codebase token footprint for AI coding agents:
+```bash
+# Standard measurement across production and test code
+pmad-codecondenser measure ./src
+
+# Using a specific token estimator preset (default, qwen, gemma)
+pmad-codecondenser measure ./src --estimator qwen
+
+# Exporting measurement data in JSON format
+pmad-codecondenser measure ./src --format json -o tokens.json
+```
+The `measure` verb returns:
+- **Total tokens**: Total estimated tokens in the codebase.
+- **Comments tokens**: Tokens consumed by inline, multi-line, and XML doc comments.
+- **Code tokens**: Tokens consumed by actual code excluding comments.
+- Broken down per category: **Production**, **Tests**, and overall **Total**.
+- *Important*: The token estimator choice is a specific setting (`--estimator` / `-te` / `"tokenEstimator"`, using `Pmad.AI.HeuristicTokenEstimator`), **not** `Ollama.Model` (which is exclusively reserved for LLM comment summarization). Estimation is local, instantaneous, and requires no backend service.
 
 ---
 

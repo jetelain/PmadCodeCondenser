@@ -270,6 +270,14 @@ public static class CliArgumentParser
                 continue;
             }
 
+            if (TryExtractOptionValue(args, ref i, "--estimator", "-te", out var teVal, out errorMessage) ||
+                TryExtractOptionValue(args, ref i, "--token-estimator", string.Empty, out teVal, out errorMessage))
+            {
+                if (errorMessage != null) return false;
+                options.TokenEstimator = teVal;
+                continue;
+            }
+
             if (TryExtractOptionValue(args, ref i, "--endpoint", "-e", out var endpointVal, out errorMessage))
             {
                 if (errorMessage != null) return false;
@@ -418,7 +426,7 @@ public static class CliArgumentParser
         if (positionalArgs.Count > 0)
         {
             var first = positionalArgs[0].ToLowerInvariant();
-            if (first is CliOptions.CommandAnalyze or CliOptions.CommandApply or CliOptions.CommandSnapshot or CliOptions.CommandSkills or "skill" or "install-skills" or "install-skill")
+            if (first is CliOptions.CommandAnalyze or CliOptions.CommandApply or CliOptions.CommandSnapshot or CliOptions.CommandSkills or CliOptions.CommandMeasure or "skill" or "install-skills" or "install-skill")
             {
                 options.Command = first is "skill" or "install-skills" or "install-skill" ? CliOptions.CommandSkills : first;
                 explicitCommand = true;
@@ -522,6 +530,7 @@ public static class CliArgumentParser
           apply [path]                Apply summarized comments directly to source files on disk
           snapshot [path]             Create or refresh the snapshot baseline
           skills [path]               Install or update AI agent skills in the workspace (.agents/skills)
+          measure [path]              Measure code in terms of estimated LLM tokens (total, comments, code)
 
         Arguments:
           [path]                      Target directory or C# file to analyze (default: current directory)
@@ -545,6 +554,7 @@ public static class CliArgumentParser
           -sc, --summarized-comments <path> Path to summarized comments JSON file stored in git (default: .codecondenser/summarized-comments.json)
           -mll, --max-line-length <n>  Maximum line length for formatted comments (default: 120)
           -m, --model <name>          Specify LLM model name (default: gemma4:e4b)
+          -te, --estimator <name>     Token estimator preset: default, qwen, or gemma (default: default)
           -e, --endpoint <url>        Specify Ollama endpoint URL (default: http://localhost:11434)
           -cs, --context-size <n>     Specify context window size in tokens (default: 24576)
           -c, --config <path>         Path to custom codecondenser.json configuration file

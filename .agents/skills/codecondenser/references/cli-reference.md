@@ -20,6 +20,7 @@ pmad-codecondenser [command] [path] [options]
 | `apply [path]` | Write summarized comments directly to source files on disk | `.` |
 | `snapshot [path]` | Create or update the baseline snapshot in `.codecondenser/snapshot.json` | `.` |
 | `skills [path]` | Install or update bundled agent skills in the workspace (`.agents/skills`) | `.` |
+| `measure [path]` | Measure code in terms of estimated LLM tokens (total, comments, code) | `.` |
 
 ---
 
@@ -43,6 +44,7 @@ pmad-codecondenser [command] [path] [options]
 | `--max-line-length <n>` | `-mll` | `int` | `120` | Max line length for formatted XML comments |
 | `--summarized-comments <path>` | `-sc` | `string` | `.codecondenser/summarized-comments.json` | Path to persistent store file stored in git |
 | `--model <name>` | `-m` | `string` | `gemma4:e4b` | LLM model tag for comment summarization |
+| `--estimator <name>` | `-te` | `string` | `default` | Token estimator preset (`default`, `qwen`, `gemma`) for code measurement |
 | `--endpoint <url>` | `-e` | `string` | `http://localhost:11434` | Ollama service endpoint URL |
 | `--context-size <n>` | `-cs` | `int` | `24576` | Ollama context window size (`num_ctx`) |
 | `--config <path>` | `-c` | `string` | Auto | Path to custom `codecondenser.json` config file |
@@ -105,6 +107,7 @@ To configure personal LLM defaults (Ollama endpoint, default model, context size
   "includeXmlDocumentation": true,
   "maxCommentLineLength": 120,
   "maxParallelLlmRequests": 4,
+  "tokenEstimator": "default",
   "provider": "Ollama",
   "ollama": {
     "endpoint": "http://localhost:11434",

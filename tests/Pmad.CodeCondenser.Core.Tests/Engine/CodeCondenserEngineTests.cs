@@ -883,7 +883,100 @@ public class CodeCondenserEngineTests : IDisposable
         modified.Should().BeEmpty();
     }
 
+    [Fact]
+    public async Task MeasureAsync_MeasuresProductionAndTestFilesSeparately()
+    {
+        var srcDir = Path.Combine(_testDir, "src");
+        var testsDir = Path.Combine(_testDir, "tests");
+        Directory.CreateDirectory(srcDir);
+        Directory.CreateDirectory(testsDir);
+
+        var prodFile = Path.Combine(srcDir, "App.cs");
+        var testFile = Path.Combine(testsDir, "AppTests.cs");
+
+        var prodCode = """
+            namespace MyApp;
+            // Production service comment
+            public class AppService
+            {
+                /// <summary>Starts service.</summary>
+                public void Start() => Console.WriteLine("Started");
+            }
+            """;
+
+        var testCode = """
+            namespace MyApp.Tests;
+            // Test fixture comment
+            public class AppServiceTests
+            {
+                public void ShouldStart() => new AppService().Start();
+            }
+            """;
+
+        await File.WriteAllTextAsync(prodFile, prodCode);
+        await File.WriteAllTextAsync(testFile, testCode);
+
+        var engine = new CodeCondenserEngine();
+        var settings = new CodeCondenserSettings();
+
+        var result = await engine.MeasureAsync(_testDir, settings);
+
+        result.Production.FilesCount.Should().Be(1);
+        result.Production.CodeTokens.Should().BeGreaterThan(0);
+        result.Production.CommentTokens.Should().BeGreaterThan(0);
+        result.Production.TotalTokens.Should().Be(result.Production.CodeTokens + result.Production.CommentTokens);
+
+        result.Tests.FilesCount.Should().Be(1);
+        result.Tests.CodeTokens.Should().BeGreaterThan(0);
+        result.Tests.CommentTokens.Should().BeGreaterThan(0);
+        result.Tests.TotalTokens.Should().Be(result.Tests.CodeTokens + result.Tests.CommentTokens);
+
+        result.Total.FilesCount.Should().Be(2);
+        result.Total.CodeTokens.Should().Be(result.Production.CodeTokens + result.Tests.CodeTokens);
+        result.Total.CommentTokens.Should().Be(result.Production.CommentTokens + result.Tests.CommentTokens);
+        result.Total.TotalTokens.Should().Be(result.Production.TotalTokens + result.Tests.TotalTokens);
+
+        result.Files.Should().HaveCount(2);
+    }
+
+    [Fact]
+    public async Task MeasureAsync_WithExcludeTests_SkipsTestFiles()
+    {
+        var srcDir = Path.Combine(_testDir, "src");
+        var testsDir = Path.Combine(_testDir, "tests");
+        Directory.CreateDirectory(srcDir);
+        Directory.CreateDirectory(testsDir);
+
+        await File.WriteAllTextAsync(Path.Combine(srcDir, "App.cs"), "// App\npublic class App {}");
+        await File.WriteAllTextAsync(Path.Combine(testsDir, "AppTests.cs"), "// Test\npublic class AppTests {}");
+
+        var engine = new CodeCondenserEngine();
+        var settings = new CodeCondenserSettings { ExcludeTests = true };
+
+        var result = await engine.MeasureAsync(_testDir, settings);
+
+        result.Production.FilesCount.Should().Be(1);
+        result.Tests.FilesCount.Should().Be(0);
+        result.Total.FilesCount.Should().Be(1);
+    }
+
+    [Fact]
+    public async Task MeasureAsync_WithCustomEstimator_UsesConfiguredPreset()
+    {
+        var file = Path.Combine(_testDir, "Single.cs");
+        await File.WriteAllTextAsync(file, "// Comment\npublic class Single { public int Run() => 42; }");
+
+        var engine = new CodeCondenserEngine();
+        var defaultResult = await engine.MeasureAsync(_testDir, new CodeCondenserSettings { TokenEstimator = "default" });
+        var gemmaResult = await engine.MeasureAsync(_testDir, new CodeCondenserSettings { TokenEstimator = "gemma" });
+
+        defaultResult.TotalTokens.Should().BeGreaterThan(0);
+        gemmaResult.TotalTokens.Should().BeGreaterThan(0);
+        gemmaResult.TotalTokens.Should().BeGreaterThanOrEqualTo(defaultResult.TotalTokens);
+    }
+
     private sealed class InMemorySummarizedCommentsStore : ISummarizedCommentsStore
+
 
 
     {
@@ -957,6 +1050,7 @@ public class CodeCondenserEngineTests : IDisposable
         }
     }
 
+
     private sealed class FuncCommentSummarizer(Func<IReadOnlyList<VerboseComment>, IReadOnlyDictionary<string, string>, IReadOnlyDictionary<string, string>> handler) : ICommentSummarizer
     {
         public Task<IReadOnlyDictionary<string, string>> SummarizeAsync(
@@ -979,3 +1073,4 @@ public class CodeCondenserEngineTests : IDisposable
         }
     }
 }
+

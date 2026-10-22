@@ -59,5 +59,12 @@ public interface IConsoleFormatter
     void PrintSkillFile(TextWriter writer, Skills.SkillFileResult fileResult, string baseDirectory);
 
     void PrintSkillsSummary(TextWriter writer, Skills.SkillInstallResult result, bool dryRun);
+
+    void PrintMeasurementResult(
+        TextWriter writer,
+        CodeMeasurementResult result,
+        string targetPath,
+        string estimatorName);
 }
+
 

@@ -99,6 +99,11 @@ public static class Program
             settings.IsLlmConfiguredGlobally = false;
         }
 
+        if (!string.IsNullOrWhiteSpace(options.TokenEstimator))
+        {
+            settings.TokenEstimator = options.TokenEstimator;
+        }
+
         if (!string.IsNullOrWhiteSpace(options.Endpoint))
         {
             settings.Ollama.Endpoint = options.Endpoint;
@@ -221,6 +226,7 @@ public static class Program
             CliOptions.CommandApply => new ApplyCommand(),
             CliOptions.CommandSnapshot => new SnapshotCommand(),
             CliOptions.CommandSkills => new SkillsCommand(),
+            CliOptions.CommandMeasure => new MeasureCommand(),
             _ => new AnalyzeCommand()
         };
 
