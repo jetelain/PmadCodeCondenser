@@ -1,14 +1,14 @@
 ---
 name: codecondenser
 description: >-
-  Comprehensive guide for AI agents on how to use Pmad.CodeCondenser (pmad-codecondenser)
+  Comprehensive guide for AI agents on how to use Pmad.CodeCondenser (codecondenser)
   for C# static code analysis, structural code clone detection, LLM-based verbose comment
   condensation, CI incremental checking, and managing code duplication and comment suppressions.
 ---
 
 # CodeCondenser Agent Skill
 
-`Pmad.CodeCondenser` (`pmad-codecondenser`) is a .NET 10 Roslyn-based static analysis tool designed to:
+`Pmad.CodeCondenser` (`codecondenser`) is a .NET 10 Roslyn-based static analysis tool designed to:
 1. **Detect Type-2 Structural Code Clones**: Identifies duplicate logic across C# methods (ignoring variable, parameter, and literal renames) without requiring an LLM.
 2. **Compact Repeated Inline Strings**: Detects string literals >= 100 characters used more than once, with estimated character/token savings, minimal constant declaration snippets, and typical usage patterns.
 3. **Condense Verbose Comments**: Shortens oversized single-line, multi-line, and XML documentation comments into clean, concise summaries formatted to 120 columns using an LLM.
@@ -18,23 +18,23 @@ description: >-
 
 ## Quick Reference: CLI Commands
 
-The CLI can be invoked via the global tool `pmad-codecondenser`, local tool `dotnet pmad-codecondenser`, or from source `dotnet run --project src/Pmad.CodeCondenser.Cli --`.
+The CLI can be invoked via the global tool `codecondenser`, local tool `dotnet codecondenser`, or from source `dotnet run --project src/Pmad.CodeCondenser.Cli --`.
 
 | Task | Command | AI Backend Needed? |
 | :--- | :--- | :---: |
-| **Check clones & comments (Report mode - default)** | `pmad-codecondenser ./src` | No |
-| **Check clones only (disable comments & strings)** | `pmad-codecondenser ./src --no-comments --no-strings` | No |
-| **Check production code only (skip tests)** | `pmad-codecondenser ./ --exclude-tests --no-comments` | No |
-| **Incremental CI check (strict duplication + comments + strings)** | `pmad-codecondenser ./ --incremental --duplication-tolerance 0 -ct 0 -st 0` | No |
-| **Incremental CI check (strict duplication only)** | `pmad-codecondenser ./ --incremental --duplication-tolerance 0` | No |
-| **Export SARIF report for GitHub Actions** | `pmad-codecondenser ./src --format sarif --output results.sarif` | No |
-| **Export structured JSON report** | `pmad-codecondenser ./src --format json --output results.json` | No |
-| **Summarize comments using LLM** | `pmad-codecondenser ./src -m gemma4:e4b` | Yes (Ollama) |
-| **Apply summarized comments to disk** | `pmad-codecondenser ./src --apply` | No (uses cache) |
-| **Refresh baseline snapshot** | `pmad-codecondenser snapshot ./src` | No |
-| **Install/update workspace agent skills** | `pmad-codecondenser skills [path]` | No |
-| **Measure code tokens (total, comments, code)** | `pmad-codecondenser measure ./src` | No |
-| **Measure code tokens with specific estimator** | `pmad-codecondenser measure ./src --estimator qwen` | No |
+| **Check clones & comments (Report mode - default)** | `codecondenser ./src` | No |
+| **Check clones only (disable comments & strings)** | `codecondenser ./src --no-comments --no-strings` | No |
+| **Check production code only (skip tests)** | `codecondenser ./ --exclude-tests --no-comments` | No |
+| **Incremental CI check (strict duplication + comments + strings)** | `codecondenser ./ --incremental --duplication-tolerance 0 -ct 0 -st 0` | No |
+| **Incremental CI check (strict duplication only)** | `codecondenser ./ --incremental --duplication-tolerance 0` | No |
+| **Export SARIF report for GitHub Actions** | `codecondenser ./src --format sarif --output results.sarif` | No |
+| **Export structured JSON report** | `codecondenser ./src --format json --output results.json` | No |
+| **Summarize comments using LLM** | `codecondenser ./src -m gemma4:e4b` | Yes (Ollama) |
+| **Apply summarized comments to disk** | `codecondenser ./src --apply` | No (uses cache) |
+| **Refresh baseline snapshot** | `codecondenser snapshot ./src` | No |
+| **Install/update workspace agent skills** | `codecondenser skills [path]` | No |
+| **Measure code tokens (total, comments, code)** | `codecondenser measure ./src` | No |
+| **Measure code tokens with specific estimator** | `codecondenser measure ./src --estimator qwen` | No |
 
 > [!NOTE]
 > **Summary Modes**:
@@ -55,7 +55,7 @@ The CLI can be invoked via the global tool `pmad-codecondenser`, local tool `dot
 ### Workflow 1: Pre-PR / Pre-Commit Check (Report Mode)
 Before finalizing changes or opening a PR, run a dry-run check for accidental code duplication and verbose comments:
 ```bash
-pmad-codecondenser ./src
+codecondenser ./src
 ```
 - If clean (Exit code `0`): Proceed with your workflow.
 - If clones or verbose comments detected: Review the recommendations. Refactor, condense, or suppress appropriately (see [Managing Suppressions](#managing-suppressions)).
@@ -64,7 +64,7 @@ pmad-codecondenser ./src
 When CI fails with exit code `2`, new code duplication, new repeated strings, or new verbose comments were introduced exceeding policy tolerance:
 1. Run the incremental check locally to view the actionable feedback:
    ```bash
-   pmad-codecondenser ./src --incremental --duplication-tolerance 0 -ct 0 -st 0
+   codecondenser ./src --incremental --duplication-tolerance 0 -ct 0 -st 0
    ```
 2. The CLI outputs unified **actionable feedback only once at the end** specifying the exact files, lines, and suppress instructions:
    - For duplication: add `[SuppressMessage("CodeCondenser", "Duplication", Justification = "<why>")]` or `// codecondenser:ignore-duplicate`.
@@ -78,11 +78,11 @@ When asked to condense or clean up verbose comments:
 1. **Verify Ollama availability**: Ensure Ollama is running or use a cloud model:
    ```bash
    # Local model:
-   pmad-codecondenser ./src -m gemma4:e4b
+   codecondenser ./src -m gemma4:e4b
    # Or cloud model (zero local VRAM):
-   pmad-codecondenser ./src -m gpt-oss:20b-cloud
+   codecondenser ./src -m gpt-oss:20b-cloud
    # Or with global config (%APPDATA%\CodeCondenser\codecondenser.json on Windows, ~/.codecondenser/codecondenser.json on Linux/macOS):
-   pmad-codecondenser ./src --summary summarize
+   codecondenser ./src --summary summarize
    ```
 2. **Review proposed summaries & retry behavior**:
    - The dry run saves proposed summaries to `.codecondenser/snapshot.json` without modifying files on disk.
@@ -90,7 +90,7 @@ When asked to condense or clean up verbose comments:
    - **Useless Comments**: The LLM is instructed to answer `"Comment is useless"` if a regular comment fails to explain 'why' (e.g. merely restates code syntax) or if an XML doc comment fails to explain 'what'. When detected, applying changes removes the comment completely, granting 100% reduction credit.
 3. **Apply changes**:
    ```bash
-   pmad-codecondenser ./src --apply
+   codecondenser ./src --apply
    ```
    *WYSIWYG Guarantee*: `apply` uses the exact summaries cached during the dry run; no secondary LLM calls are made.
 4. **Git hygiene**:
@@ -101,13 +101,13 @@ When asked to condense or clean up verbose comments:
 When estimating context window usage or assessing codebase token footprint for AI coding agents:
 ```bash
 # Standard measurement across production and test code
-pmad-codecondenser measure ./src
+codecondenser measure ./src
 
 # Using a specific token estimator preset (default, qwen, gemma)
-pmad-codecondenser measure ./src --estimator qwen
+codecondenser measure ./src --estimator qwen
 
 # Exporting measurement data in JSON format
-pmad-codecondenser measure ./src --format json -o tokens.json
+codecondenser measure ./src --format json -o tokens.json
 ```
 The `measure` verb returns:
 - **Total tokens**: Total estimated tokens in the codebase.
@@ -244,7 +244,7 @@ flowchart TD
     B --> C{Can code be cleanly refactored?}
     C -->|Yes: Extract Method / Helper| D[Refactor duplicate logic into shared helper]
     C -->|No: Intentional / Premature abstraction| E[Add suppression marker to method]
-    D --> F[Run: pmad-codecondenser ./src --no-comments]
+    D --> F[Run: codecondenser ./src --no-comments]
     E --> F
     F --> G{Exit code 0?}
     G -->|Yes| H[Commit changes & push]
@@ -266,7 +266,7 @@ The CLI prints the exact file paths, line ranges, and normalized syntax for ever
 ### Step 3: Validate
 Re-run the check to ensure all violations are resolved:
 ```bash
-pmad-codecondenser ./src --incremental --duplication-tolerance 0 --no-comments
+codecondenser ./src --incremental --duplication-tolerance 0 --no-comments
 ```
 
 ---

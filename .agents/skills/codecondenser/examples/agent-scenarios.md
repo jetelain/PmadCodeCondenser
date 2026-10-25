@@ -20,7 +20,7 @@ Process exited with code 2.
 
 #### Step 1: Run the check locally
 ```bash
-pmad-codecondenser ./src --incremental --duplication-tolerance 0 --no-comments
+codecondenser ./src --incremental --duplication-tolerance 0 --no-comments
 ```
 
 #### Step 2: Analyze the duplicate methods
@@ -107,7 +107,7 @@ public async Task NotifySmsAsync(User user, string message)
 #### Step 4: Verify
 Re-run the command:
 ```bash
-pmad-codecondenser ./src --incremental --duplication-tolerance 0 --no-comments
+codecondenser ./src --incremental --duplication-tolerance 0 --no-comments
 ```
 Expected output:
 ```
@@ -126,7 +126,7 @@ A user asks: *"Clean up the verbose comments in the project using local Ollama m
 
 #### Step 1: Run dry-run analysis
 ```bash
-pmad-codecondenser ./src -m gemma4:e4b
+codecondenser ./src -m gemma4:e4b
 ```
 The agent reviews the console output:
 ```
@@ -139,7 +139,7 @@ Run with --apply to apply summarized comments to source files.
 
 #### Step 2: Apply the cached summaries to source code
 ```bash
-pmad-codecondenser ./src --apply
+codecondenser ./src --apply
 ```
 The agent inspects git diff to ensure all edits are accurate:
 - Summaries were wrapped within 120 columns.
@@ -191,4 +191,4 @@ public sealed class FastRingBuffer<T>
 {
 }
 ```
-Now, whenever `pmad-codecondenser` analyzes this file, it immediately ignores the `<summary>` tag.
+Now, whenever `codecondenser` analyzes this file, it immediately ignores the `<summary>` tag.

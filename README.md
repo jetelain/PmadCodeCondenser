@@ -36,7 +36,7 @@ A static analysis developer utility and .NET tool built on **.NET 10** and Rosly
 
 ### 1. Install as a .NET Global Tool (Recommended)
 
-Install globally to make the `pmad-codecondenser` command available everywhere on your machine:
+Install globally to make the `codecondenser` command available everywhere on your machine:
 
 ```bash
 dotnet tool install -g Pmad.CodeCondenser --prerelease
@@ -72,9 +72,9 @@ Commit the generated `.config/dotnet-tools.json` file. Team members and CI runne
 dotnet tool restore
 
 # Run via dotnet:
-dotnet pmad-codecondenser [path] [options]
+dotnet codecondenser [path] [options]
 # or:
-dotnet tool run pmad-codecondenser [path] [options]
+dotnet tool run codecondenser [path] [options]
 ```
 
 ### 3. Run Directly from Source
@@ -89,10 +89,10 @@ dotnet run --project src/Pmad.CodeCondenser.Cli -- [path] [options]
 
 ## Quick Start & Core Workflows
 
-The tool binary command is **`pmad-codecondenser`** (or `dotnet pmad-codecondenser` when used as a local tool).
+The tool binary command is **`codecondenser`** (or `dotnet codecondenser` when used as a local tool).
 
 ```bash
-pmad-codecondenser [command] [path] [options]
+codecondenser [command] [path] [options]
 ```
 
 ### Scenario A: Instant Code Clone Detection (No Comments)
@@ -100,7 +100,7 @@ pmad-codecondenser [command] [path] [options]
 Scan for structural code clones without checking comments:
 
 ```bash
-pmad-codecondenser ./src --no-comments
+codecondenser ./src --no-comments
 ```
 
 Roslyn parses the syntax trees, normalizes identifier names, statements, and literals, and prints all duplicate method clusters with location details and refactoring guidance.
@@ -110,9 +110,9 @@ Roslyn parses the syntax trees, normalizes identifier names, statements, and lit
 When no LLM is configured (or with `--report-only`), CodeCondenser defaults to **`report` mode**:
 
 ```bash
-pmad-codecondenser ./src
+codecondenser ./src
 # Or explicitly:
-pmad-codecondenser ./src --summary report
+codecondenser ./src --summary report
 ```
 
 Report mode scans both structural code clones and overly verbose comments, printing actionable recommendations and suppression tips (e.g. `condense="no"` or `// codecondenser:ignore`) without needing any local or cloud LLM backend.
@@ -122,9 +122,9 @@ Report mode scans both structural code clones and overly verbose comments, print
 When an LLM model or endpoint is specified (or configured in `codecondenser.json`), CodeCondenser defaults to **`summarize` mode**:
 
 ```bash
-pmad-codecondenser ./src -m gemma4:e4b
+codecondenser ./src -m gemma4:e4b
 # Or explicitly:
-pmad-codecondenser ./src --summary summarize -m gemma4:e4b
+codecondenser ./src --summary summarize -m gemma4:e4b
 ```
 
 Overly verbose comments are condensed using the LLM, and results are safely stored in `.codecondenser/snapshot.json` without modifying any files on disk.
@@ -135,10 +135,10 @@ Apply the summarized comments directly into your C# source files on disk:
 
 ```bash
 # Using the --apply flag:
-pmad-codecondenser ./src --apply
+codecondenser ./src --apply
 
 # Or using the 'apply' command verb:
-pmad-codecondenser apply ./src
+codecondenser apply ./src
 ```
 
 > [!TIP]
@@ -149,7 +149,7 @@ pmad-codecondenser apply ./src
 Analyze only files that were added or modified since the last snapshot baseline:
 
 ```bash
-pmad-codecondenser ./src --incremental
+codecondenser ./src --incremental
 ```
 
 In incremental mode, if new duplication or verbose comments are detected, CodeCondenser outputs unified **actionable feedback only once at the end**, complete with suppression instructions (`condense="no"`, `// codecondenser:ignore`, or `[SuppressMessage]`).
@@ -160,10 +160,10 @@ Update or create the baseline snapshot stored in `.codecondenser/snapshot.json`:
 
 ```bash
 # Using the snapshot command verb:
-pmad-codecondenser snapshot ./src
+codecondenser snapshot ./src
 
 # Or using the --update-snapshot flag:
-pmad-codecondenser ./src --update-snapshot
+codecondenser ./src --update-snapshot
 ```
 
 ### Scenario G: Install or Update Workspace AI Agent Skills
@@ -172,13 +172,13 @@ Install or synchronize the bundled AI agent skills into a workspace's `.agents/s
 
 ```bash
 # Install or update skills in the current workspace:
-pmad-codecondenser skills
+codecondenser skills
 
 # Target a specific workspace:
-pmad-codecondenser skills ./my-project
+codecondenser skills ./my-project
 
 # Preview what files would be created or updated without modifying disk:
-pmad-codecondenser skills --dry-run
+codecondenser skills --dry-run
 ```
 
 ---
@@ -223,7 +223,7 @@ jobs:
         id: analyze
         continue-on-error: true
         run: |
-          pmad-codecondenser ./src \
+          codecondenser ./src \
             --incremental \
             --duplication-tolerance 0 \
             --no-comments \
@@ -235,7 +235,7 @@ jobs:
         if: always() && github.event.pull_request.head.repo.full_name == github.repository
         with:
           sarif_file: results.sarif
-          category: pmad-codecondenser
+          category: codecondenser
 
       - name: Enforce Policy Quality Gate
         if: steps.analyze.outcome == 'failure'
@@ -337,10 +337,10 @@ Generates standard OASIS SARIF 2.1.0 compatible with GitHub Code Scanning, GitLa
 
 ```bash
 # Export SARIF to file
-pmad-codecondenser ./src --format sarif --output results.sarif
+codecondenser ./src --format sarif --output results.sarif
 
 # Or pipe directly (progress/banners are automatically routed to stderr)
-pmad-codecondenser ./src --format sarif > results.sarif
+codecondenser ./src --format sarif > results.sarif
 ```
 
 ### 2. Structured JSON Export (`--format json`)
@@ -348,7 +348,7 @@ pmad-codecondenser ./src --format sarif > results.sarif
 Outputs a versioned JSON report conforming to the [`schemas/codecondenser-report.json`](schemas/codecondenser-report.json) schema, including full metrics, cluster impact scores, AST hashes, line numbers, and actionable recommendations.
 
 ```bash
-pmad-codecondenser ./src --format json --output results.json
+codecondenser ./src --format json --output results.json
 ```
 
 ---
@@ -489,7 +489,7 @@ Settings are resolved in the following priority order (highest to lowest):
 
 > [!NOTE]
 > **Summary Mode Safety**:
-> When an LLM model or endpoint is configured in your **global user profile**, `pmad-codecondenser` continues to default to fast, dry-run **`report` mode**.
+> When an LLM model or endpoint is configured in your **global user profile**, `codecondenser` continues to default to fast, dry-run **`report` mode**.
 > This prevents accidental, slow LLM calls on every execution across your repositories.
 > To run LLM summarization using your global configuration, explicitly pass `--summary summarize` (or `-m <model>`).
 
@@ -531,7 +531,7 @@ To identify optimal models for comment condensation, a comprehensive benchmark w
 
 - **`Pmad.CodeCondenser.Core`**: Domain models, AST normalization (`AstNormalizer`), clone detection (`CloneDetector`), comment extraction (`VerboseCommentExtractor`), Roslyn trivia rewriting (`VerboseCommentRewriter`), incremental diffing (`SnapshotDiffer`), and analysis engine (`CodeCondenserEngine`).
 - **`Pmad.CodeCondenser.Infrastructure`**: LLM integration via `Microsoft.Extensions.AI` and `OllamaSharp` (`CommentSummarizer`), and snapshot JSON storage (`JsonSnapshotStore`).
-- **`Pmad.CodeCondenser.Cli`**: Command-line interface with color-coded formatting and packaging as a packable .NET tool (`pmad-codecondenser`).
+- **`Pmad.CodeCondenser.Cli`**: Command-line interface with color-coded formatting and packaging as a packable .NET tool (`codecondenser`).
 
 ---
 

@@ -536,6 +536,8 @@ public static class CodeCondenserConfigurationLoader
                 {
                     Path.Combine(appDataDir, "CodeCondenser", DefaultConfigFileName),
                     Path.Combine(appDataDir, "CodeCondenser", UserConfigFileName),
+                    Path.Combine(appDataDir, "codecondenser", DefaultConfigFileName),
+                    Path.Combine(appDataDir, "codecondenser", UserConfigFileName),
                     Path.Combine(appDataDir, "pmad-codecondenser", DefaultConfigFileName),
                     Path.Combine(appDataDir, "pmad-codecondenser", UserConfigFileName),
                     Path.Combine(appDataDir, "PmadCodeCondenser", DefaultConfigFileName),
@@ -582,6 +584,8 @@ public static class CodeCondenserConfigurationLoader
         {
             Path.Combine(userProfileDirectory, "CodeCondenser", DefaultConfigFileName),
             Path.Combine(userProfileDirectory, "CodeCondenser", UserConfigFileName),
+            Path.Combine(userProfileDirectory, "codecondenser", DefaultConfigFileName),
+            Path.Combine(userProfileDirectory, "codecondenser", UserConfigFileName),
             Path.Combine(userProfileDirectory, "pmad-codecondenser", DefaultConfigFileName),
             Path.Combine(userProfileDirectory, "pmad-codecondenser", UserConfigFileName),
             Path.Combine(userProfileDirectory, "PmadCodeCondenser", DefaultConfigFileName),

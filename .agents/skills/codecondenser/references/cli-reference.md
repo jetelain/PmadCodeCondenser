@@ -1,15 +1,15 @@
 # CodeCondenser CLI & Configuration Reference
 
-This document provides a comprehensive reference for the `pmad-codecondenser` command-line tool and its `codecondenser.json` configuration.
+This document provides a comprehensive reference for the `codecondenser` command-line tool and its `codecondenser.json` configuration.
 
 ---
 
 ## 1. CLI Commands & Invocation
 
-The CLI binary is named `pmad-codecondenser`. When configured as a local tool in `.config/dotnet-tools.json`, it can also be run as `dotnet pmad-codecondenser`.
+The CLI binary is named `codecondenser`. When configured as a local tool in `.config/dotnet-tools.json`, it can also be run as `dotnet codecondenser`.
 
 ```bash
-pmad-codecondenser [command] [path] [options]
+codecondenser [command] [path] [options]
 ```
 
 ### Commands

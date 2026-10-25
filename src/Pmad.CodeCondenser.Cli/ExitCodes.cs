@@ -1,7 +1,7 @@
 namespace Pmad.CodeCondenser.Cli;
 
 /// <summary>
-/// Process exit codes returned by pmad-codecondenser CLI.
+/// Process exit codes returned by codecondenser CLI.
 /// </summary>
 public static class ExitCodes
 {

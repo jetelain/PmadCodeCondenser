@@ -586,7 +586,7 @@ public class CodeCondenserEngineTests : IDisposable
         var diskContent = await File.ReadAllTextAsync(file);
         diskContent.Should().Contain($"// {bareSummary}");
 
-        // 3. Launch subsequent report run (with a new engine instance, simulating `pmad-codecondenser --summary report`)
+        // 3. Launch subsequent report run (with a new engine instance, simulating `codecondenser --summary report`)
         var reportEngine = new CodeCondenserEngine(
             snapshotStore: _snapshotStore,
             commentSummarizer: null,
