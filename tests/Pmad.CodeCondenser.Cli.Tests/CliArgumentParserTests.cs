@@ -714,6 +714,47 @@ public class CliArgumentParserTests
         options.DryRun.Should().BeTrue();
     }
 
+    [Theory]
+    [InlineData("--global")]
+    [InlineData("-g")]
+    public void TryParse_SkillsGlobal_SetsGlobal(string flag)
+    {
+        var success = CliArgumentParser.TryParse(["skills", flag], out var options, out var error);
+
+        success.Should().BeTrue();
+        error.Should().BeNull();
+        options.Command.Should().Be(CliOptions.CommandSkills);
+        options.Global.Should().BeTrue();
+    }
+
+    [Theory]
+    [InlineData("install", "--global")]
+    [InlineData("update", "-g")]
+    public void TryParse_SkillsSubCommandWithGlobal_SetsGlobal(string subCmd, string flag)
+    {
+        var success = CliArgumentParser.TryParse(["skills", subCmd, flag], out var options, out var error);
+
+        success.Should().BeTrue();
+        error.Should().BeNull();
+        options.Command.Should().Be(CliOptions.CommandSkills);
+        options.Global.Should().BeTrue();
+    }
+
+    [Theory]
+    [InlineData("--dir", ".agents/custom-dir")]
+    [InlineData("-d", ".agents/custom-dir")]
+    [InlineData("--skills-dir", ".agents/custom-dir")]
+    [InlineData("--skills-directory", ".agents/custom-dir")]
+    public void TryParse_SkillsDirAliases_SetsSkillsDirectory(string optionName, string expectedDir)
+    {
+        var success = CliArgumentParser.TryParse(["skills", optionName, expectedDir], out var options, out var error);
+
+        success.Should().BeTrue();
+        error.Should().BeNull();
+        options.Command.Should().Be(CliOptions.CommandSkills);
+        options.SkillsDirectory.Should().Be(expectedDir);
+    }
+
     [Fact]
     public void TryParse_MeasureCommand_SetsCommandAndPath()
     {

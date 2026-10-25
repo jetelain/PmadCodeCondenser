@@ -30,7 +30,7 @@ public static class CliArgumentParser
           analyze [path]              Analyze C# codebase in dry-run mode (default)
           apply [path]                Apply summarized comments directly to source files on disk
           snapshot [path]             Create or refresh the snapshot baseline
-          skills, skill [path]        Install or update AI agent skills in the workspace (.agents/skills)
+          skills [path]               Install or update AI agent skills in workspace or globally (--global)
           measure [path]              Measure code in terms of estimated LLM tokens (total, comments, code)
 
         Arguments:
@@ -72,10 +72,11 @@ public static class CliArgumentParser
           --enforce-test-duplication  Treat test clones as CI policy violation in gate check
           --include-generated         Disable automatic exclusion of generated files
           -n, --dry-run               Preview actions without modifying files on disk
+          -g, --global                Install skills globally into ~/.gemini/config/skills/ and ~/.agents/skills/
           --force                     Force overwrite skill files even if up to date
           --clean                     Remove obsolete files from skill directories
           --skill <name>              Specify a specific skill to install/update (default: all bundled skills)
-          --skills-dir <path>         Override target skills directory (default: <workspace>/.agents/skills)
+          -d, --dir, --skills-dir <path> Override target skills directory (default: <workspace>/.agents/skills)
           -f, --format <type>          Output format: console, sarif, json (default: console)
           -o, --output <path>          Output file path (default: stdout)
           --no-color                  Disable ANSI color formatting
@@ -114,6 +115,7 @@ public static class CliArgumentParser
         public Option<bool> IncludeGeneratedOpt { get; }
         public Option<bool> SubMethodClonesOpt { get; }
         public Option<bool> DryRunOpt { get; }
+        public Option<bool> GlobalOpt { get; }
         public Option<bool> ForceOpt { get; }
         public Option<bool> CleanOpt { get; }
 
@@ -271,6 +273,11 @@ public static class CliArgumentParser
             DryRunOpt = new Option<bool>("--dry-run", "-n")
             {
                 Description = "Preview actions without modifying files on disk",
+                Recursive = true
+            };
+            GlobalOpt = new Option<bool>("--global", "-g")
+            {
+                Description = "Install skills globally into ~/.gemini/config/skills/ and ~/.agents/skills/",
                 Recursive = true
             };
             ForceOpt = new Option<bool>("--force")
@@ -603,7 +610,7 @@ public static class CliArgumentParser
                 Description = "Specify a specific skill to install/update",
                 Recursive = true
             };
-            SkillsDirOpt = new Option<string?>("--skills-dir", "--skills-directory")
+            SkillsDirOpt = new Option<string?>("--skills-dir", "--skills-directory", "--dir", "-d")
             {
                 Description = "Override target skills directory",
                 Recursive = true
@@ -627,6 +634,7 @@ public static class CliArgumentParser
             RootCommand.Add(IncludeGeneratedOpt);
             RootCommand.Add(SubMethodClonesOpt);
             RootCommand.Add(DryRunOpt);
+            RootCommand.Add(GlobalOpt);
             RootCommand.Add(ForceOpt);
             RootCommand.Add(CleanOpt);
 
@@ -815,6 +823,7 @@ public static class CliArgumentParser
             options.IncludeGenerated = WasSpecified(pr, IncludeGeneratedOpt) && pr.GetValue(IncludeGeneratedOpt);
             options.SubMethodClones = WasSpecified(pr, SubMethodClonesOpt) && pr.GetValue(SubMethodClonesOpt);
             options.DryRun = WasSpecified(pr, DryRunOpt) && pr.GetValue(DryRunOpt);
+            options.Global = WasSpecified(pr, GlobalOpt) && pr.GetValue(GlobalOpt);
             options.Force = WasSpecified(pr, ForceOpt) && pr.GetValue(ForceOpt);
             options.Clean = WasSpecified(pr, CleanOpt) && pr.GetValue(CleanOpt);
             options.NoGlobalConfig = WasSpecified(pr, NoGlobalConfigOpt) && pr.GetValue(NoGlobalConfigOpt);

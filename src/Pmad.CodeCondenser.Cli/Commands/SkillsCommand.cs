@@ -8,7 +8,7 @@ using Pmad.CodeCondenser.Core.Filtering;
 namespace Pmad.CodeCondenser.Cli.Commands;
 
 /// <summary>
-/// Installs or updates bundled AI agent skills in a workspace's .agents/skills directory.
+/// Installs or updates bundled AI agent skills in a workspace's .agents/skills directory or globally.
 /// </summary>
 public sealed class SkillsCommand : ICommand
 {
@@ -28,7 +28,17 @@ public sealed class SkillsCommand : ICommand
         ArgumentNullException.ThrowIfNull(output);
         ArgumentNullException.ThrowIfNull(error);
 
-        var targetSkillsDir = WorkspaceSkillManager.ResolveTargetSkillsDirectory(options.TargetPath, options.SkillsDirectory);
+        var targetSkillsDirs = WorkspaceSkillManager.ResolveTargetSkillsDirectories(
+            options.TargetPath,
+            options.SkillsDirectory,
+            options.Global);
+
+        if (targetSkillsDirs.Count == 0)
+        {
+            formatter.PrintError(error, "Could not determine target directory for skills installation.");
+            return ExitCodes.Error;
+        }
+
         var baseDir = PathFilter.ResolveBaseDirectory(options.TargetPath);
 
         var availableSkills = WorkspaceSkillManager.GetAvailableSkillNames();
@@ -53,25 +63,58 @@ public sealed class SkillsCommand : ICommand
             SkillName = options.SkillName
         };
 
-        var result = WorkspaceSkillManager.InstallSkills(targetSkillsDir, installOptions);
+        var results = WorkspaceSkillManager.InstallSkillsToDirectories(targetSkillsDirs, installOptions);
 
         if (options.Format == OutputFormat.Json)
         {
-            var json = JsonSerializer.Serialize(new
+            object jsonModel;
+            if (results.Count == 1 && !options.Global)
             {
-                targetDirectory = result.TargetDirectory,
-                dryRun = options.DryRun,
-                created = result.CreatedCount,
-                updated = result.UpdatedCount,
-                upToDate = result.UpToDateCount,
-                removed = result.RemovedCount,
-                files = result.Files.Select(f => new
+                var r = results[0];
+                jsonModel = new
                 {
-                    relativePath = f.RelativePath,
-                    fullPath = f.FullPath,
-                    status = f.Status.ToString()
-                })
-            }, new JsonSerializerOptions { WriteIndented = true });
+                    targetDirectory = r.TargetDirectory,
+                    dryRun = options.DryRun,
+                    created = r.CreatedCount,
+                    updated = r.UpdatedCount,
+                    upToDate = r.UpToDateCount,
+                    removed = r.RemovedCount,
+                    files = r.Files.Select(f => new
+                    {
+                        relativePath = f.RelativePath,
+                        fullPath = f.FullPath,
+                        status = f.Status.ToString()
+                    })
+                };
+            }
+            else
+            {
+                jsonModel = new
+                {
+                    isGlobal = options.Global,
+                    dryRun = options.DryRun,
+                    created = results.Sum(r => r.CreatedCount),
+                    updated = results.Sum(r => r.UpdatedCount),
+                    upToDate = results.Sum(r => r.UpToDateCount),
+                    removed = results.Sum(r => r.RemovedCount),
+                    targets = results.Select(r => new
+                    {
+                        targetDirectory = r.TargetDirectory,
+                        created = r.CreatedCount,
+                        updated = r.UpdatedCount,
+                        upToDate = r.UpToDateCount,
+                        removed = r.RemovedCount,
+                        files = r.Files.Select(f => new
+                        {
+                            relativePath = f.RelativePath,
+                            fullPath = f.FullPath,
+                            status = f.Status.ToString()
+                        })
+                    })
+                };
+            }
+
+            var json = JsonSerializer.Serialize(jsonModel, new JsonSerializerOptions { WriteIndented = true });
 
             if (!string.IsNullOrWhiteSpace(options.OutputFilePath))
             {
@@ -93,16 +136,43 @@ public sealed class SkillsCommand : ICommand
             return ExitCodes.Success;
         }
 
-        formatter.PrintInfo(output, $"Workspace base directory: {baseDir}");
-        formatter.PrintInfo(output, $"Target skills directory:  {targetSkillsDir}");
-        output.WriteLine();
-
-        foreach (var fileResult in result.Files)
+        if (results.Count == 1 && !options.Global)
         {
-            formatter.PrintSkillFile(output, fileResult, baseDir);
+            var singleResult = results[0];
+            formatter.PrintInfo(output, $"Workspace base directory: {baseDir}");
+            formatter.PrintInfo(output, $"Target skills directory:  {singleResult.TargetDirectory}");
+            output.WriteLine();
+
+            foreach (var fileResult in singleResult.Files)
+            {
+                formatter.PrintSkillFile(output, fileResult, baseDir);
+            }
+
+            formatter.PrintSkillsSummary(output, singleResult, options.DryRun);
+            return ExitCodes.Success;
         }
 
-        formatter.PrintSkillsSummary(output, result, options.DryRun);
+        formatter.PrintInfo(output, "Installing skills at global scope.");
+        output.WriteLine();
+
+        for (int i = 0; i < results.Count; i++)
+        {
+            var res = results[i];
+            if (i > 0)
+            {
+                output.WriteLine();
+            }
+
+            formatter.PrintInfo(output, $"Target skills directory:  {res.TargetDirectory}");
+
+            var printBase = Path.GetDirectoryName(res.TargetDirectory) ?? res.TargetDirectory;
+            foreach (var fileResult in res.Files)
+            {
+                formatter.PrintSkillFile(output, fileResult, printBase);
+            }
+
+            formatter.PrintSkillsSummary(output, res, options.DryRun);
+        }
 
         return ExitCodes.Success;
     }

@@ -33,6 +33,7 @@ The CLI can be invoked via the global tool `codecondenser`, local tool `dotnet c
 | **Apply summarized comments to disk** | `codecondenser ./src --apply` | No (uses cache) |
 | **Refresh baseline snapshot** | `codecondenser snapshot ./src` | No |
 | **Install/update workspace agent skills** | `codecondenser skills [path]` | No |
+| **Install agent skills globally** | `codecondenser skills --global` | No |
 | **Measure code tokens (total, comments, code)** | `codecondenser measure ./src` | No |
 | **Measure code tokens with specific estimator** | `codecondenser measure ./src --estimator qwen` | No |
 

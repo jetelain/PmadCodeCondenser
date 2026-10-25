@@ -209,6 +209,11 @@ public sealed class CliOptions
     public bool DryRun { get; set; }
 
     /// <summary>
+    /// When true, installs skills globally into ~/.gemini/config/skills and ~/.agents/skills.
+    /// </summary>
+    public bool Global { get; set; }
+
+    /// <summary>
     /// When true, forces overwriting of skill files even if content is identical.
     /// </summary>
     public bool Force { get; set; }
