@@ -35,7 +35,7 @@ public class CliIntegrationTests : IDisposable
 
         exitCode.Should().Be(0);
         error.ToString().Should().BeEmpty();
-        output.ToString().Should().Contain("pmad-codecondenser");
+        output.ToString().Should().Contain("codecondenser");
         output.ToString().Should().Contain("--apply");
         output.ToString().Should().Contain("--incremental");
     }
@@ -50,7 +50,7 @@ public class CliIntegrationTests : IDisposable
 
         exitCode.Should().Be(0);
         error.ToString().Should().BeEmpty();
-        output.ToString().Should().Contain("pmad-codecondenser version");
+        output.ToString().Should().Contain("codecondenser version");
     }
 
     [Fact]

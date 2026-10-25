@@ -1,7 +1,7 @@
 namespace Pmad.CodeCondenser.Cli;
 
 /// <summary>
-/// Parsed command line options for the pmad-codecondenser CLI tool.
+/// Parsed command line options for the codecondenser CLI tool.
 /// </summary>
 public sealed class CliOptions
 {

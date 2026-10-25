@@ -4,7 +4,7 @@
 .DESCRIPTION
     Packs the Pmad.CodeCondenser.Cli project into a NuGet tool package (.nupkg),
     clears any cached local versions in the user NuGet cache to ensure fresh binaries,
-    and installs or updates the 'pmad-codecondenser' global tool.
+    and installs or updates the 'codecondenser' global tool.
 .PARAMETER Configuration
     The build configuration to pack (default: Release).
 .PARAMETER Force
@@ -28,7 +28,7 @@ $scriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
 $projectPath = Join-Path $scriptDir "src/Pmad.CodeCondenser.Cli/Pmad.CodeCondenser.Cli.csproj"
 $packageOutputDir = Join-Path $scriptDir "src/Pmad.CodeCondenser.Cli/bin/package"
 $packageName = "Pmad.CodeCondenser"
-$toolCommand = "pmad-codecondenser"
+$toolCommand = "codecondenser"
 
 Write-Host "==========================================================" -ForegroundColor Cyan
 Write-Host " Pmad.CodeCondenser CLI - Build and Global Tool Installer " -ForegroundColor Cyan

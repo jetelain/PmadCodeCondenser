@@ -6,7 +6,7 @@ using System.Reflection;
 namespace Pmad.CodeCondenser.Cli;
 
 /// <summary>
-/// Argument parser for pmad-codecondenser command line options, built on System.CommandLine.
+/// Argument parser for codecondenser command line options, built on System.CommandLine.
 /// </summary>
 public static class CliArgumentParser
 {
@@ -23,8 +23,8 @@ public static class CliArgumentParser
         Pmad.CodeCondenser - Static analysis tool for C# clone detection and comment summarization
 
         Usage:
-          pmad-codecondenser [path] [options]
-          pmad-codecondenser <command> [path] [options]
+          codecondenser [path] [options]
+          codecondenser <command> [path] [options]
 
         Commands:
           analyze [path]              Analyze C# codebase in dry-run mode (default)
@@ -90,7 +90,7 @@ public static class CliArgumentParser
         var infoVersion = assembly.GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion;
         var version = assembly.GetName().Version?.ToString(3) ?? "0.1.0-preview";
 
-        return $"pmad-codecondenser version {infoVersion ?? version}";
+        return $"codecondenser version {infoVersion ?? version}";
     }
 
     private sealed class ParserModel

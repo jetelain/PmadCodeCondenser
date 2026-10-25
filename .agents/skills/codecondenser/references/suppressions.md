@@ -169,7 +169,7 @@ public async Task<ResponseB> SendRequestBAsync(RequestB request, CancellationTok
 To prevent summarized comments from being repeatedly re-analyzed (e.g. if the condensed version is 115 characters and the threshold is 100):
 
 1. **How It Works**:
-   When `pmad-codecondenser --apply` or `pmad-codecondenser apply` is executed, the SHA-256 hash of each applied comment is recorded in:
+   When `codecondenser --apply` or `codecondenser apply` is executed, the SHA-256 hash of each applied comment is recorded in:
    ```
    .codecondenser/summarized-comments.json
    ```

@@ -282,7 +282,7 @@ public class CliArgumentParserTests
     public void GetHelpText_ReturnsNonEmptyDocumentation()
     {
         var help = CliArgumentParser.GetHelpText();
-        help.Should().Contain("pmad-codecondenser");
+        help.Should().Contain("codecondenser");
         help.Should().Contain("--apply");
         help.Should().Contain("--incremental");
         help.Should().Contain("--update-snapshot");
@@ -292,7 +292,7 @@ public class CliArgumentParserTests
     public void GetVersionText_ReturnsVersionString()
     {
         var version = CliArgumentParser.GetVersionText();
-        version.Should().Contain("pmad-codecondenser version");
+        version.Should().Contain("codecondenser version");
     }
 
     [Theory]

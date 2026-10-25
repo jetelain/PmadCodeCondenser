@@ -563,7 +563,7 @@ public sealed class ConsoleFormatter : IConsoleFormatter
         writer.WriteLine("  2. Extract the identical structural logic into a shared helper method or service.");
         writer.WriteLine("  3. Replace the bodies of the duplicate methods with a call to the extracted helper.");
         writer.WriteLine("  4. To suppress: Add '[SuppressMessage(\"CodeCondenser\", \"Duplication\", Justification = \"<why>\")]' or '// codecondenser:ignore-duplicate' on the method.");
-        writer.WriteLine("  5. Re-run 'pmad-codecondenser --incremental' to confirm the violation is resolved.");
+        writer.WriteLine("  5. Re-run 'codecondenser --incremental' to confirm the violation is resolved.");
         writer.WriteLine(Red(Bold("========================================================================")));
         writer.WriteLine();
     }
@@ -631,7 +631,7 @@ public sealed class ConsoleFormatter : IConsoleFormatter
         writer.WriteLine("  2. Extract the identical structural logic into a shared helper method or service.");
         writer.WriteLine("  3. Replace the duplicate code with a call to the extracted helper.");
         writer.WriteLine("  4. To suppress: Add '[SuppressMessage(\"CodeCondenser\", \"Duplication\", Justification = \"<why>\")]' or '// codecondenser:ignore-duplicate' on the method.");
-        writer.WriteLine("  5. Re-run 'pmad-codecondenser --incremental' to confirm the violation is resolved.");
+        writer.WriteLine("  5. Re-run 'codecondenser --incremental' to confirm the violation is resolved.");
         writer.WriteLine(Red(Bold("========================================================================")));
         writer.WriteLine();
     }
@@ -688,7 +688,7 @@ public sealed class ConsoleFormatter : IConsoleFormatter
             writer.WriteLine("  2. Extract duplicate strings into a shared constant (e.g. in a static constants class).");
             writer.WriteLine("  3. Replace the inline string literals with references to the constant.");
             writer.WriteLine("  4. To suppress: Add '[SuppressMessage(\"CodeCondenser\", \"RepeatedString\")]' or '// codecondenser:ignore-string'.");
-            writer.WriteLine("  5. Re-run 'pmad-codecondenser --incremental' to confirm the violation is resolved.");
+            writer.WriteLine("  5. Re-run 'codecondenser --incremental' to confirm the violation is resolved.");
             writer.WriteLine(Red(Bold("========================================================================")));
             writer.WriteLine();
             return;
@@ -728,7 +728,7 @@ public sealed class ConsoleFormatter : IConsoleFormatter
             writer.WriteLine("  3. Suppress: If extensive documentation is intentional:");
             writer.WriteLine("     • XML doc comments: Add 'condense=\"no\"' attribute to XML tag (e.g. <summary condense=\"no\">).");
             writer.WriteLine("     • Regular comments: Add '// codecondenser:ignore' or '// nocondense' on the preceding line or inline.");
-            writer.WriteLine("  4. Re-run 'pmad-codecondenser --incremental' to confirm the violation is resolved.");
+            writer.WriteLine("  4. Re-run 'codecondenser --incremental' to confirm the violation is resolved.");
             writer.WriteLine(Red(Bold("========================================================================")));
             writer.WriteLine();
             return;
@@ -846,7 +846,7 @@ public sealed class ConsoleFormatter : IConsoleFormatter
             writer.WriteLine("    3. To suppress: Add 'condense=\"no\"' attribute (XML doc) or '// codecondenser:ignore' (preceding/inline).");
         }
         writer.WriteLine("  Verification:");
-        writer.WriteLine("    • Re-run 'pmad-codecondenser --incremental' to confirm all violations are resolved.");
+        writer.WriteLine("    • Re-run 'codecondenser --incremental' to confirm all violations are resolved.");
         writer.WriteLine(Red(Bold("========================================================================")));
         writer.WriteLine();
     }

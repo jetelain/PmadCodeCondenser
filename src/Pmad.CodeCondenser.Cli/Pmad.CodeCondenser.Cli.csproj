@@ -11,7 +11,7 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <PackAsTool>true</PackAsTool>
-    <ToolCommandName>pmad-codecondenser</ToolCommandName>
+    <ToolCommandName>codecondenser</ToolCommandName>
     <PackageId>Pmad.CodeCondenser</PackageId>
     <Version>0.1.0-preview</Version>
     <Description>Roslyn-based static analysis CLI tool to detect C# code clones and condense verbose comments via local LLMs.</Description>
