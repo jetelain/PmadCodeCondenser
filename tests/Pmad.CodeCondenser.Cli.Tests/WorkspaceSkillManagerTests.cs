@@ -181,4 +181,62 @@ public sealed class WorkspaceSkillManagerTests : IDisposable
         result.UpToDateCount.Should().Be(0);
         result.Files.Should().BeEmpty();
     }
+
+    [Fact]
+    public void GetGlobalSkillsDirectories_WithCustomProfile_ReturnsGeminiAndAgentsPaths()
+    {
+        var customProfile = Path.Combine(_tempDir, "mockuser");
+        var dirs = WorkspaceSkillManager.GetGlobalSkillsDirectories(customProfile);
+
+        dirs.Should().HaveCount(2);
+        dirs.Should().Contain(Path.Combine(customProfile, ".gemini", "config", "skills"));
+        dirs.Should().Contain(Path.Combine(customProfile, ".agents", "skills"));
+    }
+
+    [Fact]
+    public void ResolveTargetSkillsDirectories_GlobalTrue_ReturnsGlobalPaths()
+    {
+        var customProfile = Path.Combine(_tempDir, "mockuser");
+        var dirs = WorkspaceSkillManager.ResolveTargetSkillsDirectories(_tempDir, isGlobal: true, userProfilePath: customProfile);
+
+        dirs.Should().HaveCount(2);
+        dirs.Should().Contain(Path.Combine(customProfile, ".gemini", "config", "skills"));
+        dirs.Should().Contain(Path.Combine(customProfile, ".agents", "skills"));
+    }
+
+    [Fact]
+    public void ResolveTargetSkillsDirectories_ExplicitSkillsDir_TakesPrecedenceOverGlobal()
+    {
+        var customProfile = Path.Combine(_tempDir, "mockuser");
+        var customDir = Path.Combine(_tempDir, "custom-skills");
+        var dirs = WorkspaceSkillManager.ResolveTargetSkillsDirectories(_tempDir, explicitSkillsDir: customDir, isGlobal: true, userProfilePath: customProfile);
+
+        dirs.Should().HaveCount(1);
+        dirs[0].Should().Be(Path.GetFullPath(customDir));
+    }
+
+    [Fact]
+    public void ResolveTargetSkillsDirectories_WorkspaceDefault_ReturnsAgentsSkills()
+    {
+        var dirs = WorkspaceSkillManager.ResolveTargetSkillsDirectories(_tempDir, isGlobal: false);
+
+        dirs.Should().HaveCount(1);
+        dirs[0].Should().Be(Path.Combine(Path.GetFullPath(_tempDir), ".agents", "skills"));
+    }
+
+    [Fact]
+    public void InstallSkillsToDirectories_InstallsToMultipleLocations()
+    {
+        var targetDir1 = Path.Combine(_tempDir, "target1", ".agents", "skills");
+        var targetDir2 = Path.Combine(_tempDir, "target2", ".gemini", "config", "skills");
+
+        var results = WorkspaceSkillManager.InstallSkillsToDirectories([targetDir1, targetDir2]);
+
+        results.Should().HaveCount(2);
+        results[0].CreatedCount.Should().BeGreaterThan(0);
+        results[1].CreatedCount.Should().BeGreaterThan(0);
+
+        File.Exists(Path.Combine(targetDir1, "codecondenser", "SKILL.md")).Should().BeTrue();
+        File.Exists(Path.Combine(targetDir2, "codecondenser", "SKILL.md")).Should().BeTrue();
+    }
 }

@@ -121,4 +121,88 @@ public sealed class SkillsCliTests : IDisposable
         outWriter.ToString().Should().Contain("Dry run mode");
         Directory.Exists(Path.Combine(_tempDir, ".agents", "skills")).Should().BeFalse();
     }
+
+    [Fact]
+    public async Task RunAsync_SkillsGlobal_InstallsSkillsIntoGeminiAndAgentsDirectories()
+    {
+        var mockProfile = Path.Combine(_tempDir, "mock_global_profile");
+        Environment.SetEnvironmentVariable("CODECONDENSER_USER_PROFILE", mockProfile);
+
+        try
+        {
+            var outWriter = new StringWriter();
+            var errWriter = new StringWriter();
+
+            var exitCode = await Program.RunAsync(["skills", "--global", "--no-color"], outWriter, errWriter);
+
+            exitCode.Should().Be(0);
+            errWriter.ToString().Should().BeEmpty();
+            var output = outWriter.ToString();
+            output.Should().Contain("Installing skills at global scope.");
+            output.Should().Contain(Path.Combine(mockProfile, ".gemini", "config", "skills"));
+            output.Should().Contain(Path.Combine(mockProfile, ".agents", "skills"));
+            output.Should().Contain("[Created]");
+
+            var geminiSkill = Path.Combine(mockProfile, ".gemini", "config", "skills", "codecondenser", "SKILL.md");
+            var agentsSkill = Path.Combine(mockProfile, ".agents", "skills", "codecondenser", "SKILL.md");
+            File.Exists(geminiSkill).Should().BeTrue();
+            File.Exists(agentsSkill).Should().BeTrue();
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable("CODECONDENSER_USER_PROFILE", null);
+        }
+    }
+
+    [Fact]
+    public async Task RunAsync_SkillsGlobalDryRun_DoesNotCreateFiles()
+    {
+        var mockProfile = Path.Combine(_tempDir, "mock_global_dryrun");
+        Environment.SetEnvironmentVariable("CODECONDENSER_USER_PROFILE", mockProfile);
+
+        try
+        {
+            var outWriter = new StringWriter();
+            var errWriter = new StringWriter();
+
+            var exitCode = await Program.RunAsync(["skills", "-g", "--dry-run", "--no-color"], outWriter, errWriter);
+
+            exitCode.Should().Be(0);
+            outWriter.ToString().Should().Contain("Dry run mode");
+            Directory.Exists(Path.Combine(mockProfile, ".gemini", "config", "skills")).Should().BeFalse();
+            Directory.Exists(Path.Combine(mockProfile, ".agents", "skills")).Should().BeFalse();
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable("CODECONDENSER_USER_PROFILE", null);
+        }
+    }
+
+    [Fact]
+    public async Task RunAsync_SkillsGlobalJsonFormat_OutputsValidJsonWithTargets()
+    {
+        var mockProfile = Path.Combine(_tempDir, "mock_global_json");
+        Environment.SetEnvironmentVariable("CODECONDENSER_USER_PROFILE", mockProfile);
+
+        try
+        {
+            var outWriter = new StringWriter();
+            var errWriter = new StringWriter();
+
+            var exitCode = await Program.RunAsync(["skills", "--global", "--format", "json"], outWriter, errWriter);
+
+            exitCode.Should().Be(0);
+            var json = outWriter.ToString();
+
+            using var doc = JsonDocument.Parse(json);
+            var root = doc.RootElement;
+            root.GetProperty("isGlobal").GetBoolean().Should().BeTrue();
+            root.GetProperty("created").GetInt32().Should().BeGreaterThan(0);
+            root.GetProperty("targets").GetArrayLength().Should().Be(2);
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable("CODECONDENSER_USER_PROFILE", null);
+        }
+    }
 }

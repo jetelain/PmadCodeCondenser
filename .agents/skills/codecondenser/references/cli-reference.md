@@ -19,7 +19,7 @@ codecondenser [command] [path] [options]
 | `analyze [path]` | Perform analysis in dry-run mode (default command if omitted) | `.` |
 | `apply [path]` | Write summarized comments directly to source files on disk | `.` |
 | `snapshot [path]` | Create or update the baseline snapshot in `.codecondenser/snapshot.json` | `.` |
-| `skills [path]` | Install or update bundled agent skills in the workspace (`.agents/skills`) | `.` |
+| `skills [path]` | Install or update bundled agent skills in the workspace (`.agents/skills`) or globally (`--global`) | `.` |
 | `measure [path]` | Measure code in terms of estimated LLM tokens (total, comments, code) | `.` |
 
 ---
@@ -56,10 +56,11 @@ codecondenser [command] [path] [options]
 | `--global-config <path>` | `-gc` | `string` | Auto (`%APPDATA%\CodeCondenser\codecondenser.json` on Windows, `~/.codecondenser/codecondenser.json` on Linux/macOS) | Path to custom global user profile configuration file |
 | `--no-global-config` | | `switch` | `false` | Disable loading of global user profile configuration file |
 | `--dry-run` | `-n` | `switch` | `false` | Preview actions without writing changes to disk |
+| `--global` | `-g` | `switch` | `false` | Install skills globally into `~/.gemini/config/skills/` and `~/.agents/skills/` |
 | `--force` | | `switch` | `false` | Force overwrite skill files even if up to date |
 | `--clean` | | `switch` | `false` | Remove obsolete files from skill directories |
 | `--skill <name>` | | `string` | `null` | Specify a single skill to install/update (default: all) |
-| `--skills-dir <path>` | | `string` | `null` | Override target skills directory (default: `.agents/skills`) |
+| `--skills-dir <path>` | `-d`, `--dir` | `string` | `null` | Override target skills directory (default: `.agents/skills`) |
 | `--format <type>` | `-f` | `string` | `console` | Report format: `console`, `sarif`, `json` |
 | `--output <path>` | `-o` | `string` | `null` | Output file path to write report to (stdout if omitted) |
 | `--no-color` | | `switch` | `false` | Disable ANSI color sequences in output |

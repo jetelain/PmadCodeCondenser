@@ -82,6 +82,73 @@ public static class WorkspaceSkillManager
     }
 
     /// <summary>
+    /// Gets the standard global skills directories: ~/.gemini/config/skills and ~/.agents/skills.
+    /// </summary>
+    public static IReadOnlyList<string> GetGlobalSkillsDirectories(string? userProfilePath = null)
+    {
+        var userProfile = !string.IsNullOrWhiteSpace(userProfilePath)
+            ? userProfilePath
+            : Environment.GetEnvironmentVariable("CODECONDENSER_USER_PROFILE") is { Length: > 0 } envProfile
+                ? envProfile
+                : Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+
+        if (string.IsNullOrWhiteSpace(userProfile))
+        {
+            return [];
+        }
+
+        var dirs = new List<string>
+        {
+            Path.Combine(userProfile, ".gemini", "config", "skills"),
+            Path.Combine(userProfile, ".agents", "skills")
+        };
+
+        return dirs
+            .Select(Path.GetFullPath)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
+    }
+
+    /// <summary>
+    /// Resolves the destination directories for skills based on target path, explicit override, or global flag.
+    /// </summary>
+    public static IReadOnlyList<string> ResolveTargetSkillsDirectories(
+        string targetPath,
+        string? explicitSkillsDir = null,
+        bool isGlobal = false,
+        string? userProfilePath = null)
+    {
+        if (!string.IsNullOrWhiteSpace(explicitSkillsDir))
+        {
+            return [Path.GetFullPath(explicitSkillsDir)];
+        }
+
+        if (isGlobal)
+        {
+            return GetGlobalSkillsDirectories(userProfilePath);
+        }
+
+        return [ResolveTargetSkillsDirectory(targetPath)];
+    }
+
+    /// <summary>
+    /// Installs or updates bundled skills across multiple target skill directories.
+    /// </summary>
+    public static IReadOnlyList<SkillInstallResult> InstallSkillsToDirectories(
+        IEnumerable<string> targetDirectories,
+        SkillInstallOptions? options = null,
+        Assembly? resourceAssembly = null)
+    {
+        ArgumentNullException.ThrowIfNull(targetDirectories);
+        var results = new List<SkillInstallResult>();
+        foreach (var dir in targetDirectories)
+        {
+            results.Add(InstallSkills(dir, options, resourceAssembly));
+        }
+        return results;
+    }
+
+    /// <summary>
     /// Gets the list of distinct skill names available in the bundled assembly resources.
     /// </summary>
     public static IReadOnlyList<string> GetAvailableSkillNames(Assembly? assembly = null)
