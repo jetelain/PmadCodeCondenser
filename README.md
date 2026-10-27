@@ -8,7 +8,7 @@
 A static analysis developer utility and .NET tool built on **.NET 10** and Roslyn (`Microsoft.CodeAnalysis.CSharp`). It analyzes C# codebases to:
 
 1. **Detect Structural Code Clones (Type-2 Clones)**: Identify methods sharing identical AST logic structures (ignoring variable, parameter, and constant renames) and provide actionable refactoring advice.
-2. **Compact Repeated Inline Strings**: Detect string literals >= 100 characters used more than once, with estimated character/token savings, minimal constant declaration snippets, and typical usage patterns.
+2. **Compact Repeated Inline Strings**: Detect string literals >= 100 characters used more than once, with estimated character/token savings, minimal constant declaration snippets, and typical usage patterns. Also detects when inline strings match an existing `const` or `static readonly` string (with a lower threshold, default >= 20 characters), recommending referencing the existing constant instead.
 3. **Condense Verbose Comments**: Scan overly verbose regular comments (`//`, `/* */`) and XML documentation comments (`/// <summary>`, `<remarks>`, `<param>`) and condense them into clear, concise summaries using local or cloud LLMs via `Microsoft.Extensions.AI` and Ollama.
 4. **Enforce Single Type Per File (Automatic Splitting & Renaming)**: Keep each class, interface, struct, enum, record, or delegate in its own `.cs` file matching its type name (allowing small inline types like 1-line delegates via configurable line tolerance) to optimize AI agent context window loading and codebase modularity.
 5. **WYSIWYG Guarantee & Incremental Snapshots**: Cache generated comment summaries and AST hashes so that dry-run reviews match applied code without LLM drift, while incremental runs only analyze changed code.
@@ -296,6 +296,7 @@ jobs:
 | `--enable-strings` | | Explicitly enable repeated inline string detection | `true` |
 | `-ts, --threshold-statements <n>` | `-ts` | Minimum statement count to analyze a method for clones | `8` |
 | `-tstr, --threshold-strings <n>` | `-tstr` | Minimum character length for repeated string detection | `100` |
+| `-tec, --threshold-existing-constants <n>` | `-tec` | Minimum character length when matching against existing constants | `20` |
 | `-so, --string-occurrences <n>` | `-so` | Minimum occurrences for repeated string detection | `2` |
 | `-tc, --threshold-comments <n>` | `-tc` | Minimum character length for comments to be flagged as verbose | `100` |
 | `-txs, --threshold-xml-summary <n>` | `-txs` | Minimum content length for XML `<summary>` / `<remarks>` tags | `threshold-comments` (`100`) |
@@ -458,6 +459,7 @@ Even summarized comments might exceed the character threshold (e.g. 110 characte
   "repeatedStringTolerance": null,
   "repeatedStringExitCode": 2,
   "repeatedStringLengthThreshold": 100,
+  "existingConstantStringLengthThreshold": 20,
   "repeatedStringMinOccurrences": 2,
   "commentLengthThreshold": 100,
   "xmlSummaryLengthThreshold": 100,

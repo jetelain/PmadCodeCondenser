@@ -659,6 +659,60 @@ public class ConsoleFormatterTests
     }
 
     [Fact]
+    public void PrintRepeatedStringGroups_ExistingConstant_OutputsCleanRecommendation()
+    {
+        var formatter = new ConsoleFormatter(enableColor: false);
+        using var writer = new StringWriter();
+
+        var str = "https://api.example.com/v1/resource";
+        var constOcc = new RepeatedStringOccurrence
+        {
+            FilePath = "src/Common/Routes.cs",
+            StartLine = 12,
+            EndLine = 12,
+            StartColumn = 25,
+            EndColumn = 25 + str.Length,
+            StringValue = str,
+            IsConstDeclaration = true,
+            ConstantName = "ResourceRoute",
+            ConstantTypeName = "Routes"
+        };
+        var inlineOcc = new RepeatedStringOccurrence
+        {
+            FilePath = "src/Services/Client.cs",
+            StartLine = 30,
+            EndLine = 30,
+            StartColumn = 18,
+            EndColumn = 18 + str.Length,
+            StringValue = str,
+            EnclosingMember = "FetchResource",
+            Category = FileCategory.Production
+        };
+
+        var group = new RepeatedStringGroup
+        {
+            Value = str,
+            Occurrences = [constOcc, inlineOcc],
+            ExistingConstantDeclarations = [constOcc],
+            Category = CloneCategory.Production,
+            SuggestedConstantName = "ResourceRoute",
+            SuggestedClassName = "Routes",
+            TargetNamespace = "Common"
+        };
+
+        formatter.PrintRepeatedStringGroups(writer, [group], ".");
+
+        var output = writer.ToString();
+        output.Should().Contain("[PRODUCTION EXISTING CONSTANT #1]");
+        output.Should().Contain("1 inline occurrence(s)");
+        output.Should().Contain("Existing Constant: Routes.ResourceRoute in src/Common/Routes.cs:12:25");
+        output.Should().Contain("Inline Occurrences (1):");
+        output.Should().Contain("Client.cs:30:18 in FetchResource");
+        output.Should().Contain("Recommendation: Use existing constant 'Routes.ResourceRoute' instead of inline value.");
+        output.Should().NotContain("Minimal Declaration:");
+    }
+
+    [Fact]
     public void PrintTypeFileIssues_OutputsFormattedSplitAndRenameDetails()
     {
         var formatter = new ConsoleFormatter(enableColor: false);

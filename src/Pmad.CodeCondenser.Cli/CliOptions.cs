@@ -165,6 +165,11 @@ public sealed class CliOptions
     public int? ThresholdStringOccurrences { get; set; }
 
     /// <summary>
+    /// Override minimum character length for string detection when an existing constant already exists (default: 20).
+    /// </summary>
+    public int? ThresholdExistingConstants { get; set; }
+
+    /// <summary>
     /// Maximum number of new repeated string groups tolerated in incremental mode before returning an error exit code.
     /// </summary>
     public int? RepeatedStringTolerance { get; set; }

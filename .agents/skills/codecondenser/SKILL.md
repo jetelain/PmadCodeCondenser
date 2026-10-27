@@ -10,7 +10,7 @@ description: >-
 
 `Pmad.CodeCondenser` (`codecondenser`) is a .NET 10 Roslyn-based static analysis tool designed to:
 1. **Detect Type-2 Structural Code Clones**: Identifies duplicate logic across C# methods (ignoring variable, parameter, and literal renames) without requiring an LLM.
-2. **Compact Repeated Inline Strings**: Detects string literals >= 100 characters used more than once, with estimated character/token savings, minimal constant declaration snippets, and typical usage patterns.
+2. **Compact Repeated Inline Strings**: Detects string literals >= 100 characters used more than once, with estimated character/token savings, minimal constant declaration snippets, and typical usage patterns. Also identifies inline strings matching existing `const` or `static readonly` string constants (with a lower default threshold of >= 20 characters) and recommends referencing the existing constant instead.
 3. **Condense Verbose Comments**: Shortens oversized single-line, multi-line, and XML documentation comments into clean, concise summaries formatted to 120 columns using an LLM.
 4. **Enforce Single Type Per File**: Automatically ensures each class, interface, struct, enum, record, or delegate has its own `.cs` file matching its type name (with line tolerance for small inline types like 1-line delegates) to optimize AI agent context window loading.
 5. **Enforce Guardrails in CI**: Compares changes incrementally against a baseline snapshot and exits with code `2` when new duplication, repeated strings, or type violations are introduced.
@@ -223,7 +223,13 @@ Use repeated string suppressions when a long string literal must intentionally r
 - **Comment Marker**: Place `// codecondenser:ignore-string` (or `// nocondense`) on the line preceding or inline with the string literal.
 - **Attribute**: Apply `[SuppressMessage("CodeCondenser", "RepeatedString")]` to the enclosing method or class.
 
-Minimal constant declaration pattern recommended:
+#### Existing Constant Recommendation
+When an inline string matches an existing `const string` or `static readonly string` defined in the codebase, CodeCondenser detects it using a lower threshold (default: 20 characters, configurable via `--threshold-existing-constants` / `-tec`) and recommends referencing that existing constant directly (zero declaration overhead):
+- Output recommendation: `Use existing constant '<TypeName>.<ConstantName>' instead of inline value.`
+- SARIF diagnostic: Flags the inline occurrence with rule `CC006` and links the existing constant declaration as a related location.
+
+#### New Constant Extraction Pattern
+When no existing constant exists and a string is repeated >= 100 characters, minimal constant declaration pattern recommended:
 ```csharp
 namespace ApplicationNamespace;
 

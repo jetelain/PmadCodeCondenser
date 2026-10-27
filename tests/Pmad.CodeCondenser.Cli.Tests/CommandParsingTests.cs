@@ -138,13 +138,26 @@ public class CommandParsingTests
     public void Parse_RepeatedStringThresholds_BindsValues()
     {
         var (root, globals) = CreateRoot();
-        var parseResult = root.Parse(["analyze", "--threshold-strings", "80", "--string-occurrences", "3"]);
+        var parseResult = root.Parse(["analyze", "--threshold-strings", "80", "--string-occurrences", "3", "--threshold-existing-constants", "25"]);
 
         parseResult.Errors.Should().BeEmpty();
         var options = globals.BindCliOptions(parseResult, CliOptions.CommandAnalyze, ".");
 
         options.ThresholdRepeatedStrings.Should().Be(80);
         options.ThresholdStringOccurrences.Should().Be(3);
+        options.ThresholdExistingConstants.Should().Be(25);
+    }
+
+    [Fact]
+    public void Parse_ThresholdExistingConstantsShortAlias_BindsValues()
+    {
+        var (root, globals) = CreateRoot();
+        var parseResult = root.Parse(["analyze", "-tec", "15"]);
+
+        parseResult.Errors.Should().BeEmpty();
+        var options = globals.BindCliOptions(parseResult, CliOptions.CommandAnalyze, ".");
+
+        options.ThresholdExistingConstants.Should().Be(15);
     }
 
     [Fact]

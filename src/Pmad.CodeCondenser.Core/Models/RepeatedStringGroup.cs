@@ -43,7 +43,30 @@ public sealed record RepeatedStringGroup
     public string? TargetNamespace { get; init; }
 
     /// <summary>
-    /// Estimates character savings if this repeated string is extracted into a constant.
+    /// Indicates whether an existing constant declaration with this string value was found in the codebase.
+    /// </summary>
+    public bool HasExistingConstant => ExistingConstantDeclarations.Count > 0;
+
+    /// <summary>
+    /// The primary occurrence representing the existing constant declaration, if one exists.
+    /// </summary>
+    public RepeatedStringOccurrence? ExistingConstantDeclaration =>
+        ExistingConstantDeclarations.Count > 0 ? ExistingConstantDeclarations[0] : null;
+
+    /// <summary>
+    /// All existing constant declarations found with this string value.
+    /// </summary>
+    public IReadOnlyList<RepeatedStringOccurrence> ExistingConstantDeclarations { get; init; } = [];
+
+    /// <summary>
+    /// Gets only the inline occurrences (excluding any existing constant declarations).
+    /// </summary>
+    public IReadOnlyList<RepeatedStringOccurrence> InlineOccurrences =>
+        Occurrences.Where(o => !o.IsConstDeclaration).ToList();
+
+    /// <summary>
+    /// Estimates character savings if this repeated string is extracted into a constant or replaced by an existing constant.
+    /// When an existing constant already exists, declaration cost is already paid.
     /// With a pre-existing class: declaration is ~60 chars + string size, each usage is ~30 chars.
     /// Without a pre-existing class: declaration is ~120 chars + string size, each usage is ~30 chars.
     /// </summary>
@@ -51,6 +74,20 @@ public sealed record RepeatedStringGroup
     /// <returns>Estimated character gain (reduction in characters).</returns>
     public int EstimateGainCharacters(bool preExistingClass = true)
     {
+        if (HasExistingConstant)
+        {
+            var inlineCount = InlineOccurrences.Count;
+            if (inlineCount == 0)
+            {
+                return 0;
+            }
+
+            int existingCurrentChars = inlineCount * (Length + 2);
+            int usageLength = GenerateTypicalUsage().Length;
+            int existingNewCost = inlineCount * usageLength;
+            return Math.Max(0, existingCurrentChars - existingNewCost);
+        }
+
         int count = Occurrences.Count;
         if (count < 2)
         {
@@ -74,14 +111,26 @@ public sealed record RepeatedStringGroup
     /// <returns>Estimated tokens saved.</returns>
     public int EstimateGainTokens(HeuristicTokenEstimator? estimator = null)
     {
+        var effEstimator = estimator ?? HeuristicTokenEstimator.Default;
+        int literalTokens = effEstimator.Estimate(Value.AsSpan());
+
+        if (HasExistingConstant)
+        {
+            var inlineCount = InlineOccurrences.Count;
+            if (inlineCount == 0)
+            {
+                return 0;
+            }
+
+            int usageTokens = effEstimator.Estimate(GenerateTypicalUsage().AsSpan());
+            return Math.Max(0, inlineCount * Math.Max(0, literalTokens - usageTokens));
+        }
+
         int count = Occurrences.Count;
         if (count < 2)
         {
             return 0;
         }
-
-        var effEstimator = estimator ?? HeuristicTokenEstimator.Default;
-        int literalTokens = effEstimator.Estimate(Value.AsSpan());
 
         int currentTokens = count * literalTokens;
         // Declaration: literalTokens + ~8 overhead tokens for 'internal const string Name = "";'

@@ -59,4 +59,14 @@ public sealed record RepeatedStringOccurrence
     /// Enclosing namespace name if any.
     /// </summary>
     public string? Namespace { get; init; }
+
+    /// <summary>
+    /// Identifier name of the constant if this occurrence is a constant declaration.
+    /// </summary>
+    public string? ConstantName { get; init; }
+
+    /// <summary>
+    /// Name of the declaring type (class, struct, record, interface) if this occurrence is a constant declaration.
+    /// </summary>
+    public string? ConstantTypeName { get; init; }
 }

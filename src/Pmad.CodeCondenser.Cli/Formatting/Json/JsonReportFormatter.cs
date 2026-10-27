@@ -147,11 +147,16 @@ public sealed class JsonReportFormatter : IReportFormatter
                 EndLine = occ.EndLine,
                 StartColumn = occ.StartColumn,
                 EndColumn = occ.EndColumn,
-                EnclosingMember = occ.EnclosingMember
+                EnclosingMember = occ.EnclosingMember,
+                IsConstDeclaration = occ.IsConstDeclaration
             }).ToList();
 
             var gainChars = strGroup.EstimateGainCharacters(preExistingClass: true);
             var gainTokens = strGroup.EstimateGainTokens(estimator);
+
+            var recommendation = strGroup.HasExistingConstant
+                ? $"Use existing constant '{strGroup.SuggestedClassName}.{strGroup.SuggestedConstantName}' instead of inline value."
+                : "Extract repeated inline string literal into a shared constant.";
 
             repeatedStrings.Add(new JsonRepeatedStringCluster
             {
@@ -162,8 +167,10 @@ public sealed class JsonReportFormatter : IReportFormatter
                 Category = strGroup.Category.ToString(),
                 SuggestedConstantName = strGroup.SuggestedConstantName,
                 SuggestedClassName = strGroup.SuggestedClassName,
+                HasExistingConstant = strGroup.HasExistingConstant,
+                ExistingConstant = strGroup.HasExistingConstant ? $"{strGroup.SuggestedClassName}.{strGroup.SuggestedConstantName}" : null,
                 Occurrences = occurrences,
-                Recommendation = "Extract repeated inline string literal into a shared constant.",
+                Recommendation = recommendation,
                 PotentialGainCharacters = gainChars > 0 ? gainChars : null,
                 PotentialGainTokens = gainTokens > 0 ? gainTokens : null
             });

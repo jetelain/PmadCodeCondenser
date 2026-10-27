@@ -48,6 +48,7 @@ codecondenser [command] [path] [options]
 | `--enable-strings` | | `switch` | `true` | Explicitly enable repeated inline string detection |
 | `--threshold-statements <n>` | `-ts` | `int` | `8` | Minimum statement count for a method to be analyzed for clones |
 | `--threshold-strings <n>` | `-tstr` | `int` | `100` | Minimum character length for repeated string detection |
+| `--threshold-existing-constants <n>` | `-tec` | `int` | `20` | Minimum character length when matching against existing constants |
 | `--string-occurrences <n>` | `-so` | `int` | `2` | Minimum occurrences for repeated string detection |
 | `--threshold-comments <n>` | `-tc` | `int` | `100` | Minimum character length for comments to be flagged as verbose |
 | `--threshold-xml-summary <n>` | `-txs` | `int` | `100` | Minimum length for XML `<summary>` and `<remarks>` content |
@@ -120,6 +121,7 @@ To configure personal LLM defaults (Ollama endpoint, default model, context size
   "repeatedStringTolerance": null,
   "repeatedStringExitCode": 2,
   "repeatedStringLengthThreshold": 100,
+  "existingConstantStringLengthThreshold": 20,
   "repeatedStringMinOccurrences": 2,
   "duplicationStatementThreshold": 8,
   "commentLengthThreshold": 100,

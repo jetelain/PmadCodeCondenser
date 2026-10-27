@@ -157,6 +157,39 @@ public sealed class CodeCondenserSettings
     }
 
     /// <summary>
+    /// Minimum character length of a string literal to be flagged when an existing constant with the same value already exists.
+    /// Default is 20 characters (lower than <see cref="RepeatedStringLengthThreshold"/> because the declaration cost is already paid).
+    /// </summary>
+    public int ExistingConstantStringLengthThreshold { get; set; } = 20;
+
+    /// <summary>
+    /// Alias for <see cref="ExistingConstantStringLengthThreshold"/>.
+    /// </summary>
+    public int? ExistingConstantLengthThreshold
+    {
+        get => ExistingConstantStringLengthThreshold;
+        set { if (value.HasValue) ExistingConstantStringLengthThreshold = value.Value; }
+    }
+
+    /// <summary>
+    /// Alias for <see cref="ExistingConstantStringLengthThreshold"/>.
+    /// </summary>
+    public int? ThresholdExistingConstantLength
+    {
+        get => ExistingConstantStringLengthThreshold;
+        set { if (value.HasValue) ExistingConstantStringLengthThreshold = value.Value; }
+    }
+
+    /// <summary>
+    /// Alias for <see cref="ExistingConstantStringLengthThreshold"/>.
+    /// </summary>
+    public int? ThresholdExistingConstants
+    {
+        get => ExistingConstantStringLengthThreshold;
+        set { if (value.HasValue) ExistingConstantStringLengthThreshold = value.Value; }
+    }
+
+    /// <summary>
     /// Minimum number of occurrences across the codebase for a string literal to be flagged as repeated.
     /// Default is 2.
     /// </summary>
@@ -665,6 +698,7 @@ public sealed class CodeCondenserSettings
             TokenEstimator = TokenEstimator,
             EnableRepeatedStringDetection = EnableRepeatedStringDetection,
             RepeatedStringLengthThreshold = RepeatedStringLengthThreshold,
+            ExistingConstantStringLengthThreshold = ExistingConstantStringLengthThreshold,
             RepeatedStringMinOccurrences = RepeatedStringMinOccurrences,
             RepeatedStringTolerance = RepeatedStringTolerance,
             RepeatedStringExitCode = RepeatedStringExitCode,
