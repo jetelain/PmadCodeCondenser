@@ -26,7 +26,12 @@ public static class ReportCommand
         {
             var path = parseResult.GetValue(pathArg) ?? ".";
             var options = globals.BindCliOptions(parseResult, CliOptions.CommandReport, path);
-            options.SummaryMode = SummaryMode.Report;
+
+            if (options.SummaryMode != SummaryMode.Disabled && options.EnableCommentSummarization != false)
+            {
+                options.SummaryMode = SummaryMode.Report;
+            }
+
             return await services.RunCommandAsync(new AnalyzeCommand(), options, ct).ConfigureAwait(false);
         });
 

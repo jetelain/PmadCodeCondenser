@@ -117,6 +117,28 @@ public class CliIntegrationTests : IDisposable
     }
 
     [Fact]
+    public async Task RunAsync_ReportCommand_WithNoComments_DoesNotReportComments()
+    {
+        var file = Path.Combine(_testDirectory, "ReportNoCommentsTest.cs");
+        await File.WriteAllTextAsync(file, """
+        public class ReportNoCommentsTest
+        {
+            // This is a very long and verbose explanation that easily exceeds the default threshold of one hundred characters in total length
+            public void Run() {}
+        }
+        """);
+
+        using var output = new StringWriter();
+        using var error = new StringWriter();
+
+        var exitCode = await Program.RunAsync(["report", _testDirectory, "--no-comments", "--no-color"], output, error);
+
+        exitCode.Should().Be(0);
+        output.ToString().Should().Contain("No verbose comments detected.");
+        output.ToString().Should().NotContain("Found 1 verbose comment(s) exceeding threshold:");
+    }
+
+    [Fact]
     public async Task RunAsync_ApplyMode_WhenNoFilesModified_PrintsNoFilesRequiredModification()
     {
         var file = Path.Combine(_testDirectory, "CleanService.cs");

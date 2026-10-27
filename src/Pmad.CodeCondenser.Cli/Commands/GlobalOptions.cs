@@ -169,6 +169,18 @@ public sealed class GlobalOptions
     };
 
     // Comments & XML doc thresholds
+    public Option<string?> SummaryOption { get; } = new("--summary", "--summary-mode")
+    {
+        Description = "Comment summary mode: summarize, report, or disabled",
+        Recursive = true
+    };
+
+    public Option<bool> ReportOnlyOption { get; } = new("--report-only")
+    {
+        Description = "Report-only mode for comments without calling an LLM (alias for --summary report)",
+        Recursive = true
+    };
+
     public Option<bool> NoCommentsOption { get; } = new("--no-comments", "--disable-comments", "--no-comment-summarization")
     {
         Description = "Disable comment extraction and summarization",
@@ -275,6 +287,8 @@ public sealed class GlobalOptions
         root.Add(ThresholdRepeatedStringsOption);
         root.Add(ThresholdStringOccurrencesOption);
 
+        root.Add(SummaryOption);
+        root.Add(ReportOnlyOption);
         root.Add(NoCommentsOption);
         root.Add(EnableCommentsOption);
         root.Add(ThresholdCommentsOption);
@@ -370,6 +384,36 @@ public sealed class GlobalOptions
         else if (pr.GetResult(EnableStringsOption) is { Implicit: false } && pr.GetValue(EnableStringsOption))
         {
             options.EnableRepeatedStrings = true;
+        }
+
+        var summary = pr.GetValue(SummaryOption);
+        if (!string.IsNullOrWhiteSpace(summary))
+        {
+            if (summary.Equals("disabled", StringComparison.OrdinalIgnoreCase) ||
+                summary.Equals("none", StringComparison.OrdinalIgnoreCase) ||
+                summary.Equals("off", StringComparison.OrdinalIgnoreCase) ||
+                summary.Equals("false", StringComparison.OrdinalIgnoreCase))
+            {
+                options.SummaryMode = SummaryMode.Disabled;
+                options.EnableCommentSummarization = false;
+            }
+            else if (summary.Equals("report", StringComparison.OrdinalIgnoreCase) ||
+                     summary.Equals("report-only", StringComparison.OrdinalIgnoreCase))
+            {
+                options.SummaryMode = SummaryMode.Report;
+            }
+            else if (summary.Equals("summarize", StringComparison.OrdinalIgnoreCase) ||
+                     summary.Equals("condense", StringComparison.OrdinalIgnoreCase) ||
+                     summary.Equals("llm", StringComparison.OrdinalIgnoreCase) ||
+                     summary.Equals("true", StringComparison.OrdinalIgnoreCase))
+            {
+                options.SummaryMode = SummaryMode.Summarize;
+                options.EnableCommentSummarization = true;
+            }
+        }
+        else if (pr.GetResult(ReportOnlyOption) is { Implicit: false } && pr.GetValue(ReportOnlyOption))
+        {
+            options.SummaryMode = SummaryMode.Report;
         }
 
         if (pr.GetResult(NoCommentsOption) is { Implicit: false } && pr.GetValue(NoCommentsOption))

@@ -140,6 +140,10 @@ public sealed class CommandServices
         if (options.SummaryMode.HasValue)
         {
             settings.SummaryMode = options.SummaryMode.Value;
+            if (options.SummaryMode.Value == SummaryMode.Disabled)
+            {
+                settings.EnableCommentSummarization = false;
+            }
         }
         else if (options.EnableCommentSummarization.HasValue)
         {
@@ -148,6 +152,12 @@ public sealed class CommandServices
             {
                 settings.SummaryMode = SummaryMode.Disabled;
             }
+        }
+
+        if (options.EnableCommentSummarization == false)
+        {
+            settings.EnableCommentSummarization = false;
+            settings.SummaryMode = SummaryMode.Disabled;
         }
 
         settings.SummaryMode = settings.GetEffectiveSummaryMode();
