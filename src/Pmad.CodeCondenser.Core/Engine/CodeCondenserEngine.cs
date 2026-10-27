@@ -548,7 +548,8 @@ public sealed class CodeCondenserEngine : ICodeCondenserEngine
                 currentFileHashes,
                 methodsForSnapshot,
                 cacheForSnapshot,
-                typeViolationFiles: effectiveSettings.EnableTypeSplitting ? allTypeIssues.Select(i => i.FilePath) : null);
+                typeViolationFiles: effectiveSettings.EnableTypeSplitting ? allTypeIssues.Select(i => i.FilePath) : null,
+                isIncremental: incremental && baseline != null);
 
             // If duplication detection was disabled, restore baseline method hashes
             if (!effectiveSettings.EnableDuplicationDetection && baseline?.MethodHashes != null)
@@ -1014,7 +1015,8 @@ public sealed class CodeCondenserEngine : ICodeCondenserEngine
             currentFileHashes,
             methodsForSnapshot,
             commentCache,
-            typeViolationFiles: settings.EnableTypeSplitting ? typeViolationFiles : null);
+            typeViolationFiles: settings.EnableTypeSplitting ? typeViolationFiles : null,
+            isIncremental: false);
 
         if (settings.EnableDuplicationDetection)
         {

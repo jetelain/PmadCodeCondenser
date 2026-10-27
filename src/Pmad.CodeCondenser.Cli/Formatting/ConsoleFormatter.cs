@@ -759,6 +759,16 @@ public sealed class ConsoleFormatter : IConsoleFormatter
                     writer.WriteLine(Yellow($"Issue #{i + 1} [Rename]: {Cyan(relPath)} → {Cyan(issue.SuggestedFileName ?? "")}"));
                     writer.WriteLine($"  File contains single type '{Bold(primary?.TypeName ?? "")}' ({primary?.Kind}) which does not match file name.");
                 }
+                else if (issue.Action == TypeFileAction.SplitAndRename)
+                {
+                    writer.WriteLine(Yellow($"Issue #{i + 1} [Split & Rename]: {Cyan(relPath)} → {Cyan(issue.SuggestedFileName ?? "")} (Contains {issue.Types.Count} types)"));
+                    writer.WriteLine($"  Primary Type: {Bold(primary?.TypeName ?? "")} (renames file to {issue.SuggestedFileName})");
+                    writer.WriteLine($"  Types to Extract ({issue.TypesToExtract.Count}):");
+                    foreach (var ext in issue.TypesToExtract)
+                    {
+                        writer.WriteLine($"    • {Bold(ext.TypeName)} ({ext.Kind}, {ext.LinesOfCode} LOC) → {Cyan(ext.TargetFileName)}");
+                    }
+                }
                 else
                 {
                     writer.WriteLine(Yellow($"Issue #{i + 1} [Split]: {Cyan(relPath)} (Contains {issue.Types.Count} types)"));
@@ -942,6 +952,10 @@ public sealed class ConsoleFormatter : IConsoleFormatter
                 if (issue.Action == TypeFileAction.Rename)
                 {
                     writer.WriteLine(Yellow($"  File #{i + 1} [Rename]: {Cyan(relPath)} → {Cyan(issue.SuggestedFileName ?? "")}"));
+                }
+                else if (issue.Action == TypeFileAction.SplitAndRename)
+                {
+                    writer.WriteLine(Yellow($"  File #{i + 1} [Split & Rename]: {Cyan(relPath)} → {Cyan(issue.SuggestedFileName ?? "")} ({issue.TypesToExtract.Count} types to extract)"));
                 }
                 else
                 {

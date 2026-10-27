@@ -362,4 +362,41 @@ public class SarifReportFormatterTests
         res.Locations[0].PhysicalLocation.Region.StartLine.Should().Be(5);
         res.Locations[0].PhysicalLocation.Region.EndLine.Should().Be(25);
     }
+
+    [Fact]
+    public async Task FormatAsync_SingleTypePerFileIssue_SplitAndRename_PointsToAuxiliaryTypeLocation()
+    {
+        var primaryType = new ExtractedTypeInfo { TypeName = "PrimaryService", Kind = "class", LinesOfCode = 20, StartLine = 5, EndLine = 25, TargetFileName = "PrimaryService.cs", IsPrimary = true };
+        var secondaryType = new ExtractedTypeInfo { TypeName = "AuxService", Kind = "class", LinesOfCode = 15, StartLine = 30, EndLine = 48, TargetFileName = "AuxService.cs" };
+
+        var issue = new TypeFileAnalysis
+        {
+            FilePath = "c:/repo/src/OldName.cs",
+            Action = TypeFileAction.SplitAndRename,
+            SuggestedFileName = "PrimaryService.cs",
+            Types = [primaryType, secondaryType],
+            Category = FileCategory.Production
+        };
+
+        var result = new AnalysisResult
+        {
+            AnalyzedFilesCount = 1,
+            TotalMethodsScanned = 0,
+            CloneGroups = [],
+            VerboseComments = [],
+            SummarizedComments = new Dictionary<string, string>(),
+            TypeFileIssues = [issue]
+        };
+
+        using var writer = new StringWriter();
+        await _formatter.FormatAsync(result, _settings, writer, "c:/repo");
+
+        var sarif = JsonSerializer.Deserialize<SarifLog>(writer.ToString(), new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase });
+        sarif!.Runs[0].Results.Should().HaveCount(1);
+
+        var res = sarif.Runs[0].Results[0];
+        res.RuleId.Should().Be("CC007");
+        res.Locations[0].PhysicalLocation.Region.StartLine.Should().Be(30);
+        res.Locations[0].PhysicalLocation.Region.EndLine.Should().Be(48);
+    }
 }

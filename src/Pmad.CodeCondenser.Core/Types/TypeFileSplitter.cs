@@ -149,7 +149,13 @@ public sealed class TypeFileSplitter : ITypeFileSplitter
         TypeFileAction action = TypeFileAction.None;
         string? suggestedFileName = null;
 
-        if (typesToExtract.Count > 0)
+        bool allTypesToleratedOrSuppressed = detectedTypes.Count > 1 && detectedTypes.All(t => t.IsTolerated || t.IsSuppressed);
+
+        if (allTypesToleratedOrSuppressed)
+        {
+            action = TypeFileAction.None;
+        }
+        else if (typesToExtract.Count > 0)
         {
             if (!nameMatches && settings.EnableTypeRenaming && primary != null && !primary.IsSuppressed)
             {

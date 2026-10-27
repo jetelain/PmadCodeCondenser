@@ -357,4 +357,26 @@ public class TypeFileSplitterTests
         Assert.Contains("using ModelA = System.String;", content);
         Assert.Contains("using ModelB = System.String;", content);
     }
+
+    [Fact]
+    public void AnalyzeFile_MultiTypeFileAllWithinTolerance_ReturnsNoAction()
+    {
+        var code = """
+            namespace MyNamespace;
+
+            public delegate void StepOneCompleted(int code);
+            public delegate void StepTwoCompleted(string message);
+            public delegate void StepThreeCompleted(bool success);
+            """;
+        var tree = CSharpSyntaxTree.ParseText(code);
+        var settings = new CodeCondenserSettings { TypeLineTolerance = 1 };
+
+        // File name is Delegates.cs; none of the delegates match the file name, but all are 1 LOC (tolerated).
+        var result = _splitter.AnalyzeFile(tree, "Delegates.cs", settings);
+
+        Assert.Equal(TypeFileAction.None, result.Action);
+        Assert.False(result.HasViolation);
+        Assert.Null(result.SuggestedFileName);
+        Assert.Empty(result.TypesToExtract);
+    }
 }

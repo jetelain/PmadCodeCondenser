@@ -657,4 +657,66 @@ public class ConsoleFormatterTests
         output.Should().Contain("static class MyConstants");
         output.Should().Contain("internal const string PendingOrdersQuery = \"...\";");
     }
+
+    [Fact]
+    public void PrintTypeFileIssues_OutputsFormattedSplitAndRenameDetails()
+    {
+        var formatter = new ConsoleFormatter(enableColor: false);
+        using var writer = new StringWriter();
+
+        var primary = new ExtractedTypeInfo { TypeName = "PrimaryService", Kind = "class", LinesOfCode = 30, StartLine = 1, EndLine = 35, TargetFileName = "PrimaryService.cs", IsPrimary = true };
+        var auxiliary = new ExtractedTypeInfo { TypeName = "AuxService", Kind = "class", LinesOfCode = 20, StartLine = 36, EndLine = 55, TargetFileName = "AuxService.cs" };
+
+        var issue = new TypeFileAnalysis
+        {
+            FilePath = "src/OldService.cs",
+            Action = TypeFileAction.SplitAndRename,
+            SuggestedFileName = "PrimaryService.cs",
+            Types = [primary, auxiliary]
+        };
+
+        formatter.PrintTypeFileIssues(writer, [issue], ".");
+
+        var output = writer.ToString();
+        output.Should().Contain("Found 1 File(s) with Multiple Types or Mismatched Names:");
+        output.Should().Contain("[SPLIT & RENAME FILE #1] src/OldService.cs → PrimaryService.cs:");
+        output.Should().Contain("Primary Type: PrimaryService (renames file to PrimaryService.cs)");
+        output.Should().Contain("• AuxService (class, 20 LOC) → AuxService.cs");
+    }
+
+    [Fact]
+    public void PrintAiActionableIncrementalFeedback_WithSplitAndRename_OutputsDistinctLabel()
+    {
+        var formatter = new ConsoleFormatter(enableColor: false);
+        using var writer = new StringWriter();
+
+        var primary = new ExtractedTypeInfo { TypeName = "PrimaryService", Kind = "class", LinesOfCode = 30, StartLine = 1, EndLine = 35, TargetFileName = "PrimaryService.cs", IsPrimary = true };
+        var auxiliary = new ExtractedTypeInfo { TypeName = "AuxService", Kind = "class", LinesOfCode = 20, StartLine = 36, EndLine = 55, TargetFileName = "AuxService.cs" };
+
+        var issue = new TypeFileAnalysis
+        {
+            FilePath = "src/OldService.cs",
+            Action = TypeFileAction.SplitAndRename,
+            SuggestedFileName = "PrimaryService.cs",
+            Types = [primary, auxiliary]
+        };
+
+        formatter.PrintAiActionableIncrementalFeedback(
+            writer,
+            cloneGroups: [],
+            subMethodGroups: [],
+            verboseComments: [],
+            baseDirectory: ".",
+            duplicationTolerance: 0,
+            hasDuplicationViolation: false,
+            typeIssues: [issue],
+            typeTolerance: 0,
+            hasTypeViolation: true);
+
+        var output = writer.ToString();
+        output.Should().Contain("[AI AGENT ACTION REQUIRED] Single Type Per File Policy Violation (Exit Code: 2)");
+        output.Should().Contain("Issue #1 [Split & Rename]: src/OldService.cs → PrimaryService.cs (Contains 2 types)");
+        output.Should().Contain("Primary Type: PrimaryService (renames file to PrimaryService.cs)");
+        output.Should().Contain("• AuxService (class, 20 LOC) → AuxService.cs");
+    }
 }
