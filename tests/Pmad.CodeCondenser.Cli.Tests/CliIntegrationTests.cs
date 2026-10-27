@@ -1,3 +1,4 @@
+using System.Reflection;
 using AwesomeAssertions;
 using Pmad.CodeCondenser.Core.Comments;
 using Pmad.CodeCondenser.Core.Configuration;
@@ -51,7 +52,32 @@ public class CliIntegrationTests : IDisposable
 
         exitCode.Should().Be(0);
         error.ToString().Should().BeEmpty();
-        output.ToString().Should().Contain("0.1.0-preview");
+
+        var assembly = typeof(Program).Assembly;
+        var infoVersion = assembly.GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion;
+        var version = assembly.GetName().Version?.ToString(3) ?? "0.1.0-preview";
+        var expectedVersion = infoVersion?.Split('+')[0] ?? version;
+
+        output.ToString().Trim().Should().Be(expectedVersion);
+    }
+
+    [Fact]
+    public async Task RunAsync_VersionOption_ShortAlias_OutputsVersionAndExitsZero()
+    {
+        using var output = new StringWriter();
+        using var error = new StringWriter();
+
+        var exitCode = await Program.RunAsync(["-v"], output, error);
+
+        exitCode.Should().Be(0);
+        error.ToString().Should().BeEmpty();
+
+        var assembly = typeof(Program).Assembly;
+        var infoVersion = assembly.GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion;
+        var version = assembly.GetName().Version?.ToString(3) ?? "0.1.0-preview";
+        var expectedVersion = infoVersion?.Split('+')[0] ?? version;
+
+        output.ToString().Trim().Should().Be(expectedVersion);
     }
 
     [Fact]
