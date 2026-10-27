@@ -11,15 +11,20 @@
     Uninstalls the existing global tool and wipes the cache before reinstalling.
 .PARAMETER SkipBuild
     Skips the build/pack step and installs the existing .nupkg from the output folder.
+.PARAMETER InstallSkill
+    Automatically installs the agent skill globally to ~/.gemini/config/skills/ and ~/.agents/skills/.
 .EXAMPLE
     .\install-cli.ps1
 .EXAMPLE
     .\install-cli.ps1 -Force
+.EXAMPLE
+    .\install-cli.ps1 -InstallSkill
 #>
 param(
     [string]$Configuration = "Release",
     [switch]$Force,
-    [switch]$SkipBuild
+    [switch]$SkipBuild,
+    [switch]$InstallSkill
 )
 
 $ErrorActionPreference = "Stop"
@@ -64,20 +69,38 @@ if (Test-Path $userCacheDir) {
 # 3. Install or Update Global Tool
 Write-Host "`n[3/3] Installing or updating global dotnet tool '$toolCommand'..." -ForegroundColor Gray
 
-if ($Force) {
-    Write-Host "[Force] Uninstalling existing global tool if present..." -ForegroundColor Yellow
-    dotnet tool uninstall -g $packageName 2>$null | Out-Null
+# Stop any running codecondenser processes that might be locking the tool files
+Get-Process $toolCommand -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
+
+$installArgs = @("--add-source", $packageOutputDir, "--no-cache")
+$nupkgFile = Get-ChildItem "$packageOutputDir\$packageName.*.nupkg" -ErrorAction SilentlyContinue | Sort-Object LastWriteTime -Descending | Select-Object -First 1
+if ($nupkgFile -and $nupkgFile.Name -match "^$packageName\.(.+)\.nupkg$") {
+    $packageVersion = $Matches[1]
+    Write-Host "Target package version: $packageVersion" -ForegroundColor Gray
+    $installArgs += @("--version", $packageVersion)
+} else {
+    $installArgs += @("--prerelease")
 }
 
 $installedTools = dotnet tool list -g
 $isInstalled = $installedTools -match "(?i)\b$packageName\b"
 
-if ($isInstalled -and -not $Force) {
+if ($Force -and $isInstalled) {
+    Write-Host "[Force] Uninstalling existing global tool if present..." -ForegroundColor Yellow
+    & dotnet tool uninstall -g $packageName
+    if ($LASTEXITCODE -eq 0) {
+        $isInstalled = $false
+    } else {
+        Write-Warning "Failed to uninstall existing tool. Proceeding with update instead..."
+    }
+}
+
+if ($isInstalled) {
     Write-Host "Updating global tool '$toolCommand'..." -ForegroundColor Cyan
-    dotnet tool update -g $packageName --add-source $packageOutputDir --no-cache --prerelease
+    & dotnet tool update -g $packageName @installArgs
 } else {
     Write-Host "Installing global tool '$toolCommand'..." -ForegroundColor Cyan
-    dotnet tool install -g $packageName --add-source $packageOutputDir --no-cache --prerelease
+    & dotnet tool install -g $packageName @installArgs
 }
 
 if ($LASTEXITCODE -ne 0) {
@@ -85,11 +108,17 @@ if ($LASTEXITCODE -ne 0) {
     exit $LASTEXITCODE
 }
 
+# 4. Optional / Recommended: Install AI Agent Skill
+if ($InstallSkill) {
+    Write-Host "`nInstalling AI agent skill 'codecondenser' globally..." -ForegroundColor Cyan
+    & $toolCommand skills install --global
+}
+
 Write-Host "`n==========================================================" -ForegroundColor Green
 Write-Host " Installation Successful!                                 " -ForegroundColor Green
 Write-Host "==========================================================" -ForegroundColor Green
 
-# 4. Verify installation
+# 5. Verify installation
 Write-Host "`nVerifying '$toolCommand --version'..." -ForegroundColor Gray
 try {
     & $toolCommand --version
@@ -97,4 +126,5 @@ try {
     Write-Host "Note: If '$toolCommand' is not yet found in PATH, restart your shell or ensure '$HOME\.dotnet\tools' is in PATH." -ForegroundColor Yellow
 }
 
-Write-Host "`nYou can now run '$toolCommand [path] [options]' in any repository." -ForegroundColor Cyan
+Write-Host "`nYou can now run '$toolCommand <command> [path] [options]' in any repository." -ForegroundColor Cyan
+Write-Host "Tip: Run '$toolCommand skills install' in any project or '$toolCommand skills install --global' to install the AI agent skill.`n" -ForegroundColor Gray

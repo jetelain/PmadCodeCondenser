@@ -82,7 +82,7 @@ public sealed class CodeCondenserSettings
     /// When true, enables sliding-window AST sequence detection within method bodies.
     /// Default is false.
     /// </summary>
-    public bool EnableSubMethodCloneDetection { get; set; } = false;
+    public bool EnableSubMethodCloneDetection { get; set; }
 
     /// <summary>
     /// Alias for <see cref="EnableSubMethodCloneDetection"/>.
@@ -391,7 +391,7 @@ public sealed class CodeCondenserSettings
     /// Maximum number of new or modified code clone clusters tolerated in incremental mode before returning an error exit code.
     /// Default is 0 (zero tolerance).
     /// </summary>
-    public int DuplicationTolerance { get; set; } = 0;
+    public int DuplicationTolerance { get; set; }
 
     /// <summary>
     /// Alias for <see cref="DuplicationTolerance"/>.
@@ -470,13 +470,13 @@ public sealed class CodeCondenserSettings
     /// When true, completely skips scanning and reporting test files.
     /// Default is false.
     /// </summary>
-    public bool ExcludeTests { get; set; } = false;
+    public bool ExcludeTests { get; set; }
 
     /// <summary>
     /// When false (default), test clones are reported for review but do not count toward CI tolerance failure.
     /// When true, test clones count toward CI gate failure.
     /// </summary>
-    public bool EnforceTestDuplication { get; set; } = false;
+    public bool EnforceTestDuplication { get; set; }
 
     /// <summary>
     /// Glob patterns used to categorize files as unit/integration tests for isolated reporting and guidance.

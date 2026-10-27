@@ -1,4 +1,4 @@
-using FluentAssertions;
+using AwesomeAssertions;
 using Pmad.CodeCondenser.Core.Models;
 using Pmad.CodeCondenser.Core.Strings;
 

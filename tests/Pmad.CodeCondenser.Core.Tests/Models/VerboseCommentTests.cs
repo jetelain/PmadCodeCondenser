@@ -1,4 +1,4 @@
-using FluentAssertions;
+using AwesomeAssertions;
 using Pmad.CodeCondenser.Core.Models;
 
 namespace Pmad.CodeCondenser.Core.Tests.Models;

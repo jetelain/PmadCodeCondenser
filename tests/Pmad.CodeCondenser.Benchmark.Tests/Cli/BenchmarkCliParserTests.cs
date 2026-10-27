@@ -1,4 +1,4 @@
-using FluentAssertions;
+using AwesomeAssertions;
 using Pmad.CodeCondenser.Benchmark.Cli;
 
 namespace Pmad.CodeCondenser.Benchmark.Tests.Cli;

@@ -1,4 +1,4 @@
-using FluentAssertions;
+using AwesomeAssertions;
 using Pmad.AI.Tokens;
 using Pmad.CodeCondenser.Core.Comments;
 using Pmad.CodeCondenser.Core.Configuration;

@@ -1,5 +1,5 @@
 using System.Text.Json;
-using FluentAssertions;
+using AwesomeAssertions;
 using Pmad.CodeCondenser.Cli.Formatting.Json;
 using Pmad.CodeCondenser.Cli.Formatting.Sarif;
 using Pmad.CodeCondenser.Core.Comments;
@@ -38,7 +38,7 @@ public class CliExportIntegrationTests : IDisposable
 
         var engine = CreateEngine();
         var exitCode = await Program.RunAsync(
-            [_testDirectory, "--no-comments", "--format", "sarif"],
+            ["analyze", _testDirectory, "--no-comments", "--format", "sarif"],
             output,
             error,
             customEngine: engine);
@@ -71,7 +71,7 @@ public class CliExportIntegrationTests : IDisposable
 
         var engine = CreateEngine();
         var exitCode = await Program.RunAsync(
-            [_testDirectory, "--no-comments", "--format", "json"],
+            ["analyze", _testDirectory, "--no-comments", "--format", "json"],
             output,
             error,
             customEngine: engine);
@@ -103,7 +103,7 @@ public class CliExportIntegrationTests : IDisposable
 
         var engine = CreateEngine();
         var exitCode = await Program.RunAsync(
-            [_testDirectory, "--no-comments", "--format", "sarif", "--output", outputFile],
+            ["analyze", _testDirectory, "--no-comments", "--format", "sarif", "--output", outputFile],
             output,
             error,
             customEngine: engine);
@@ -132,7 +132,7 @@ public class CliExportIntegrationTests : IDisposable
 
         var engine = CreateEngine();
         var exitCode = await Program.RunAsync(
-            [_testDirectory, "--no-comments", "-f", "json", "-o", outputFile],
+            ["analyze", _testDirectory, "--no-comments", "-f", "json", "-o", outputFile],
             output,
             error,
             customEngine: engine);
@@ -158,7 +158,7 @@ public class CliExportIntegrationTests : IDisposable
 
         var engine = CreateEngine();
         var exitCode = await Program.RunAsync(
-            [_testDirectory, "--no-comments", "--incremental", "--duplication-tolerance", "0", "--format", "sarif", "--output", outputFile],
+            ["analyze", _testDirectory, "--no-comments", "--incremental", "--duplication-tolerance", "0", "--format", "sarif", "--output", outputFile],
             output,
             error,
             customEngine: engine);

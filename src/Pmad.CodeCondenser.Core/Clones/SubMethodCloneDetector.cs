@@ -513,7 +513,7 @@ public sealed class SubMethodCloneDetector : ISubMethodCloneDetector
     }
 
     private static CloneCategory DetermineCategory(
-        IReadOnlyList<SubMethodCloneOccurrence> occurrences,
+        List<SubMethodCloneOccurrence> occurrences,
         Func<string, FileCategory>? fileClassifier)
     {
         if (fileClassifier == null || occurrences.Count == 0)

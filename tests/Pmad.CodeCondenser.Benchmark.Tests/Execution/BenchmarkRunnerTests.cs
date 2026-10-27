@@ -1,7 +1,7 @@
 using System.Net;
 using System.Text;
 using System.Text.Json;
-using FluentAssertions;
+using AwesomeAssertions;
 using Pmad.CodeCondenser.Benchmark.Execution;
 using Pmad.CodeCondenser.Benchmark.Models;
 using Pmad.CodeCondenser.Core.Models;

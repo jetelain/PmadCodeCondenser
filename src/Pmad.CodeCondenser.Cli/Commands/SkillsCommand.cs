@@ -1,3 +1,4 @@
+using System.CommandLine;
 using System.Text.Json;
 using Pmad.CodeCondenser.Cli.Formatting;
 using Pmad.CodeCondenser.Cli.Skills;
@@ -12,6 +13,100 @@ namespace Pmad.CodeCondenser.Cli.Commands;
 /// </summary>
 public sealed class SkillsCommand : ICommand
 {
+    private static readonly JsonSerializerOptions JsonOptions = new() { WriteIndented = true };
+
+    public static Command Create(GlobalOptions globals, CommandServices services)
+    {
+        ArgumentNullException.ThrowIfNull(globals);
+        ArgumentNullException.ThrowIfNull(services);
+
+        var globalOpt = new Option<bool>("--global", "-g")
+        {
+            Description = "Install skills globally into user configuration directories (~/.gemini/config/skills/ and ~/.agents/skills/)",
+            Recursive = true
+        };
+
+        var skillOpt = new Option<string?>("--skill", "--skill-name")
+        {
+            Description = "Specify a specific skill to install or update (e.g. 'codecondenser')",
+            Recursive = true
+        };
+
+        var dirOpt = new Option<string?>("--dir", "-d", "--skills-dir", "--skills-directory")
+        {
+            Description = "Override target skills directory",
+            Recursive = true
+        };
+
+        var forceOpt = new Option<bool>("--force")
+        {
+            Description = "Force overwrite skill files even if up to date",
+            Recursive = true
+        };
+
+        var cleanOpt = new Option<bool>("--clean")
+        {
+            Description = "Remove obsolete files from target skill directories",
+            Recursive = true
+        };
+
+        var rootPathArg = new Argument<string?>("path")
+        {
+            Description = "Target directory or workspace root (default: current directory)",
+            Arity = ArgumentArity.ZeroOrOne
+        };
+
+        var installPathArg = new Argument<string?>("path")
+        {
+            Description = "Target directory or workspace root (default: current directory)",
+            Arity = ArgumentArity.ZeroOrOne
+        };
+
+        var updatePathArg = new Argument<string?>("path")
+        {
+            Description = "Target directory or workspace root (default: current directory)",
+            Arity = ArgumentArity.ZeroOrOne
+        };
+
+        Task<int> HandleAction(ParseResult parseResult, Argument<string?> arg, CancellationToken ct)
+        {
+            var path = parseResult.GetValue(arg) ?? ".";
+            var options = globals.BindCliOptions(parseResult, CliOptions.CommandSkills, path);
+
+            options.Global = parseResult.GetValue(globalOpt);
+            options.SkillName = parseResult.GetValue(skillOpt);
+            options.SkillsDirectory = parseResult.GetValue(dirOpt);
+            options.Force = parseResult.GetValue(forceOpt);
+            options.Clean = parseResult.GetValue(cleanOpt);
+
+            return services.RunCommandAsync(options, new SkillsCommand(), ct);
+        }
+
+        var cmd = new Command("skills", "Install or update AI agent skills in the workspace (.agents/skills)");
+        cmd.Aliases.Add("install-skills");
+        cmd.Aliases.Add("install-skill");
+
+        cmd.Add(globalOpt);
+        cmd.Add(skillOpt);
+        cmd.Add(dirOpt);
+        cmd.Add(forceOpt);
+        cmd.Add(cleanOpt);
+        cmd.Add(rootPathArg);
+
+        cmd.SetAction((parseResult, ct) => HandleAction(parseResult, rootPathArg, ct));
+
+        var installSub = new Command("install", "Install AI agent skills in the workspace or globally");
+        installSub.Add(installPathArg);
+        installSub.SetAction((parseResult, ct) => HandleAction(parseResult, installPathArg, ct));
+        cmd.Add(installSub);
+
+        var updateSub = new Command("update", "Update existing AI agent skills to the latest bundled version");
+        updateSub.Add(updatePathArg);
+        updateSub.SetAction((parseResult, ct) => HandleAction(parseResult, updatePathArg, ct));
+        cmd.Add(updateSub);
+
+        return cmd;
+    }
     public async Task<int> ExecuteAsync(
         CliOptions options,
         CodeCondenserSettings settings,
@@ -114,7 +209,7 @@ public sealed class SkillsCommand : ICommand
                 };
             }
 
-            var json = JsonSerializer.Serialize(jsonModel, new JsonSerializerOptions { WriteIndented = true });
+            var json = JsonSerializer.Serialize(jsonModel, JsonOptions);
 
             if (!string.IsNullOrWhiteSpace(options.OutputFilePath))
             {

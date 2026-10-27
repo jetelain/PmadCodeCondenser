@@ -95,36 +95,34 @@ The tool binary command is **`codecondenser`** (or `dotnet codecondenser` when u
 codecondenser [command] [path] [options]
 ```
 
-### Scenario A: Instant Code Clone Detection (No Comments)
+### Scenario A: Clone Detection Only (Fast Dry-Run)
 
 Scan for structural code clones without checking comments:
 
 ```bash
-codecondenser ./src --no-comments
+codecondenser analyze ./src --no-comments
 ```
 
 Roslyn parses the syntax trees, normalizes identifier names, statements, and literals, and prints all duplicate method clusters with location details and refactoring guidance.
 
-### Scenario B: CI / AI Agent-Friendly Dry-Run (Report Mode - No LLM Required)
+### Scenario B: CI / AI Agent-Friendly Status Report (Report Mode - No LLM Required)
 
-When no LLM is configured (or with `--report-only`), CodeCondenser defaults to **`report` mode**:
+When no LLM is configured (or with `codecondenser report`), CodeCondenser runs deterministic status reporting:
 
 ```bash
-codecondenser ./src
-# Or explicitly:
-codecondenser ./src --summary report
+codecondenser report ./src
 ```
 
 Report mode scans both structural code clones and overly verbose comments, printing actionable recommendations and suppression tips (e.g. `condense="no"` or `// codecondenser:ignore`) without needing any local or cloud LLM backend.
 
-### Scenario C: LLM Comment Summarization (Summarize Mode)
+### Scenario C: LLM Comment Summarization (Analyze Mode)
 
-When an LLM model or endpoint is specified (or configured in `codecondenser.json`), CodeCondenser defaults to **`summarize` mode**:
+When an LLM model or endpoint is specified, CodeCondenser summarizes verbose comments:
 
 ```bash
-codecondenser ./src -m gemma4:e4b
+codecondenser analyze ./src -m gemma4:e4b
 # Or explicitly:
-codecondenser ./src --summary summarize -m gemma4:e4b
+codecondenser analyze ./src --summary summarize -m gemma4:e4b
 ```
 
 Overly verbose comments are condensed using the LLM, and results are safely stored in `.codecondenser/snapshot.json` without modifying any files on disk.
@@ -134,10 +132,6 @@ Overly verbose comments are condensed using the LLM, and results are safely stor
 Apply the summarized comments directly into your C# source files on disk:
 
 ```bash
-# Using the --apply flag:
-codecondenser ./src --apply
-
-# Or using the 'apply' command verb:
 codecondenser apply ./src
 ```
 
@@ -149,7 +143,7 @@ codecondenser apply ./src
 Analyze only files that were added or modified since the last snapshot baseline:
 
 ```bash
-codecondenser ./src --incremental
+codecondenser analyze ./src --incremental
 ```
 
 In incremental mode, if new duplication or verbose comments are detected, CodeCondenser outputs unified **actionable feedback only once at the end**, complete with suppression instructions (`condense="no"`, `// codecondenser:ignore`, or `[SuppressMessage]`).
@@ -159,11 +153,7 @@ In incremental mode, if new duplication or verbose comments are detected, CodeCo
 Update or create the baseline snapshot stored in `.codecondenser/snapshot.json`:
 
 ```bash
-# Using the snapshot command verb:
 codecondenser snapshot ./src
-
-# Or using the --update-snapshot flag:
-codecondenser ./src --update-snapshot
 ```
 
 ### Scenario G: Install or Update Workspace AI Agent Skills
@@ -337,10 +327,10 @@ Generates standard OASIS SARIF 2.1.0 compatible with GitHub Code Scanning, GitLa
 
 ```bash
 # Export SARIF to file
-codecondenser ./src --format sarif --output results.sarif
+codecondenser analyze ./src --format sarif --output results.sarif
 
 # Or pipe directly (progress/banners are automatically routed to stderr)
-codecondenser ./src --format sarif > results.sarif
+codecondenser analyze ./src --format sarif > results.sarif
 ```
 
 ### 2. Structured JSON Export (`--format json`)
@@ -348,7 +338,7 @@ codecondenser ./src --format sarif > results.sarif
 Outputs a versioned JSON report conforming to the [`schemas/codecondenser-report.json`](schemas/codecondenser-report.json) schema, including full metrics, cluster impact scores, AST hashes, line numbers, and actionable recommendations.
 
 ```bash
-codecondenser ./src --format json --output results.json
+codecondenser analyze ./src --format json --output results.json
 ```
 
 ---

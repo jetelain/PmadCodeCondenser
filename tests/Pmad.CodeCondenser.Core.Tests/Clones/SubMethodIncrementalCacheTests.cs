@@ -1,4 +1,4 @@
-using FluentAssertions;
+using AwesomeAssertions;
 using Pmad.CodeCondenser.Core.Clones;
 using Pmad.CodeCondenser.Core.Configuration;
 using Pmad.CodeCondenser.Core.Engine;

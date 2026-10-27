@@ -22,15 +22,15 @@ The CLI can be invoked via the global tool `codecondenser`, local tool `dotnet c
 
 | Task | Command | AI Backend Needed? |
 | :--- | :--- | :---: |
-| **Check clones & comments (Report mode - default)** | `codecondenser ./src` | No |
-| **Check clones only (disable comments & strings)** | `codecondenser ./src --no-comments --no-strings` | No |
-| **Check production code only (skip tests)** | `codecondenser ./ --exclude-tests --no-comments` | No |
-| **Incremental CI check (strict duplication + comments + strings)** | `codecondenser ./ --incremental --duplication-tolerance 0 -ct 0 -st 0` | No |
-| **Incremental CI check (strict duplication only)** | `codecondenser ./ --incremental --duplication-tolerance 0` | No |
-| **Export SARIF report for GitHub Actions** | `codecondenser ./src --format sarif --output results.sarif` | No |
-| **Export structured JSON report** | `codecondenser ./src --format json --output results.json` | No |
-| **Summarize comments using LLM** | `codecondenser ./src -m gemma4:e4b` | Yes (Ollama) |
-| **Apply summarized comments to disk** | `codecondenser ./src --apply` | No (uses cache) |
+| **Status report of clones & comments (deterministic)** | `codecondenser report ./src` | No |
+| **Check clones only (disable comments & strings)** | `codecondenser analyze ./src --no-comments --no-strings` | No |
+| **Check production code only (skip tests)** | `codecondenser analyze ./ --exclude-tests --no-comments` | No |
+| **Incremental CI check (strict duplication + comments + strings)** | `codecondenser analyze ./ --incremental --duplication-tolerance 0 -ct 0 -st 0` | No |
+| **Incremental CI check (strict duplication only)** | `codecondenser analyze ./ --incremental --duplication-tolerance 0` | No |
+| **Export SARIF report for GitHub Actions** | `codecondenser analyze ./src --format sarif --output results.sarif` | No |
+| **Export structured JSON report** | `codecondenser analyze ./src --format json --output results.json` | No |
+| **Summarize comments using LLM** | `codecondenser analyze ./src -m gemma4:e4b` | Yes (Ollama) |
+| **Apply summarized comments to disk** | `codecondenser apply ./src` | No (uses cache) |
 | **Refresh baseline snapshot** | `codecondenser snapshot ./src` | No |
 | **Install/update workspace agent skills** | `codecondenser skills [path]` | No |
 | **Install agent skills globally** | `codecondenser skills --global` | No |
@@ -39,7 +39,7 @@ The CLI can be invoked via the global tool `codecondenser`, local tool `dotnet c
 
 > [!NOTE]
 > **Summary Modes**:
-> - **`report`** (default if no LLM configured, or `--report-only` / `--summary report`): Extracts verbose comments and structural clones, outputting tips, refactoring recommendations, and suppression guidance without calling an LLM.
+> - **`report`** (default if no LLM configured, or `codecondenser report` / `--summary report`): Extracts verbose comments and structural clones, outputting tips, refactoring recommendations, and suppression guidance without calling an LLM.
 > - **`summarize`** (default if LLM is configured, or `--summary summarize`): Uses LLM to condense verbose comments and caches summaries for WYSIWYG application.
 > - **`disabled`** (`--no-comments` / `--summary disabled`): Disables comment extraction and summarization entirely.
 
@@ -54,9 +54,9 @@ The CLI can be invoked via the global tool `codecondenser`, local tool `dotnet c
 ## Agent Decision Tree & Workflows
 
 ### Workflow 1: Pre-PR / Pre-Commit Check (Report Mode)
-Before finalizing changes or opening a PR, run a dry-run check for accidental code duplication and verbose comments:
+Before finalizing changes or opening a PR, run a status check for accidental code duplication and verbose comments:
 ```bash
-codecondenser ./src
+codecondenser report ./src
 ```
 - If clean (Exit code `0`): Proceed with your workflow.
 - If clones or verbose comments detected: Review the recommendations. Refactor, condense, or suppress appropriately (see [Managing Suppressions](#managing-suppressions)).
@@ -65,7 +65,7 @@ codecondenser ./src
 When CI fails with exit code `2`, new code duplication, new repeated strings, or new verbose comments were introduced exceeding policy tolerance:
 1. Run the incremental check locally to view the actionable feedback:
    ```bash
-   codecondenser ./src --incremental --duplication-tolerance 0 -ct 0 -st 0
+   codecondenser analyze ./src --incremental --duplication-tolerance 0 -ct 0 -st 0
    ```
 2. The CLI outputs unified **actionable feedback only once at the end** specifying the exact files, lines, and suppress instructions:
    - For duplication: add `[SuppressMessage("CodeCondenser", "Duplication", Justification = "<why>")]` or `// codecondenser:ignore-duplicate`.
@@ -79,11 +79,11 @@ When asked to condense or clean up verbose comments:
 1. **Verify Ollama availability**: Ensure Ollama is running or use a cloud model:
    ```bash
    # Local model:
-   codecondenser ./src -m gemma4:e4b
+   codecondenser analyze ./src -m gemma4:e4b
    # Or cloud model (zero local VRAM):
-   codecondenser ./src -m gpt-oss:20b-cloud
+   codecondenser analyze ./src -m gpt-oss:20b-cloud
    # Or with global config (%APPDATA%\CodeCondenser\codecondenser.json on Windows, ~/.codecondenser/codecondenser.json on Linux/macOS):
-   codecondenser ./src --summary summarize
+   codecondenser analyze ./src --summary summarize
    ```
 2. **Review proposed summaries & retry behavior**:
    - The dry run saves proposed summaries to `.codecondenser/snapshot.json` without modifying files on disk.
@@ -91,7 +91,7 @@ When asked to condense or clean up verbose comments:
    - **Useless Comments**: The LLM is instructed to answer `"Comment is useless"` if a regular comment fails to explain 'why' (e.g. merely restates code syntax) or if an XML doc comment fails to explain 'what'. When detected, applying changes removes the comment completely, granting 100% reduction credit.
 3. **Apply changes**:
    ```bash
-   codecondenser ./src --apply
+   codecondenser apply ./src
    ```
    *WYSIWYG Guarantee*: `apply` uses the exact summaries cached during the dry run; no secondary LLM calls are made.
 4. **Git hygiene**:

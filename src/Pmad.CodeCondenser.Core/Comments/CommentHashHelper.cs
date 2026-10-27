@@ -49,7 +49,7 @@ public static class CommentHashHelper
             }
         }
 
-        if (!trimmed.StartsWith("//") && !trimmed.StartsWith("/*") && !trimmed.StartsWith("///"))
+        if (!trimmed.StartsWith("//", StringComparison.Ordinal) && !trimmed.StartsWith("/*", StringComparison.Ordinal) && !trimmed.StartsWith("///", StringComparison.Ordinal))
         {
             if (trimmed.Contains('\n') || trimmed.Contains('\r'))
             {
@@ -108,7 +108,7 @@ public static class CommentHashHelper
                 }
             }
         }
-        else if (trimmed.StartsWith("//"))
+        else if (trimmed.StartsWith("//", StringComparison.Ordinal))
         {
             var lines = trimmed.Replace("\r\n", "\n").Split('\n');
             if (lines.Length == 1)
@@ -143,7 +143,7 @@ public static class CommentHashHelper
                 }
             }
         }
-        else if (trimmed.StartsWith("/*") && trimmed.EndsWith("*/"))
+        else if (trimmed.StartsWith("/*", StringComparison.Ordinal) && trimmed.EndsWith("*/", StringComparison.Ordinal))
         {
             var stripped = trimmed[2..^2].Trim();
             if (!string.IsNullOrEmpty(stripped))
@@ -172,7 +172,7 @@ public static class CommentHashHelper
             }
         }
 
-        if (kind == CommentKind.XmlDocumentation || trimmed.Contains('<') || trimmed.StartsWith("///"))
+        if (kind == CommentKind.XmlDocumentation || trimmed.Contains('<') || trimmed.StartsWith("///", StringComparison.Ordinal))
         {
             var normalizedXml = XmlDocumentationParser.NormalizeXmlText(trimmed);
             if (!string.IsNullOrWhiteSpace(normalizedXml))
@@ -268,7 +268,7 @@ public static class CommentHashHelper
             }
         }
 
-        if (kind == CommentKind.SingleLine && trimmed.StartsWith("//"))
+        if (kind == CommentKind.SingleLine && trimmed.StartsWith("//", StringComparison.Ordinal))
         {
             var lines = trimmed.Replace("\r\n", "\n").Split('\n');
             if (lines.Length == 1)
@@ -292,7 +292,7 @@ public static class CommentHashHelper
                 }
             }
         }
-        else if (kind == CommentKind.MultiLine && trimmed.StartsWith("/*") && trimmed.EndsWith("*/"))
+        else if (kind == CommentKind.MultiLine && trimmed.StartsWith("/*", StringComparison.Ordinal) && trimmed.EndsWith("*/", StringComparison.Ordinal))
         {
             var stripped = trimmed[2..^2].Trim();
             if (!string.IsNullOrEmpty(stripped))
@@ -304,7 +304,7 @@ public static class CommentHashHelper
                 }
             }
         }
-        if (kind == CommentKind.XmlDocumentation || text.Contains('<') || text.TrimStart().StartsWith("///"))
+        if (kind == CommentKind.XmlDocumentation || text.Contains('<') || text.TrimStart().StartsWith("///", StringComparison.Ordinal))
         {
             var normalizedXml = XmlDocumentationParser.NormalizeXmlText(text);
             if (!string.IsNullOrEmpty(normalizedXml) &&

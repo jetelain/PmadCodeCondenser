@@ -1,4 +1,4 @@
-using FluentAssertions;
+using AwesomeAssertions;
 using Microsoft.Extensions.AI;
 using Pmad.CodeCondenser.Core.Comments;
 using Pmad.CodeCondenser.Core.Configuration;
@@ -446,7 +446,7 @@ public class CommentSummarizerTests
         public void Report(T value) => handler(value);
     }
 
-    private class DelegatingHandlerStub : HttpMessageHandler
+    private sealed class DelegatingHandlerStub : HttpMessageHandler
     {
         private readonly Func<HttpRequestMessage, CancellationToken, Task<HttpResponseMessage>> _handler;
         public DelegatingHandlerStub(Func<HttpRequestMessage, CancellationToken, Task<HttpResponseMessage>> handler) => _handler = handler;

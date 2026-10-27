@@ -1,4 +1,4 @@
-using FluentAssertions;
+using AwesomeAssertions;
 using Pmad.CodeCondenser.Infrastructure.Storage;
 
 namespace Pmad.CodeCondenser.Infrastructure.Tests.Storage;

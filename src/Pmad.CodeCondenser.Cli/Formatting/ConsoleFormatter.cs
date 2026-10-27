@@ -133,22 +133,22 @@ public sealed class ConsoleFormatter : IConsoleFormatter
         }
     }
 
-    public void PrintSubMethodCloneGroups(TextWriter writer, IReadOnlyList<SubMethodCloneGroup> groups, string baseDirectory, HeuristicTokenEstimator? estimator = null)
+    public void PrintSubMethodCloneGroups(TextWriter writer, IReadOnlyList<SubMethodCloneGroup> subMethodGroups, string baseDirectory, HeuristicTokenEstimator? estimator = null)
     {
         ArgumentNullException.ThrowIfNull(writer);
-        ArgumentNullException.ThrowIfNull(groups);
+        ArgumentNullException.ThrowIfNull(subMethodGroups);
 
-        if (groups.Count == 0)
+        if (subMethodGroups.Count == 0)
         {
             return;
         }
 
-        writer.WriteLine(Yellow(Bold($"Found {groups.Count} Sub-Method Duplication Cluster(s):")));
+        writer.WriteLine(Yellow(Bold($"Found {subMethodGroups.Count} Sub-Method Duplication Cluster(s):")));
         writer.WriteLine();
 
-        for (int i = 0; i < groups.Count; i++)
+        for (int i = 0; i < subMethodGroups.Count; i++)
         {
-            var group = groups[i];
+            var group = subMethodGroups[i];
             var gainText = CloneGainText(CloneGainEstimator.EstimateGainTokens(group, estimator, baseDirectory));
             writer.WriteLine(Yellow($"[SUB-METHOD DUPLICATION CLUSTER #{i + 1}] ({group.StatementCount} consecutive statements, Impact: {group.ImpactScore}{gainText})"));
             writer.WriteLine($"  Occurrences ({group.Occurrences.Count}):");
@@ -168,18 +168,18 @@ public sealed class ConsoleFormatter : IConsoleFormatter
         }
     }
 
-    public void PrintRepeatedStringGroups(TextWriter writer, IReadOnlyList<RepeatedStringGroup> groups, string baseDirectory, HeuristicTokenEstimator? estimator = null)
+    public void PrintRepeatedStringGroups(TextWriter writer, IReadOnlyList<RepeatedStringGroup> repeatedStrings, string baseDirectory, HeuristicTokenEstimator? estimator = null)
     {
         ArgumentNullException.ThrowIfNull(writer);
-        ArgumentNullException.ThrowIfNull(groups);
+        ArgumentNullException.ThrowIfNull(repeatedStrings);
 
-        if (groups.Count == 0)
+        if (repeatedStrings.Count == 0)
         {
             return;
         }
 
-        var prodAndCrossGroups = groups.Where(g => g.Category != CloneCategory.Test).ToList();
-        var testGroups = groups.Where(g => g.Category == CloneCategory.Test).ToList();
+        var prodAndCrossGroups = repeatedStrings.Where(g => g.Category != CloneCategory.Test).ToList();
+        var testGroups = repeatedStrings.Where(g => g.Category == CloneCategory.Test).ToList();
 
         if (prodAndCrossGroups.Count > 0)
         {

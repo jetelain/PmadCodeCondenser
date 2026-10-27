@@ -1,4 +1,4 @@
-using FluentAssertions;
+using AwesomeAssertions;
 using Pmad.CodeCondenser.Core.Clones;
 using Pmad.CodeCondenser.Core.Engine;
 using Pmad.CodeCondenser.Infrastructure.Storage;
@@ -68,7 +68,7 @@ public class PathFilteringCliIntegrationTests : IDisposable
 
         // Act - Default behavior excludes generated code
         var exitCode = await Program.RunAsync(
-            [_testDirectory, "--no-color", "--no-comments"],
+            ["analyze", _testDirectory, "--no-color", "--no-comments"],
             output,
             error,
             customEngine: engine);
@@ -123,7 +123,7 @@ public class PathFilteringCliIntegrationTests : IDisposable
 
         // Act - Explicitly include generated code
         var exitCode = await Program.RunAsync(
-            [_testDirectory, "--include-generated", "--no-color", "--no-comments"],
+            ["analyze", _testDirectory, "--include-generated", "--no-color", "--no-comments"],
             output,
             error,
             customEngine: engine);
@@ -177,7 +177,7 @@ public class PathFilteringCliIntegrationTests : IDisposable
         using var error = new StringWriter();
 
         var exitCode = await Program.RunAsync(
-            [_testDirectory, "--incremental", "--duplication-tolerance", "0", "--no-color", "--no-comments"],
+            ["analyze", _testDirectory, "--incremental", "--duplication-tolerance", "0", "--no-color", "--no-comments"],
             output,
             error,
             customEngine: engine);
@@ -231,7 +231,7 @@ public class PathFilteringCliIntegrationTests : IDisposable
         using var error = new StringWriter();
 
         var exitCode = await Program.RunAsync(
-            [_testDirectory, "--incremental", "--duplication-tolerance", "0", "--enforce-test-duplication", "--no-color", "--no-comments"],
+            ["analyze", _testDirectory, "--incremental", "--duplication-tolerance", "0", "--enforce-test-duplication", "--no-color", "--no-comments"],
             output,
             error,
             customEngine: engine);
@@ -259,7 +259,7 @@ public class PathFilteringCliIntegrationTests : IDisposable
         using var error = new StringWriter();
 
         var exitCode = await Program.RunAsync(
-            [_testDirectory, "--exclude-tests", "--no-color", "--no-comments"],
+            ["analyze", _testDirectory, "--exclude-tests", "--no-color", "--no-comments"],
             output,
             error,
             customEngine: engine);
@@ -287,7 +287,7 @@ public class PathFilteringCliIntegrationTests : IDisposable
 
             // Run WITHOUT --no-color flag; NO_COLOR env var should suppress ANSI
             var exitCode = await Program.RunAsync(
-                [_testDirectory, "--no-comments"],
+                ["analyze", _testDirectory, "--no-comments"],
                 output,
                 error,
                 customEngine: engine);

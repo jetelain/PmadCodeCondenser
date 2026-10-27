@@ -30,6 +30,7 @@ public static class DeterministicGuid
     /// <summary>
     /// Creates a deterministic Version 5 UUID per RFC 4122.
     /// </summary>
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Security", "CA5350:Do Not Use Weak Cryptographic Algorithms", Justification = "RFC 4122 UUID version 5 specifies SHA-1")]
     public static Guid CreateVersion5(Guid namespaceId, string name)
     {
         ArgumentNullException.ThrowIfNull(name);
