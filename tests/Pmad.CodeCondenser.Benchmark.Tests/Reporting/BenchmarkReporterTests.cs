@@ -1,4 +1,4 @@
-using FluentAssertions;
+using AwesomeAssertions;
 using Pmad.CodeCondenser.Benchmark.Models;
 using Pmad.CodeCondenser.Benchmark.Reporting;
 using Pmad.CodeCondenser.Core.Models;

@@ -1,6 +1,6 @@
 using System.Security.Cryptography;
 using System.Text;
-using FluentAssertions;
+using AwesomeAssertions;
 using Microsoft.CodeAnalysis.CSharp;
 using Pmad.CodeCondenser.Core.Comments;
 

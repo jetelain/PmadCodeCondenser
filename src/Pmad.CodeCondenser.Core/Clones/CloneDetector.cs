@@ -251,7 +251,7 @@ public sealed class CloneDetector : ICloneDetector
     }
 
     private static CloneCategory DetermineCategory(
-        IReadOnlyList<MethodCloneInfo> methods,
+        List<MethodCloneInfo> methods,
         Func<string, FileCategory>? fileClassifier)
     {
         if (fileClassifier == null || methods.Count == 0)

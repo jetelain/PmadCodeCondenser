@@ -1,5 +1,5 @@
 using System.Text.Json;
-using FluentAssertions;
+using AwesomeAssertions;
 
 namespace Pmad.CodeCondenser.Cli.Tests;
 

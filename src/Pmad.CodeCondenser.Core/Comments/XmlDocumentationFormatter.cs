@@ -381,7 +381,7 @@ public static class XmlDocumentationFormatter
                 continue;
             }
 
-            if (!line.StartsWith("///"))
+            if (!line.StartsWith("///", StringComparison.Ordinal))
             {
                 line = "/// " + line;
             }

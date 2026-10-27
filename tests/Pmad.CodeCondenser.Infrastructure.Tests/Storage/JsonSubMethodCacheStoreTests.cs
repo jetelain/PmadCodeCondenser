@@ -1,4 +1,4 @@
-using FluentAssertions;
+using AwesomeAssertions;
 using Pmad.CodeCondenser.Core.Snapshots;
 using Pmad.CodeCondenser.Infrastructure.Storage;
 using Xunit;

@@ -32,26 +32,26 @@ public static class XmlDocumentationParser
         foreach (var rawLine in lines)
         {
             var line = rawLine.Trim();
-            if (line.StartsWith("///"))
+            if (line.StartsWith("///", StringComparison.Ordinal))
             {
                 line = line[3..];
                 if (line.StartsWith(' ')) line = line[1..];
                 sb.Append(line).Append('\n');
             }
-            else if (line.StartsWith("//!"))
+            else if (line.StartsWith("//!", StringComparison.Ordinal))
             {
                 line = line[3..];
                 if (line.StartsWith(' ')) line = line[1..];
                 sb.Append(line).Append('\n');
             }
-            else if (line.StartsWith("/**"))
+            else if (line.StartsWith("/**", StringComparison.Ordinal))
             {
                 line = line[3..];
-                if (line.EndsWith("*/")) line = line[..^2];
+                if (line.EndsWith("*/", StringComparison.Ordinal)) line = line[..^2];
                 line = line.Trim();
                 if (!string.IsNullOrEmpty(line)) sb.Append(line).Append('\n');
             }
-            else if (line.EndsWith("*/"))
+            else if (line.EndsWith("*/", StringComparison.Ordinal))
             {
                 line = line[..^2].Trim();
                 if (line.StartsWith('*')) line = line[1..].Trim();

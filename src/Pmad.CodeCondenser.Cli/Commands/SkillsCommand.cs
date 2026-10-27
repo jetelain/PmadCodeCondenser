@@ -12,6 +12,7 @@ namespace Pmad.CodeCondenser.Cli.Commands;
 /// </summary>
 public sealed class SkillsCommand : ICommand
 {
+    private static readonly JsonSerializerOptions JsonOptions = new() { WriteIndented = true };
     public async Task<int> ExecuteAsync(
         CliOptions options,
         CodeCondenserSettings settings,
@@ -114,7 +115,7 @@ public sealed class SkillsCommand : ICommand
                 };
             }
 
-            var json = JsonSerializer.Serialize(jsonModel, new JsonSerializerOptions { WriteIndented = true });
+            var json = JsonSerializer.Serialize(jsonModel, JsonOptions);
 
             if (!string.IsNullOrWhiteSpace(options.OutputFilePath))
             {

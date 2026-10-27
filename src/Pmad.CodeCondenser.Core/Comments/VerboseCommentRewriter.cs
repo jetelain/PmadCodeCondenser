@@ -304,7 +304,7 @@ public sealed class VerboseCommentRewriter : CSharpSyntaxRewriter, ICommentRewri
     {
         var trimmed = replacementText.Trim();
 
-        if (trimmed.StartsWith("/*") && trimmed.EndsWith("*/"))
+        if (trimmed.StartsWith("/*", StringComparison.Ordinal) && trimmed.EndsWith("*/", StringComparison.Ordinal))
         {
             return SyntaxFactory.Comment(trimmed);
         }
@@ -315,7 +315,7 @@ public sealed class VerboseCommentRewriter : CSharpSyntaxRewriter, ICommentRewri
             return SyntaxFactory.Comment($"/* {sanitized} */");
         }
 
-        if (trimmed.StartsWith("//"))
+        if (trimmed.StartsWith("//", StringComparison.Ordinal))
         {
             return SyntaxFactory.Comment(trimmed);
         }
@@ -327,7 +327,7 @@ public sealed class VerboseCommentRewriter : CSharpSyntaxRewriter, ICommentRewri
     {
         var trimmed = replacementText.Trim();
 
-        if (trimmed.StartsWith("/*") && trimmed.EndsWith("*/"))
+        if (trimmed.StartsWith("/*", StringComparison.Ordinal) && trimmed.EndsWith("*/", StringComparison.Ordinal))
         {
             return SyntaxFactory.Comment(trimmed);
         }

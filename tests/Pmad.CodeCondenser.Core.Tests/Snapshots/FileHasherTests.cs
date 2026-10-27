@@ -1,5 +1,5 @@
 using System.Text;
-using FluentAssertions;
+using AwesomeAssertions;
 using Pmad.CodeCondenser.Core.Snapshots;
 
 namespace Pmad.CodeCondenser.Core.Tests.Snapshots;
