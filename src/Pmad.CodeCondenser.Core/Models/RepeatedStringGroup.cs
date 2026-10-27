@@ -54,6 +54,11 @@ public sealed record RepeatedStringGroup
         ExistingConstantDeclarations.Count > 0 ? ExistingConstantDeclarations[0] : null;
 
     /// <summary>
+    /// Indicates whether the primary existing constant was declared with private accessibility.
+    /// </summary>
+    public bool IsExistingConstantPrivate => ExistingConstantDeclaration?.IsPrivateConstant ?? false;
+
+    /// <summary>
     /// All existing constant declarations found with this string value.
     /// </summary>
     public IReadOnlyList<RepeatedStringOccurrence> ExistingConstantDeclarations { get; init; } = [];

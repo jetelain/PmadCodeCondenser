@@ -217,7 +217,10 @@ public sealed class ConsoleFormatter : IConsoleFormatter
                         writer.WriteLine($"    • {Cyan(relPath)}:{occ.StartLine}:{occ.StartColumn}{memberInfo}");
                     }
 
-                    writer.WriteLine(Dim($"  Recommendation: Use existing constant '{group.GenerateTypicalUsage()}' instead of inline value."));
+                    var promoNote = (group.IsExistingConstantPrivate && group.InlineOccurrences.Any(o => o.FilePath != group.ExistingConstantDeclaration?.FilePath))
+                        ? " (promote to internal/public if needed)"
+                        : string.Empty;
+                    writer.WriteLine(Dim($"  Recommendation: Use existing constant '{group.GenerateTypicalUsage()}' instead of inline value{promoNote}."));
                     writer.WriteLine(Dim("  To suppress: Add '[SuppressMessage(\"CodeCondenser\", \"RepeatedString\")]' or '// codecondenser:ignore-string'."));
                     writer.WriteLine();
                 }
@@ -290,7 +293,10 @@ public sealed class ConsoleFormatter : IConsoleFormatter
                         writer.WriteLine($"    • {Cyan(relPath)}:{occ.StartLine}:{occ.StartColumn}{memberInfo}");
                     }
 
-                    writer.WriteLine(Dim($"  Recommendation: Use existing constant '{group.GenerateTypicalUsage()}' instead of inline value."));
+                    var promoNote = (group.IsExistingConstantPrivate && group.InlineOccurrences.Any(o => o.FilePath != group.ExistingConstantDeclaration?.FilePath))
+                        ? " (promote to internal/public if needed)"
+                        : string.Empty;
+                    writer.WriteLine(Dim($"  Recommendation: Use existing constant '{group.GenerateTypicalUsage()}' instead of inline value{promoNote}."));
                     writer.WriteLine(Dim("  To suppress: Add '[SuppressMessage(\"CodeCondenser\", \"RepeatedString\")]' or '// codecondenser:ignore-string'."));
                     writer.WriteLine();
                 }
@@ -876,7 +882,10 @@ public sealed class ConsoleFormatter : IConsoleFormatter
                 if (group.HasExistingConstant)
                 {
                     writer.WriteLine(Dim($"  Existing Constant: {group.GenerateTypicalUsage()}"));
-                    writer.WriteLine(Dim($"  Recommendation: Use existing constant '{group.GenerateTypicalUsage()}' instead of inline value."));
+                    var promoNote = (group.IsExistingConstantPrivate && group.InlineOccurrences.Any(o => o.FilePath != group.ExistingConstantDeclaration?.FilePath))
+                        ? " (promote to internal/public if needed)"
+                        : string.Empty;
+                    writer.WriteLine(Dim($"  Recommendation: Use existing constant '{group.GenerateTypicalUsage()}' instead of inline value{promoNote}."));
                 }
                 else
                 {
@@ -999,12 +1008,31 @@ public sealed class ConsoleFormatter : IConsoleFormatter
             for (int i = 0; i < repeatedStrings.Count; i++)
             {
                 var strGroup = repeatedStrings[i];
-                writer.WriteLine(Yellow($"  String #{i + 1} [{strGroup.Length} chars, {strGroup.Occurrences.Count} occurrences]:"));
+                var occList = strGroup.HasExistingConstant ? strGroup.InlineOccurrences : strGroup.Occurrences;
+                var countDesc = strGroup.HasExistingConstant
+                    ? $"{occList.Count} inline occurrence(s)"
+                    : $"{strGroup.Occurrences.Count} occurrences";
+
+                writer.WriteLine(Yellow($"  String #{i + 1} [{strGroup.Length} chars, {countDesc}]:"));
                 writer.WriteLine($"    • Value: \"{TruncatePreview(strGroup.Value.Replace("\r\n", " ").Replace("\n", " "), 80)}\"");
-                foreach (var occ in strGroup.Occurrences)
+                foreach (var occ in occList)
                 {
                     var relPath = FormatPath(occ.FilePath, baseDirectory);
-                    writer.WriteLine($"      - {Cyan(relPath)}:{occ.StartLine}:{occ.StartColumn}");
+                    var memberInfo = !string.IsNullOrEmpty(occ.EnclosingMember) ? $" in {Bold(occ.EnclosingMember)}" : string.Empty;
+                    writer.WriteLine($"      - {Cyan(relPath)}:{occ.StartLine}:{occ.StartColumn}{memberInfo}");
+                }
+
+                if (strGroup.HasExistingConstant)
+                {
+                    writer.WriteLine(Dim($"        Existing Constant: {strGroup.GenerateTypicalUsage()}"));
+                    var promoNote = (strGroup.IsExistingConstantPrivate && strGroup.InlineOccurrences.Any(o => o.FilePath != strGroup.ExistingConstantDeclaration?.FilePath))
+                        ? " (promote to internal/public if needed)"
+                        : string.Empty;
+                    writer.WriteLine(Dim($"        Recommendation: Use existing constant '{strGroup.GenerateTypicalUsage()}' instead of inline value{promoNote}."));
+                }
+                else
+                {
+                    writer.WriteLine(Dim($"        Suggested Constant: {strGroup.GenerateTypicalUsage()}"));
                 }
             }
             writer.WriteLine();
@@ -1060,7 +1088,7 @@ public sealed class ConsoleFormatter : IConsoleFormatter
         {
             writer.WriteLine("  Repeated Inline Strings:");
             writer.WriteLine("    1. Inspect the repeated strings listed above.");
-            writer.WriteLine("    2. Extract each into a shared constant (e.g. 'internal const string Name = \"...\";' in a static constants class).");
+            writer.WriteLine("    2. Replace inline strings with existing constants when available, or extract duplicate strings into a shared constant (e.g. in a static constants class).");
             writer.WriteLine("    3. Replace inline occurrences with references to the constant.");
             writer.WriteLine("    4. To suppress: Add '[SuppressMessage(\"CodeCondenser\", \"RepeatedString\")]' or '// codecondenser:ignore-string'.");
         }

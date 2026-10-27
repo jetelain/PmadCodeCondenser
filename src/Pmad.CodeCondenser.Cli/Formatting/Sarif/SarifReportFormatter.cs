@@ -334,8 +334,12 @@ public sealed class SarifReportFormatter : IReportFormatter
                 var preview = strGroup.Value.Length > 40 ? strGroup.Value[..37] + "..." : strGroup.Value;
                 var escapedPreview = preview.Replace("\r", " ").Replace("\n", " ");
 
+                var promoNote = (strGroup.IsExistingConstantPrivate && strGroup.InlineOccurrences.Any(o => o.FilePath != strGroup.ExistingConstantDeclaration?.FilePath))
+                    ? " (promote to internal/public if needed)"
+                    : string.Empty;
+
                 var messageText = strGroup.HasExistingConstant
-                    ? $"String literal \"{escapedPreview}\" ({strGroup.Length} chars) matches existing constant '{strGroup.SuggestedClassName}.{strGroup.SuggestedConstantName}'. Use the constant instead of inline value."
+                    ? $"String literal \"{escapedPreview}\" ({strGroup.Length} chars) matches existing constant '{strGroup.SuggestedClassName}.{strGroup.SuggestedConstantName}'. Use the constant instead of inline value{promoNote}."
                     : $"String literal \"{escapedPreview}\" ({strGroup.Length} chars) repeated {strGroup.Occurrences.Count} times. Extract into shared constant '{strGroup.SuggestedClassName}.{strGroup.SuggestedConstantName}'.";
 
                 run.Results.Add(new SarifResult

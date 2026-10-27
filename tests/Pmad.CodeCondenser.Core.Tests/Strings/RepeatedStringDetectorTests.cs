@@ -222,6 +222,80 @@ public class RepeatedStringDetectorTests
     }
 
     [Fact]
+    public void ExtractStringLiterals_PrivateConstant_DetectsPrivateAccessibility()
+    {
+        var code = """
+            public class Config
+            {
+                private const string PrivateSecret = "This is a private constant string in the class.";
+            }
+            """;
+        var tree = CSharpSyntaxTree.ParseText(code);
+        var settings = new CodeCondenserSettings { ExistingConstantStringLengthThreshold = 20 };
+
+        var occs = _detector.ExtractStringLiterals(tree, "src/Config.cs", settings);
+        occs.Should().HaveCount(1);
+        occs[0].IsConstDeclaration.Should().BeTrue();
+        occs[0].IsPrivateConstant.Should().BeTrue();
+    }
+
+    [Fact]
+    public void ExtractStringLiterals_PublicConstant_DetectsNonPrivateAccessibility()
+    {
+        var code = """
+            public class Config
+            {
+                public const string PublicSecret = "This is a public constant string in the class.";
+            }
+            """;
+        var tree = CSharpSyntaxTree.ParseText(code);
+        var settings = new CodeCondenserSettings { ExistingConstantStringLengthThreshold = 20 };
+
+        var occs = _detector.ExtractStringLiterals(tree, "src/Config.cs", settings);
+        occs.Should().HaveCount(1);
+        occs[0].IsConstDeclaration.Should().BeTrue();
+        occs[0].IsPrivateConstant.Should().BeFalse();
+    }
+
+    [Fact]
+    public void GroupRepeatedStrings_WhenExistingConstantThresholdHigherThanRepeatedThreshold_StillDetectsQualifyingStrings()
+    {
+        var constCode = """
+            public static class Common
+            {
+                public const string Query = "SELECT id, name, email, department, salary, hire_date FROM employees WHERE is_active = 1";
+            }
+            """;
+        var usageCode = """
+            public class Service
+            {
+                public void Fetch()
+                {
+                    var sql = "SELECT id, name, email, department, salary, hire_date FROM employees WHERE is_active = 1";
+                }
+            }
+            """;
+        var constTree = CSharpSyntaxTree.ParseText(constCode);
+        var usageTree = CSharpSyntaxTree.ParseText(usageCode);
+
+        // Misconfiguration where existing constant threshold is set higher than repeated threshold
+        var settings = new CodeCondenserSettings
+        {
+            RepeatedStringLengthThreshold = 50,
+            ExistingConstantStringLengthThreshold = 150, // 89 chars is below 150, but >= 50 and count >= 2
+            RepeatedStringMinOccurrences = 2
+        };
+
+        var constOccs = _detector.ExtractStringLiterals(constTree, "src/Common.cs", settings);
+        var usageOccs = _detector.ExtractStringLiterals(usageTree, "src/Service.cs", settings);
+
+        var groups = _detector.GroupRepeatedStrings(constOccs.Concat(usageOccs), settings);
+        groups.Should().HaveCount(1);
+        groups[0].HasExistingConstant.Should().BeTrue();
+        groups[0].SuggestedConstantName.Should().Be("Query");
+    }
+
+    [Fact]
     public void ExtractStringLiterals_WithIgnoreComment_AreFilteredOut()
     {
         var longString = "This is a very long string that should be ignored by the analyzer comment.";

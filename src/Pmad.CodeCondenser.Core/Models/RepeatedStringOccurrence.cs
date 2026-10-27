@@ -56,6 +56,11 @@ public sealed record RepeatedStringOccurrence
     public bool IsConstDeclaration { get; init; }
 
     /// <summary>
+    /// Indicates whether the constant is declared with private accessibility (explicitly or implicitly by default).
+    /// </summary>
+    public bool IsPrivateConstant { get; init; }
+
+    /// <summary>
     /// Enclosing namespace name if any.
     /// </summary>
     public string? Namespace { get; init; }

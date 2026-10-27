@@ -148,14 +148,19 @@ public sealed class JsonReportFormatter : IReportFormatter
                 StartColumn = occ.StartColumn,
                 EndColumn = occ.EndColumn,
                 EnclosingMember = occ.EnclosingMember,
-                IsConstDeclaration = occ.IsConstDeclaration
+                IsConstDeclaration = occ.IsConstDeclaration,
+                IsPrivateConstant = occ.IsPrivateConstant
             }).ToList();
 
             var gainChars = strGroup.EstimateGainCharacters(preExistingClass: true);
             var gainTokens = strGroup.EstimateGainTokens(estimator);
 
+            var promoNote = (strGroup.IsExistingConstantPrivate && strGroup.InlineOccurrences.Any(o => o.FilePath != strGroup.ExistingConstantDeclaration?.FilePath))
+                ? " (promote to internal/public if needed)"
+                : string.Empty;
+
             var recommendation = strGroup.HasExistingConstant
-                ? $"Use existing constant '{strGroup.SuggestedClassName}.{strGroup.SuggestedConstantName}' instead of inline value."
+                ? $"Use existing constant '{strGroup.SuggestedClassName}.{strGroup.SuggestedConstantName}' instead of inline value{promoNote}."
                 : "Extract repeated inline string literal into a shared constant.";
 
             repeatedStrings.Add(new JsonRepeatedStringCluster
@@ -169,6 +174,7 @@ public sealed class JsonReportFormatter : IReportFormatter
                 SuggestedClassName = strGroup.SuggestedClassName,
                 HasExistingConstant = strGroup.HasExistingConstant,
                 ExistingConstant = strGroup.HasExistingConstant ? $"{strGroup.SuggestedClassName}.{strGroup.SuggestedConstantName}" : null,
+                IsExistingConstantPrivate = strGroup.IsExistingConstantPrivate,
                 Occurrences = occurrences,
                 Recommendation = recommendation,
                 PotentialGainCharacters = gainChars > 0 ? gainChars : null,

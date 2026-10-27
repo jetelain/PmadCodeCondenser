@@ -75,8 +75,12 @@ public sealed class RepeatedStringDetector : IRepeatedStringDetector
                     continue;
                 }
 
-                // Lower threshold for existing constants (declaration cost already paid)
-                if (stringValue.Length < minExistingConstLength)
+                // Lower threshold for existing constants (declaration cost already paid),
+                // but also accept if it satisfies standard repeated string thresholds.
+                bool meetsExistingConstThreshold = stringValue.Length >= minExistingConstLength;
+                bool meetsStandardThreshold = stringValue.Length >= minRepeatedLength && occList.Count >= minOccurrences;
+
+                if (!meetsExistingConstThreshold && !meetsStandardThreshold)
                 {
                     continue;
                 }
@@ -242,13 +246,14 @@ public sealed class RepeatedStringDetector : IRepeatedStringDetector
                 ProjectId = _projectId,
                 Category = _fileCategory,
                 IsConstDeclaration = constInfo.IsConst,
+                IsPrivateConstant = constInfo.IsPrivate,
                 ConstantName = constInfo.ConstantName,
                 ConstantTypeName = constInfo.TypeName,
                 StringValue = value
             });
         }
 
-        private static (bool IsConst, string? ConstantName, string? TypeName, bool IsShareable) GetConstDeclarationInfo(ExpressionSyntax node)
+        private static (bool IsConst, string? ConstantName, string? TypeName, bool IsShareable, bool IsPrivate) GetConstDeclarationInfo(ExpressionSyntax node)
         {
             if (node.Parent is EqualsValueClauseSyntax evc &&
                 evc.Parent is VariableDeclaratorSyntax vd &&
@@ -261,6 +266,11 @@ public sealed class RepeatedStringDetector : IRepeatedStringDetector
 
                     if (isConst || isStaticReadOnly)
                     {
+                        bool isPrivate = fd.Modifiers.Any(SyntaxKind.PrivateKeyword) ||
+                            (!fd.Modifiers.Any(SyntaxKind.PublicKeyword) &&
+                             !fd.Modifiers.Any(SyntaxKind.InternalKeyword) &&
+                             !fd.Modifiers.Any(SyntaxKind.ProtectedKeyword));
+
                         var typeNames = new List<string>();
                         var currentType = fd.FirstAncestorOrSelf<TypeDeclarationSyntax>();
                         while (currentType != null)
@@ -269,17 +279,17 @@ public sealed class RepeatedStringDetector : IRepeatedStringDetector
                             currentType = currentType.Parent as TypeDeclarationSyntax;
                         }
                         var typeName = typeNames.Count > 0 ? string.Join(".", typeNames) : "Constants";
-                        return (true, vd.Identifier.ValueText, typeName, true);
+                        return (true, vd.Identifier.ValueText, typeName, true, isPrivate);
                     }
                 }
 
                 if (vdecl.Parent is LocalDeclarationStatementSyntax ld && ld.Modifiers.Any(SyntaxKind.ConstKeyword))
                 {
-                    return (true, vd.Identifier.ValueText, null, false);
+                    return (true, vd.Identifier.ValueText, null, false, true);
                 }
             }
 
-            return (false, null, null, false);
+            return (false, null, null, false, false);
         }
 
         private static string? FindEnclosingMember(SyntaxNode node)

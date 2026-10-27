@@ -571,7 +571,8 @@ public sealed class CodeCondenserEngine : ICodeCondenserEngine
             {
                 var changedSet = new HashSet<string>(fileDiff.AddedFiles.Concat(fileDiff.ModifiedFiles), StringComparer.OrdinalIgnoreCase);
                 repeatedStringGroups = allGroups
-                    .Where(g => g.Occurrences.Any(o => changedSet.Contains(o.FilePath.Replace('\\', '/'))))
+                    .Where(g => (g.HasExistingConstant ? g.InlineOccurrences : g.Occurrences)
+                        .Any(o => changedSet.Contains(o.FilePath.Replace('\\', '/'))))
                     .ToList();
             }
             else
