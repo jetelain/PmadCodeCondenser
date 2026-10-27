@@ -423,4 +423,286 @@ public class LinesOfCodeDetectorTests
 
         Assert.Empty(violations);
     }
+
+    [Fact]
+    public void DetectViolations_PropertyAccessor_CommentSuppressionOnAccessor_Ignored()
+    {
+        var lines = string.Join("\n", Enumerable.Range(1, 15).Select(i => $"            int x{i} = {i};"));
+        var code = $$"""
+            public class Service
+            {
+                public int Value
+                {
+                    // codecondenser:ignore-loc
+                    get
+                    {
+            {{lines}}
+                        return 0;
+                    }
+                }
+            }
+            """;
+        var (tree, root) = Parse(code);
+        var settings = new CodeCondenserSettings
+        {
+            MethodLinesOfCodeThreshold = 10,
+            ClassLinesOfCodeThreshold = 100
+        };
+
+        var violations = _detector.DetectViolations(tree, "c:/repo/Service.cs", settings, FileCategory.Production);
+
+        Assert.Empty(violations);
+    }
+
+    [Fact]
+    public void DetectViolations_PropertyAccessor_CommentSuppressionOnProperty_Ignored()
+    {
+        var lines = string.Join("\n", Enumerable.Range(1, 15).Select(i => $"            int x{i} = {i};"));
+        var code = $$"""
+            public class Service
+            {
+                // codecondenser:ignore-loc
+                public int Value
+                {
+                    get
+                    {
+            {{lines}}
+                        return 0;
+                    }
+                }
+            }
+            """;
+        var (tree, root) = Parse(code);
+        var settings = new CodeCondenserSettings
+        {
+            MethodLinesOfCodeThreshold = 10,
+            ClassLinesOfCodeThreshold = 100
+        };
+
+        var violations = _detector.DetectViolations(tree, "c:/repo/Service.cs", settings, FileCategory.Production);
+
+        Assert.Empty(violations);
+    }
+
+    [Fact]
+    public void DetectViolations_PropertyAccessor_SuppressMessageOnProperty_Ignored()
+    {
+        var lines = string.Join("\n", Enumerable.Range(1, 15).Select(i => $"            int x{i} = {i};"));
+        var code = $$"""
+            using System.Diagnostics.CodeAnalysis;
+
+            public class Service
+            {
+                [SuppressMessage("CodeCondenser", "MethodLength")]
+                public int Value
+                {
+                    get
+                    {
+            {{lines}}
+                        return 0;
+                    }
+                }
+            }
+            """;
+        var (tree, root) = Parse(code);
+        var settings = new CodeCondenserSettings
+        {
+            MethodLinesOfCodeThreshold = 10,
+            ClassLinesOfCodeThreshold = 100
+        };
+
+        var violations = _detector.DetectViolations(tree, "c:/repo/Service.cs", settings, FileCategory.Production);
+
+        Assert.Empty(violations);
+    }
+
+    [Fact]
+    public void DetectViolations_PropertyAccessor_SuppressMessageOnAccessor_Ignored()
+    {
+        var lines = string.Join("\n", Enumerable.Range(1, 15).Select(i => $"            int x{i} = {i};"));
+        var code = $$"""
+            using System.Diagnostics.CodeAnalysis;
+
+            public class Service
+            {
+                public int Value
+                {
+                    [SuppressMessage("CodeCondenser", "MethodLength")]
+                    get
+                    {
+            {{lines}}
+                        return 0;
+                    }
+                }
+            }
+            """;
+        var (tree, root) = Parse(code);
+        var settings = new CodeCondenserSettings
+        {
+            MethodLinesOfCodeThreshold = 10,
+            ClassLinesOfCodeThreshold = 100
+        };
+
+        var violations = _detector.DetectViolations(tree, "c:/repo/Service.cs", settings, FileCategory.Production);
+
+        Assert.Empty(violations);
+    }
+
+    [Fact]
+    public void DetectViolations_LocalFunction_CommentSuppressionOnLocalFunction_Ignored()
+    {
+        var lines = string.Join("\n", Enumerable.Range(1, 15).Select(i => $"            int x{i} = {i};"));
+        var code = $$"""
+            public class Service
+            {
+                public void DoWork()
+                {
+                    // codecondenser:ignore-loc
+                    void Helper()
+                    {
+            {{lines}}
+                    }
+                }
+            }
+            """;
+        var (tree, root) = Parse(code);
+        var settings = new CodeCondenserSettings
+        {
+            MethodLinesOfCodeThreshold = 10,
+            ClassLinesOfCodeThreshold = 100
+        };
+
+        var violations = _detector.DetectViolations(tree, "c:/repo/Service.cs", settings, FileCategory.Production);
+
+        Assert.Empty(violations);
+    }
+
+    [Fact]
+    public void DetectViolations_LocalFunction_SuppressMessageOnLocalFunction_Ignored()
+    {
+        var lines = string.Join("\n", Enumerable.Range(1, 15).Select(i => $"            int x{i} = {i};"));
+        var code = $$"""
+            using System.Diagnostics.CodeAnalysis;
+
+            public class Service
+            {
+                public void DoWork()
+                {
+                    [SuppressMessage("CodeCondenser", "MethodLength")]
+                    void Helper()
+                    {
+            {{lines}}
+                    }
+                }
+            }
+            """;
+        var (tree, root) = Parse(code);
+        var settings = new CodeCondenserSettings
+        {
+            MethodLinesOfCodeThreshold = 10,
+            ClassLinesOfCodeThreshold = 100
+        };
+
+        var violations = _detector.DetectViolations(tree, "c:/repo/Service.cs", settings, FileCategory.Production);
+
+        // Helper() is suppressed; only DoWork() was flagged
+        Assert.Single(violations);
+        Assert.Equal("Service.DoWork()", violations[0].Identifier);
+        Assert.DoesNotContain(violations, v => v.Identifier.Contains("Helper"));
+    }
+
+    [Fact]
+    public void DetectViolations_LocalFunction_CommentSuppressionOnEnclosingMethod_Ignored()
+    {
+        var lines = string.Join("\n", Enumerable.Range(1, 15).Select(i => $"            int x{i} = {i};"));
+        var code = $$"""
+            public class Service
+            {
+                // codecondenser:ignore-loc
+                public void DoWork()
+                {
+                    void Helper()
+                    {
+            {{lines}}
+                    }
+                }
+            }
+            """;
+        var (tree, root) = Parse(code);
+        var settings = new CodeCondenserSettings
+        {
+            MethodLinesOfCodeThreshold = 10,
+            ClassLinesOfCodeThreshold = 100
+        };
+
+        var violations = _detector.DetectViolations(tree, "c:/repo/Service.cs", settings, FileCategory.Production);
+
+        Assert.Empty(violations);
+    }
+
+    [Fact]
+    public void DetectViolations_IndexerAccessor_EmitsCorrectIdentifier()
+    {
+        var lines = string.Join("\n", Enumerable.Range(1, 15).Select(i => $"            int x{i} = {i};"));
+        var code = $$"""
+            public class Service
+            {
+                public int this[int index]
+                {
+                    get
+                    {
+            {{lines}}
+                        return index;
+                    }
+                }
+            }
+            """;
+        var (tree, root) = Parse(code);
+        var settings = new CodeCondenserSettings
+        {
+            MethodLinesOfCodeThreshold = 10,
+            ClassLinesOfCodeThreshold = 100
+        };
+
+        var violations = _detector.DetectViolations(tree, "c:/repo/Service.cs", settings, FileCategory.Production);
+
+        Assert.Single(violations);
+        var v = violations[0];
+        Assert.Equal("Service.this[].get", v.Identifier);
+        Assert.Equal(LinesOfCodeKind.Method, v.Kind);
+    }
+
+    [Fact]
+    public void DetectViolations_EventAccessor_EmitsCorrectIdentifier()
+    {
+        var lines = string.Join("\n", Enumerable.Range(1, 15).Select(i => $"            int x{i} = {i};"));
+        var code = $$"""
+            using System;
+
+            public class Service
+            {
+                public event EventHandler CustomEvent
+                {
+                    add
+                    {
+            {{lines}}
+                    }
+                    remove { }
+                }
+            }
+            """;
+        var (tree, root) = Parse(code);
+        var settings = new CodeCondenserSettings
+        {
+            MethodLinesOfCodeThreshold = 10,
+            ClassLinesOfCodeThreshold = 100
+        };
+
+        var violations = _detector.DetectViolations(tree, "c:/repo/Service.cs", settings, FileCategory.Production);
+
+        Assert.Single(violations);
+        var v = violations[0];
+        Assert.Equal("Service.CustomEvent.add", v.Identifier);
+        Assert.Equal(LinesOfCodeKind.Method, v.Kind);
+    }
 }

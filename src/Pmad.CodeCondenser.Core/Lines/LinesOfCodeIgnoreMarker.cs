@@ -31,42 +31,74 @@ public static class LinesOfCodeIgnoreMarker
     ];
 
     /// <summary>
-    /// Checks if a member declaration (method, constructor, class, record) is ignored.
+    /// Checks if a syntax node (class, record, method, constructor, property accessor, local function) is ignored.
     /// </summary>
-    public static bool IsIgnored(MemberDeclarationSyntax member)
+    public static bool IsIgnored(SyntaxNode node)
     {
-        ArgumentNullException.ThrowIfNull(member);
+        ArgumentNullException.ThrowIfNull(node);
 
-        // 1. Check leading/trailing trivia on member
-        if (HasIgnoreCommentTrivia(member.GetLeadingTrivia()) ||
-            HasIgnoreCommentTrivia(member.GetTrailingTrivia()))
+        // 1. Check leading/trailing trivia on node
+        if (HasIgnoreCommentTrivia(node.GetLeadingTrivia()) ||
+            HasIgnoreCommentTrivia(node.GetTrailingTrivia()))
         {
             return true;
         }
 
-        // 2. Check comments inside method / constructor body if applicable
-        if (member is BaseMethodDeclarationSyntax methodDecl)
+        // 2. Check comments inside method / constructor / accessor / local function body
+        var (body, expressionBody) = GetBodyAndExpression(node);
+        if (body != null && HasIgnoreCommentTrivia(body.DescendantTrivia()))
         {
-            if (methodDecl.Body != null && HasIgnoreCommentTrivia(methodDecl.Body.DescendantTrivia()))
-            {
-                return true;
-            }
-            if (methodDecl.ExpressionBody != null && HasIgnoreCommentTrivia(methodDecl.ExpressionBody.DescendantTrivia()))
-            {
-                return true;
-            }
+            return true;
         }
-
-        // 3. Check attributes
-        if (HasIgnoreAttribute(member))
+        if (expressionBody != null && HasIgnoreCommentTrivia(expressionBody.DescendantTrivia()))
         {
             return true;
         }
 
-        // 4. Check enclosing compilation unit / file level trivia
-        if (member.SyntaxTree != null)
+        // 3. Check attributes on node
+        if (HasIgnoreAttribute(GetAttributeLists(node)))
         {
-            var root = member.SyntaxTree.GetRoot();
+            return true;
+        }
+
+        // 4. For accessors, check parent property/indexer/event declaration
+        if (node is AccessorDeclarationSyntax accessor)
+        {
+            var parentMember = accessor.Parent?.Parent;
+            if (parentMember != null)
+            {
+                if (HasIgnoreCommentTrivia(parentMember.GetLeadingTrivia()) ||
+                    HasIgnoreCommentTrivia(parentMember.GetTrailingTrivia()) ||
+                    HasIgnoreAttribute(GetAttributeLists(parentMember)))
+                {
+                    return true;
+                }
+            }
+        }
+
+        // 5. For local functions, check enclosing method/member
+        if (node is LocalFunctionStatementSyntax)
+        {
+            var current = node.Parent;
+            while (current != null && current is not TypeDeclarationSyntax)
+            {
+                if (current is BaseMethodDeclarationSyntax or BasePropertyDeclarationSyntax or AccessorDeclarationSyntax)
+                {
+                    if (HasIgnoreCommentTrivia(current.GetLeadingTrivia()) ||
+                        HasIgnoreCommentTrivia(current.GetTrailingTrivia()) ||
+                        HasIgnoreAttribute(GetAttributeLists(current)))
+                    {
+                        return true;
+                    }
+                }
+                current = current.Parent;
+            }
+        }
+
+        // 6. Check enclosing compilation unit / file level trivia
+        if (node.SyntaxTree != null)
+        {
+            var root = node.SyntaxTree.GetRoot();
             if (HasIgnoreCommentTrivia(root.GetLeadingTrivia()))
             {
                 return true;
@@ -76,15 +108,32 @@ public static class LinesOfCodeIgnoreMarker
         return false;
     }
 
-    private static bool HasIgnoreAttribute(MemberDeclarationSyntax member)
+    private static (BlockSyntax? Body, ArrowExpressionClauseSyntax? ExpressionBody) GetBodyAndExpression(SyntaxNode node)
     {
-        SyntaxList<AttributeListSyntax> attributeLists = member switch
+        return node switch
+        {
+            BaseMethodDeclarationSyntax m => (m.Body, m.ExpressionBody),
+            LocalFunctionStatementSyntax l => (l.Body, l.ExpressionBody),
+            AccessorDeclarationSyntax a => (a.Body, a.ExpressionBody),
+            _ => (null, null)
+        };
+    }
+
+    private static SyntaxList<AttributeListSyntax> GetAttributeLists(SyntaxNode node)
+    {
+        return node switch
         {
             BaseTypeDeclarationSyntax b => b.AttributeLists,
             BaseMethodDeclarationSyntax m => m.AttributeLists,
+            BasePropertyDeclarationSyntax p => p.AttributeLists,
+            AccessorDeclarationSyntax a => a.AttributeLists,
+            LocalFunctionStatementSyntax l => l.AttributeLists,
             _ => default
         };
+    }
 
+    private static bool HasIgnoreAttribute(SyntaxList<AttributeListSyntax> attributeLists)
+    {
         foreach (var attributeList in attributeLists)
         {
             foreach (var attribute in attributeList.Attributes)

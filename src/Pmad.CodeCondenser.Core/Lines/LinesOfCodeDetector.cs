@@ -44,11 +44,11 @@ public sealed class LinesOfCodeDetector : ILinesOfCodeDetector
         {
             if (node is ClassDeclarationSyntax classDecl)
             {
-                CheckClassViolation(classDecl, classDecl.Identifier.Text, syntaxTree, normalizedPath, settings, category, violations);
+                CheckClassViolation(classDecl, syntaxTree, normalizedPath, settings, category, violations);
             }
             else if (node is RecordDeclarationSyntax recordDecl && IsRecordClass(recordDecl))
             {
-                CheckClassViolation(recordDecl, recordDecl.Identifier.Text, syntaxTree, normalizedPath, settings, category, violations);
+                CheckClassViolation(recordDecl, syntaxTree, normalizedPath, settings, category, violations);
             }
             else if (node is BaseMethodDeclarationSyntax methodDecl)
             {
@@ -74,7 +74,6 @@ public sealed class LinesOfCodeDetector : ILinesOfCodeDetector
 
     private static void CheckClassViolation(
         TypeDeclarationSyntax typeDecl,
-        string identifierName,
         SyntaxTree syntaxTree,
         string normalizedPath,
         CodeCondenserSettings settings,
@@ -149,7 +148,8 @@ public sealed class LinesOfCodeDetector : ILinesOfCodeDetector
         FileCategory category,
         List<LinesOfCodeViolation> violations)
     {
-        if (GeneratedCodeDetector.HasGeneratedCodeAttribute(localFunc))
+        if (GeneratedCodeDetector.HasGeneratedCodeAttribute(localFunc) ||
+            LinesOfCodeIgnoreMarker.IsIgnored(localFunc))
         {
             return;
         }
@@ -190,7 +190,8 @@ public sealed class LinesOfCodeDetector : ILinesOfCodeDetector
             return;
         }
 
-        if (GeneratedCodeDetector.HasGeneratedCodeAttribute(accessor))
+        if (GeneratedCodeDetector.HasGeneratedCodeAttribute(accessor) ||
+            LinesOfCodeIgnoreMarker.IsIgnored(accessor))
         {
             return;
         }
@@ -199,13 +200,19 @@ public sealed class LinesOfCodeDetector : ILinesOfCodeDetector
         if (loc > settings.MethodLinesOfCodeThreshold)
         {
             var lineSpan = syntaxTree.GetLineSpan(accessor.Span);
-            var property = accessor.Parent?.Parent as PropertyDeclarationSyntax;
-            var enclosing = property != null ? GetEnclosingTypePrefix(property) : string.Empty;
-            var propName = property?.Identifier.Text ?? "Property";
+            var parentMember = accessor.Parent?.Parent;
+            var enclosing = parentMember != null ? GetEnclosingTypePrefix(parentMember) : string.Empty;
+            var memberName = parentMember switch
+            {
+                PropertyDeclarationSyntax p => p.Identifier.Text,
+                IndexerDeclarationSyntax => "this[]",
+                EventDeclarationSyntax e => e.Identifier.Text,
+                _ => "Property"
+            };
             var accessorKind = accessor.Keyword.Text;
             var identifier = string.IsNullOrEmpty(enclosing)
-                ? $"{propName}.{accessorKind}"
-                : $"{enclosing}.{propName}.{accessorKind}";
+                ? $"{memberName}.{accessorKind}"
+                : $"{enclosing}.{memberName}.{accessorKind}";
 
             violations.Add(new LinesOfCodeViolation
             {

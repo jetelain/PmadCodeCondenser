@@ -970,7 +970,7 @@ public sealed class CodeCondenserEngine : ICodeCondenserEngine
             return null;
         }
 
-        var (baseDirectory, discoveredFiles, _, _) = ResolveFiles(targetPath, settings);
+        var (baseDirectory, discoveredFiles, fileCategories, _) = ResolveFiles(targetPath, settings);
         var parallelOptions = new ParallelOptions
         {
             MaxDegreeOfParallelism = Math.Max(1, Environment.ProcessorCount),
@@ -1017,7 +1017,8 @@ public sealed class CodeCondenserEngine : ICodeCondenserEngine
 
                     if (settings.EnableLinesOfCodeDetection)
                     {
-                        locViolations = _linesOfCodeDetector.DetectViolations(tree, relPath, settings).ToList();
+                        var fileCat = fileCategories.TryGetValue(relPath, out var fc) ? fc : FileCategory.Production;
+                        locViolations = _linesOfCodeDetector.DetectViolations(tree, relPath, settings, fileCat).ToList();
                     }
                 }
 
