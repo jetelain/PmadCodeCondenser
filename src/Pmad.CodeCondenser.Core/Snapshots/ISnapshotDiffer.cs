@@ -57,5 +57,6 @@ public interface ISnapshotDiffer
         AnalysisSnapshot? baseline,
         IReadOnlyDictionary<string, string> currentFileHashes,
         IEnumerable<MethodCloneInfo> analyzedMethods,
-        IReadOnlyDictionary<string, string> commentCache);
+        IReadOnlyDictionary<string, string> commentCache,
+        IEnumerable<string>? typeViolationFiles = null);
 }

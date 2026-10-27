@@ -50,7 +50,18 @@ public sealed class ApplyCommand : ICommand
         ArgumentNullException.ThrowIfNull(formatter);
         ArgumentNullException.ThrowIfNull(output);
 
-        formatter.PrintInfo(output, $"Applying comment summaries to target: {Path.GetFullPath(options.TargetPath)}");
+        if (settings.EnableTypeSplitting && settings.GetEffectiveSummaryMode() != Core.Configuration.SummaryMode.Disabled)
+        {
+            formatter.PrintInfo(output, $"Applying single-type file splits and comment summaries to target: {Path.GetFullPath(options.TargetPath)}");
+        }
+        else if (settings.EnableTypeSplitting)
+        {
+            formatter.PrintInfo(output, $"Applying single-type file splits to target: {Path.GetFullPath(options.TargetPath)}");
+        }
+        else
+        {
+            formatter.PrintInfo(output, $"Applying comment summaries to target: {Path.GetFullPath(options.TargetPath)}");
+        }
         output.WriteLine();
 
         var progress = new Progress<Pmad.CodeCondenser.Core.Comments.CommentSummarizationProgress>(p =>
@@ -84,27 +95,40 @@ public sealed class ApplyCommand : ICommand
         {
             formatter.PrintSubMethodCloneGroups(output, result.SubMethodCloneGroups, baseDirectory, estimator);
         }
+        if (result.TypeFileIssues.Count > 0)
+        {
+            formatter.PrintTypeFileIssues(output, result.TypeFileIssues, baseDirectory, settings.TypeLineTolerance);
+        }
 
-        int modifiedCount = 0;
+        var modifiedFiles = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         if (engine is CodeCondenserEngine cce)
         {
             void OnFileApplied(string file)
             {
-                formatter.PrintFileApplied(output, file, baseDirectory);
-                Interlocked.Increment(ref modifiedCount);
+                lock (modifiedFiles)
+                {
+                    if (modifiedFiles.Add(file))
+                    {
+                        formatter.PrintFileApplied(output, file, baseDirectory);
+                    }
+                }
             }
 
             cce.FileApplied += OnFileApplied;
             try
             {
                 await cce.ApplySummariesWithModifiedFilesAsync(result, settings, cancellationToken).ConfigureAwait(false);
+                if (settings.EnableTypeSplitting)
+                {
+                    await cce.ApplyTypeSplitsWithModifiedFilesAsync(result, settings, cancellationToken).ConfigureAwait(false);
+                }
             }
             finally
             {
                 cce.FileApplied -= OnFileApplied;
             }
 
-            if (modifiedCount > 0)
+            if (modifiedFiles.Count > 0)
             {
                 await cce.UpdateSnapshotBaselineAsync(options.TargetPath, settings, cancellationToken).ConfigureAwait(false);
             }
@@ -112,16 +136,20 @@ public sealed class ApplyCommand : ICommand
         else
         {
             await engine.ApplySummariesAsync(result, settings, cancellationToken).ConfigureAwait(false);
+            if (settings.EnableTypeSplitting)
+            {
+                await engine.ApplyTypeSplitsAsync(result, settings, cancellationToken).ConfigureAwait(false);
+            }
         }
 
-        if (modifiedCount == 0)
+        if (modifiedFiles.Count == 0)
         {
             formatter.PrintSuccess(output, "No source files required modification.");
         }
         else
         {
             output.WriteLine();
-            formatter.PrintSuccess(output, $"Successfully updated comments across {modifiedCount} modified source file(s).");
+            formatter.PrintSuccess(output, $"Successfully updated {modifiedFiles.Count} modified source file(s).");
         }
 
         var mode = options.Incremental ? "Apply (Incremental)" : "Apply";
@@ -146,7 +174,11 @@ public sealed class ApplyCommand : ICommand
             commentGain,
             commentReduction,
             commentGainTokens,
-            Pmad.CodeCondenser.Core.Clones.CloneGainEstimator.EstimateTotalGainTokens(result.CloneGroups, result.SubMethodCloneGroups, estimator, baseDirectory));
+            Pmad.CodeCondenser.Core.Clones.CloneGainEstimator.EstimateTotalGainTokens(result.CloneGroups, result.SubMethodCloneGroups, estimator, baseDirectory),
+            result.RepeatedStringGroups.Count,
+            null,
+            null,
+            result.TypeFileIssues.Count(i => i.HasViolation));
 
         if (options.Incremental)
         {
@@ -181,7 +213,16 @@ public sealed class ApplyCommand : ICommand
             bool repeatedStringViolation = settings.RepeatedStringTolerance.HasValue && gatedRepeatedStrings.Count > settings.RepeatedStringTolerance.Value;
             bool hasRepeatedStringIssue = settings.RepeatedStringTolerance.HasValue ? repeatedStringViolation : gatedRepeatedStrings.Count > 0;
 
-            if (duplicationViolation || hasCommentIssue || hasRepeatedStringIssue)
+            var gatedTypeIssues = settings.EnableTypeSplitting
+                ? result.TypeFileIssues
+                    .Where(i => i.HasViolation && (i.Category != FileCategory.Test || settings.EnforceTestDuplication))
+                    .ToList()
+                : [];
+
+            bool typeViolation = settings.TypeTolerance.HasValue && gatedTypeIssues.Count > settings.TypeTolerance.Value;
+            bool hasTypeIssue = settings.TypeTolerance.HasValue ? typeViolation : gatedTypeIssues.Count > 0;
+
+            if (duplicationViolation || hasCommentIssue || hasRepeatedStringIssue || hasTypeIssue)
             {
                 formatter.PrintAiActionableIncrementalFeedback(
                     output,
@@ -194,7 +235,10 @@ public sealed class ApplyCommand : ICommand
                     hasCommentViolation: commentViolation,
                     repeatedStrings: gatedRepeatedStrings,
                     repeatedStringTolerance: settings.RepeatedStringTolerance,
-                    hasRepeatedStringViolation: repeatedStringViolation);
+                    hasRepeatedStringViolation: repeatedStringViolation,
+                    typeIssues: gatedTypeIssues,
+                    typeTolerance: settings.TypeTolerance,
+                    hasTypeViolation: typeViolation);
 
                 if (duplicationViolation)
                 {
@@ -209,6 +253,11 @@ public sealed class ApplyCommand : ICommand
                 if (repeatedStringViolation)
                 {
                     return settings.RepeatedStringExitCode;
+                }
+
+                if (typeViolation)
+                {
+                    return settings.TypeExitCode;
                 }
             }
         }

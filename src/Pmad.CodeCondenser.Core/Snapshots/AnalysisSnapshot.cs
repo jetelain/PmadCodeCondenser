@@ -35,4 +35,9 @@ public sealed class AnalysisSnapshot
     /// Ensures that what was reviewed in dry-run is exactly what gets applied in --apply.
     /// </summary>
     public Dictionary<string, string> CommentCache { get; set; } = new(StringComparer.Ordinal);
+
+    /// <summary>
+    /// Set of relative file paths that have existing type file violations (split or rename required).
+    /// </summary>
+    public HashSet<string> TypeViolationFiles { get; set; } = new(StringComparer.OrdinalIgnoreCase);
 }

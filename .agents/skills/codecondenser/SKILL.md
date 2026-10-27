@@ -12,7 +12,8 @@ description: >-
 1. **Detect Type-2 Structural Code Clones**: Identifies duplicate logic across C# methods (ignoring variable, parameter, and literal renames) without requiring an LLM.
 2. **Compact Repeated Inline Strings**: Detects string literals >= 100 characters used more than once, with estimated character/token savings, minimal constant declaration snippets, and typical usage patterns.
 3. **Condense Verbose Comments**: Shortens oversized single-line, multi-line, and XML documentation comments into clean, concise summaries formatted to 120 columns using an LLM.
-4. **Enforce Duplication & String Guardrails in CI**: Compares changes incrementally against a baseline snapshot and exits with code `2` when new duplication or repeated strings are introduced.
+4. **Enforce Single Type Per File**: Automatically ensures each class, interface, struct, enum, record, or delegate has its own `.cs` file matching its type name (with line tolerance for small inline types like 1-line delegates) to optimize AI agent context window loading.
+5. **Enforce Guardrails in CI**: Compares changes incrementally against a baseline snapshot and exits with code `2` when new duplication, repeated strings, or type violations are introduced.
 
 ---
 
@@ -22,15 +23,16 @@ The CLI can be invoked via the global tool `codecondenser`, local tool `dotnet c
 
 | Task | Command | AI Backend Needed? |
 | :--- | :--- | :---: |
-| **Status report of clones & comments (deterministic)** | `codecondenser report ./src` | No |
-| **Check clones only (disable comments & strings)** | `codecondenser analyze ./src --no-comments --no-strings` | No |
+| **Status report of types, clones & comments (deterministic)** | `codecondenser report ./src` | No |
+| **Check clones only (disable comments, strings & type splitting)** | `codecondenser analyze ./src --no-comments --no-strings --no-type-split` | No |
 | **Check production code only (skip tests)** | `codecondenser analyze ./ --exclude-tests --no-comments` | No |
-| **Incremental CI check (strict duplication + comments + strings)** | `codecondenser analyze ./ --incremental --duplication-tolerance 0 -ct 0 -st 0` | No |
+| **Incremental CI check (strict guardrails: clones + comments + strings + types)** | `codecondenser analyze ./ --incremental --duplication-tolerance 0 -ct 0 -st 0 -tt 0` | No |
 | **Incremental CI check (strict duplication only)** | `codecondenser analyze ./ --incremental --duplication-tolerance 0` | No |
 | **Export SARIF report for GitHub Actions** | `codecondenser analyze ./src --format sarif --output results.sarif` | No |
 | **Export structured JSON report** | `codecondenser analyze ./src --format json --output results.json` | No |
 | **Summarize comments using LLM** | `codecondenser analyze ./src -m gemma4:e4b` | Yes (Ollama) |
-| **Apply summarized comments to disk** | `codecondenser apply ./src` | No (uses cache) |
+| **Apply single-type splits & summarized comments to disk** | `codecondenser apply ./src` | No (uses cache) |
+| **Apply type splits only (without comments)** | `codecondenser apply ./src --no-comments` | No |
 | **Refresh baseline snapshot** | `codecondenser snapshot ./src` | No |
 | **Install/update workspace agent skills** | `codecondenser skills [path]` | No |
 | **Install agent skills globally** | `codecondenser skills --global` | No |
@@ -232,6 +234,16 @@ static class MyConstants
 ```
 Typical usage:
 `MyConstants.NameOfMyConstant`
+
+---
+
+### 4. Single Type Per File Suppressions
+
+When an auxiliary type must intentionally remain in the same file as another type (beyond the configured line tolerance):
+- **Comment Marker**: Place `// codecondenser:ignore-type-split` or `// codecondenser:ignore` on the line directly preceding the secondary type declaration.
+- **Attribute**: Apply `[SuppressMessage("CodeCondenser", "SingleTypePerFile")]` or `[SingleTypePerFileIgnore]` to the secondary type declaration.
+
+*Note*: Types declared with the C# 11 `file` modifier or types within the line tolerance (default: 1 line, e.g. 1-line delegates) are automatically tolerated and never split.
 
 ---
 

@@ -23,6 +23,8 @@ public sealed record CodeCondenserJsonReport
     public List<JsonRepeatedStringCluster> RepeatedStrings { get; init; } = [];
 
     public List<JsonVerboseComment> VerboseComments { get; init; } = [];
+
+    public List<JsonTypeFileIssue> TypeFileIssues { get; init; } = [];
 }
 
 /// <summary>
@@ -51,6 +53,8 @@ public sealed record JsonReportSummary
     public int SubMethodClustersCount { get; init; }
 
     public int RepeatedStringsCount { get; init; }
+
+    public int TypeFileIssuesCount { get; init; }
 
     public int VerboseCommentsCount { get; init; }
 
@@ -210,3 +214,40 @@ public sealed record JsonRepeatedStringOccurrence
 
     public string? EnclosingMember { get; init; }
 }
+
+/// <summary>
+/// Details of a source file requiring type splitting or renaming.
+/// </summary>
+public sealed record JsonTypeFileIssue
+{
+    public string FilePath { get; init; } = string.Empty;
+
+    public string Category { get; init; } = string.Empty;
+
+    public string Action { get; init; } = string.Empty;
+
+    public string? SuggestedFileName { get; init; }
+
+    public string? PrimaryType { get; init; }
+
+    public List<JsonExtractedType> TypesToExtract { get; init; } = [];
+}
+
+/// <summary>
+/// Information about a secondary type to be extracted into a separate file.
+/// </summary>
+public sealed record JsonExtractedType
+{
+    public string TypeName { get; init; } = string.Empty;
+
+    public string Kind { get; init; } = string.Empty;
+
+    public int LinesOfCode { get; init; }
+
+    public int StartLine { get; init; }
+
+    public int EndLine { get; init; }
+
+    public string TargetFileName { get; init; } = string.Empty;
+}
+

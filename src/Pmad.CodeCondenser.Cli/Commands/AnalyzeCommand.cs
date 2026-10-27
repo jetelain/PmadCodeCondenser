@@ -195,7 +195,16 @@ public sealed class AnalyzeCommand : ICommand
             bool repeatedStringViolation = settings.RepeatedStringTolerance.HasValue && gatedRepeatedStrings.Count > settings.RepeatedStringTolerance.Value;
             bool hasRepeatedStringIssue = settings.RepeatedStringTolerance.HasValue ? repeatedStringViolation : gatedRepeatedStrings.Count > 0;
 
-            if (duplicationViolation || hasCommentIssue || hasRepeatedStringIssue)
+            var gatedTypeIssues = settings.EnableTypeSplitting
+                ? result.TypeFileIssues
+                    .Where(i => i.HasViolation && (i.Category != FileCategory.Test || settings.EnforceTestDuplication))
+                    .ToList()
+                : [];
+
+            bool typeViolation = settings.TypeTolerance.HasValue && gatedTypeIssues.Count > settings.TypeTolerance.Value;
+            bool hasTypeIssue = settings.TypeTolerance.HasValue ? typeViolation : gatedTypeIssues.Count > 0;
+
+            if (duplicationViolation || hasCommentIssue || hasRepeatedStringIssue || hasTypeIssue)
             {
                 formatter.PrintAiActionableIncrementalFeedback(
                     statusWriter,
@@ -208,7 +217,10 @@ public sealed class AnalyzeCommand : ICommand
                     hasCommentViolation: commentViolation,
                     repeatedStrings: gatedRepeatedStrings,
                     repeatedStringTolerance: settings.RepeatedStringTolerance,
-                    hasRepeatedStringViolation: repeatedStringViolation);
+                    hasRepeatedStringViolation: repeatedStringViolation,
+                    typeIssues: gatedTypeIssues,
+                    typeTolerance: settings.TypeTolerance,
+                    hasTypeViolation: typeViolation);
 
                 if (duplicationViolation)
                 {
@@ -223,6 +235,11 @@ public sealed class AnalyzeCommand : ICommand
                 if (repeatedStringViolation)
                 {
                     return settings.RepeatedStringExitCode;
+                }
+
+                if (typeViolation)
+                {
+                    return settings.TypeExitCode;
                 }
             }
         }

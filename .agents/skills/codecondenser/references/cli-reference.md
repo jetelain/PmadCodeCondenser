@@ -34,6 +34,12 @@ codecondenser [command] [path] [options]
 | `--update-snapshot` | `-u` | `switch` | `false` | Update or create the snapshot baseline after analysis |
 | `--duplication-tolerance <n>` | `-dt` | `int` | `0` | Max new clone clusters tolerated in incremental mode before failing |
 | `--string-tolerance <n>` | `-st` | `int` | `null` | Max new repeated string groups tolerated in incremental mode |
+| `--type-tolerance <n>` | `-tt` | `int` | `null` | Max new type file issues tolerated in incremental mode |
+| `--type-line-tolerance <n>` | `-tlt` | `int` | `1` | Max pure lines of code (comments excluded) tolerated inline |
+| `--no-type-split` | | `switch` | `false` | Disable single type per file splitting |
+| `--enable-type-split` | | `switch` | `true` | Explicitly enable single type per file splitting |
+| `--no-type-rename` | | `switch` | `false` | Disable renaming files to match primary type name |
+| `--enable-type-rename` | | `switch` | `true` | Explicitly enable renaming files to match primary type name |
 | `--no-comments` | | `switch` | `false` | Disable comment extraction and LLM summarization |
 | `--enable-comments` | | `switch` | `true` | Explicitly enable comment extraction and summarization |
 | `--no-duplication` | | `switch` | `false` | Disable structural code clone detection |
@@ -104,6 +110,11 @@ To configure personal LLM defaults (Ollama endpoint, default model, context size
   "enableCommentSummarization": true,
   "enableDuplicationDetection": true,
   "enableRepeatedStringDetection": true,
+  "enableTypeSplitting": true,
+  "enableTypeRenaming": true,
+  "typeLineTolerance": 1,
+  "typeTolerance": null,
+  "typeExitCode": 2,
   "duplicationTolerance": 0,
   "duplicationExitCode": 2,
   "repeatedStringTolerance": null,

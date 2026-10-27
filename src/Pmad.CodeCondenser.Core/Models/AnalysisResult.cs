@@ -17,6 +17,7 @@ public sealed class AnalysisResult
     public int SkippedGeneratedFilesCount { get; init; }
     public IReadOnlyList<SubMethodCloneGroup> SubMethodCloneGroups { get; init; } = [];
     public IReadOnlyList<RepeatedStringGroup> RepeatedStringGroups { get; init; } = [];
+    public IReadOnlyList<TypeFileAnalysis> TypeFileIssues { get; init; } = [];
 
     /// <summary>
     /// Gets the total character gain achieved by compacting repeated inline strings into constants.

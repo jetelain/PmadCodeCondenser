@@ -194,7 +194,8 @@ public sealed class SnapshotDiffer : ISnapshotDiffer
         AnalysisSnapshot? baseline,
         IReadOnlyDictionary<string, string> currentFileHashes,
         IEnumerable<MethodCloneInfo> analyzedMethods,
-        IReadOnlyDictionary<string, string> commentCache)
+        IReadOnlyDictionary<string, string> commentCache,
+        IEnumerable<string>? typeViolationFiles = null)
     {
         ArgumentNullException.ThrowIfNull(currentFileHashes);
         ArgumentNullException.ThrowIfNull(analyzedMethods);
@@ -206,6 +207,21 @@ public sealed class SnapshotDiffer : ISnapshotDiffer
             NormalizerVersion = baseline?.NormalizerVersion ?? AnalysisSnapshot.CurrentNormalizerVersion,
             CreatedAt = DateTimeOffset.UtcNow
         };
+
+        if (typeViolationFiles != null)
+        {
+            foreach (var f in typeViolationFiles)
+            {
+                snapshot.TypeViolationFiles.Add(f);
+            }
+        }
+        else if (baseline != null)
+        {
+            foreach (var f in baseline.TypeViolationFiles)
+            {
+                snapshot.TypeViolationFiles.Add(f);
+            }
+        }
 
         // 1. Files
         foreach (var (path, hash) in currentFileHashes)

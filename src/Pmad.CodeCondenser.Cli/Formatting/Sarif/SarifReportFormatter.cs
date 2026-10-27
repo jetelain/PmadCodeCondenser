@@ -340,6 +340,50 @@ public sealed class SarifReportFormatter : IReportFormatter
             }
         }
 
+        // 5. Single Type Per File (CC007)
+        foreach (var issue in result.TypeFileIssues.Where(i => i.HasViolation))
+        {
+            var relPath = ReportPathHelper.NormalizeRelativePath(issue.FilePath, baseDirectory);
+            var primaryType = issue.PrimaryType;
+            var startLine = primaryType?.StartLine ?? 1;
+            var endLine = primaryType?.EndLine ?? 1;
+
+            string message = issue.Action switch
+            {
+                TypeFileAction.Rename => $"File '{relPath}' contains a single type '{primaryType?.TypeName}' and should be renamed to '{issue.SuggestedFileName}'.",
+                TypeFileAction.SplitAndRename => $"File '{relPath}' contains {issue.Types.Count} types and should be renamed to '{issue.SuggestedFileName}' with auxiliary types extracted.",
+                _ => $"File '{relPath}' contains {issue.Types.Count} types ({issue.TypesToExtract.Count} non-tolerated types to extract)."
+            };
+
+            run.Results.Add(new SarifResult
+            {
+                RuleId = SarifRules.SingleTypePerFileRuleId,
+                Level = issue.Category == FileCategory.Test ? "note" : "warning",
+                Message = new SarifMessage
+                {
+                    Text = message
+                },
+                Locations =
+                [
+                    new SarifLocation
+                    {
+                        PhysicalLocation = new SarifPhysicalLocation
+                        {
+                            ArtifactLocation = new SarifArtifactLocation
+                            {
+                                Uri = relPath
+                            },
+                            Region = new SarifRegion
+                            {
+                                StartLine = startLine,
+                                EndLine = endLine
+                            }
+                        }
+                    }
+                ]
+            });
+        }
+
         return new SarifLog
         {
             Runs = [run]

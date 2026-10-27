@@ -185,3 +185,52 @@ To prevent summarized comments from being repeatedly re-analyzed (e.g. if the co
 4. **Local Snapshot vs Git Store**:
    - `.codecondenser/snapshot.json`: Local cache of AST hashes and current session summaries. **Add to `.gitignore`**.
    - `.codecondenser/summarized-comments.json`: Cross-session historical store. **Commit to Git**.
+
+---
+
+## 4. Single Type Per File Suppressions
+
+When multiple types reside in a single `.cs` file and a secondary type must intentionally remain in the same file rather than being split out:
+
+### A. Preceding Comment Marker
+Place `// codecondenser:ignore-type-split` or `// codecondenser:ignore` on the comment line directly preceding the type declaration or its attributes:
+
+```csharp
+// codecondenser:ignore-type-split
+public class AuxiliaryHelper
+{
+    // ...
+}
+```
+
+*Supported comment markers*:
+- `codecondenser:ignore-type-split`
+- `codecondenser:ignore-split`
+- `codecondenser:ignore-type`
+- `codecondenser:ignore`
+- `nocondense`
+
+### B. Suppression Attribute
+Apply `[SuppressMessage]` or a custom ignore attribute to the type declaration:
+
+```csharp
+[SuppressMessage("CodeCondenser", "SingleTypePerFile", Justification = "Tightly coupled to primary entity")]
+public enum OrderStatus
+{
+    Draft,
+    Active,
+    Archived
+}
+```
+
+*Supported attributes*:
+- `[SuppressMessage("CodeCondenser", "SingleTypePerFile")]`
+- `[SuppressMessage("CodeCondenser", "CC007")]`
+- `[SingleTypePerFileIgnore]`
+- `[CodeCondenserIgnore]`
+
+### C. Automatic Tolerances
+The following types are automatically exempted from splitting without needing explicit suppression:
+1. **`file`-scoped types**: Any type with the C# 11 `file` modifier (e.g. `file class CacheHolder`).
+2. **Line tolerance**: Types whose pure lines of code (comments and blank lines excluded) do not exceed `--type-line-tolerance` / `-tlt` (default: `1`, e.g. `public delegate void Callback(int val);`).
+

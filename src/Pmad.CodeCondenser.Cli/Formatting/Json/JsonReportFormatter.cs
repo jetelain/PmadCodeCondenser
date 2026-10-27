@@ -69,6 +69,7 @@ public sealed class JsonReportFormatter : IReportFormatter
             CrossBoundaryClustersCount = crossClones,
             SubMethodClustersCount = result.SubMethodCloneGroups.Count,
             RepeatedStringsCount = result.RepeatedStringGroups.Count,
+            TypeFileIssuesCount = result.TypeFileIssues.Count(i => i.HasViolation),
             VerboseCommentsCount = result.VerboseComments.Count,
             SummaryMode = settings.GetEffectiveSummaryMode().ToString(),
             TotalCommentGainCharacters = commentGainResult.SummarizedCount > 0 ? commentGainResult.GainCharacters : null,
@@ -202,13 +203,32 @@ public sealed class JsonReportFormatter : IReportFormatter
             };
         }).ToList();
 
+        var typeFileIssues = result.TypeFileIssues.Where(i => i.HasViolation).Select(issue => new JsonTypeFileIssue
+        {
+            FilePath = ReportPathHelper.NormalizeRelativePath(issue.FilePath, baseDirectory),
+            Category = issue.Category.ToString(),
+            Action = issue.Action.ToString(),
+            SuggestedFileName = issue.SuggestedFileName,
+            PrimaryType = issue.PrimaryType?.TypeName,
+            TypesToExtract = issue.TypesToExtract.Select(t => new JsonExtractedType
+            {
+                TypeName = t.TypeName,
+                Kind = t.Kind,
+                LinesOfCode = t.LinesOfCode,
+                StartLine = t.StartLine,
+                EndLine = t.EndLine,
+                TargetFileName = t.TargetFileName
+            }).ToList()
+        }).ToList();
+
         return new CodeCondenserJsonReport
         {
             Summary = summary,
             CloneClusters = cloneClusters,
             SubMethodClusters = subMethodClusters,
             RepeatedStrings = repeatedStrings,
-            VerboseComments = verboseComments
+            VerboseComments = verboseComments,
+            TypeFileIssues = typeFileIssues
         };
     }
 }

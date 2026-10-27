@@ -170,6 +170,26 @@ public sealed class CliOptions
     public int? RepeatedStringTolerance { get; set; }
 
     /// <summary>
+    /// When false, disables single-type-per-file enforcement and type splitting.
+    /// </summary>
+    public bool? EnableTypeSplitting { get; set; }
+
+    /// <summary>
+    /// When false, disables renaming files whose primary type does not match the file name.
+    /// </summary>
+    public bool? EnableTypeRenaming { get; set; }
+
+    /// <summary>
+    /// Maximum lines of code (comments and blank lines excluded) for an auxiliary type to be tolerated inline.
+    /// </summary>
+    public int? TypeLineTolerance { get; set; }
+
+    /// <summary>
+    /// Maximum number of new type file violations tolerated in incremental mode before failing CI.
+    /// </summary>
+    public int? TypeTolerance { get; set; }
+
+    /// <summary>
     /// Path to JSON file stored in git recording summarized comments.
     /// </summary>
     public string? SummarizedCommentsPath { get; set; }
