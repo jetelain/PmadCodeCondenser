@@ -391,6 +391,58 @@ public sealed class ConsoleFormatter : IConsoleFormatter
         }
     }
 
+    public void PrintLinesOfCodeViolations(
+        TextWriter writer,
+        IReadOnlyList<LinesOfCodeViolation> violations,
+        string baseDirectory)
+    {
+        ArgumentNullException.ThrowIfNull(writer);
+        ArgumentNullException.ThrowIfNull(violations);
+
+        if (violations.Count == 0)
+        {
+            return;
+        }
+
+        var methodViolations = violations.Where(v => v.Kind == LinesOfCodeKind.Method).ToList();
+        var classViolations = violations.Where(v => v.Kind == LinesOfCodeKind.Class).ToList();
+
+        writer.WriteLine(Yellow(Bold($"Found {violations.Count} Declaration(s) Exceeding Lines of Code Thresholds:")));
+        writer.WriteLine();
+
+        if (classViolations.Count > 0)
+        {
+            writer.WriteLine(Bold($"  Classes Exceeding Threshold ({classViolations.Count}):"));
+            for (int i = 0; i < classViolations.Count; i++)
+            {
+                var v = classViolations[i];
+                var relPath = FormatPath(v.FilePath, baseDirectory);
+                writer.WriteLine(Yellow($"    Class #{i + 1} [{v.LinesOfCode} LOC > threshold {v.Threshold}]:"));
+                writer.WriteLine($"      • {Cyan(relPath)}:{v.StartLine}-{v.EndLine}");
+                writer.WriteLine($"        {Bold(v.Identifier)}");
+                writer.WriteLine(Dim($"        Recommendation: Refactor class into smaller, single-responsibility types."));
+                writer.WriteLine(Dim($"        To suppress: Add '[SuppressMessage(\"CodeCondenser\", \"ClassLength\")]' or '// codecondenser:ignore-loc'."));
+            }
+            writer.WriteLine();
+        }
+
+        if (methodViolations.Count > 0)
+        {
+            writer.WriteLine(Bold($"  Methods Exceeding Threshold ({methodViolations.Count}):"));
+            for (int i = 0; i < methodViolations.Count; i++)
+            {
+                var v = methodViolations[i];
+                var relPath = FormatPath(v.FilePath, baseDirectory);
+                writer.WriteLine(Yellow($"    Method #{i + 1} [{v.LinesOfCode} LOC > threshold {v.Threshold}]:"));
+                writer.WriteLine($"      • {Cyan(relPath)}:{v.StartLine}-{v.EndLine}");
+                writer.WriteLine($"        {Bold(v.Identifier)}");
+                writer.WriteLine(Dim($"        Recommendation: Refactor method into smaller helper methods using Extract Method pattern."));
+                writer.WriteLine(Dim($"        To suppress: Add '[SuppressMessage(\"CodeCondenser\", \"MethodLength\")]' or '// codecondenser:ignore-loc'."));
+            }
+            writer.WriteLine();
+        }
+    }
+
     public void PrintVerboseComments(
         TextWriter writer,
         IReadOnlyList<VerboseComment> comments,
@@ -528,7 +580,8 @@ public sealed class ConsoleFormatter : IConsoleFormatter
         int? repeatedStringsCount = null,
         int? repeatedStringGainChars = null,
         int? repeatedStringGainTokens = null,
-        int? typeIssuesCount = null)
+        int? typeIssuesCount = null,
+        int? linesOfCodeViolationsCount = null)
     {
         ArgumentNullException.ThrowIfNull(writer);
 
@@ -586,6 +639,11 @@ public sealed class ConsoleFormatter : IConsoleFormatter
         if (typeIssuesCount.HasValue)
         {
             writer.WriteLine($"  Type File Issues:  {(typeIssuesCount.Value > 0 ? Yellow(typeIssuesCount.Value.ToString()) : Green("0"))}");
+        }
+
+        if (linesOfCodeViolationsCount.HasValue)
+        {
+            writer.WriteLine($"  LOC Violations:    {(linesOfCodeViolationsCount.Value > 0 ? Yellow(linesOfCodeViolationsCount.Value.ToString()) : Green("0"))}");
         }
 
         writer.WriteLine($"  Verbose Comments:  {(verboseCommentsCount > 0 ? Cyan(verboseCommentsCount.ToString()) : Green("0"))}");
@@ -784,7 +842,10 @@ public sealed class ConsoleFormatter : IConsoleFormatter
         bool hasRepeatedStringViolation = false,
         IReadOnlyList<TypeFileAnalysis>? typeIssues = null,
         int? typeTolerance = null,
-        bool hasTypeViolation = false)
+        bool hasTypeViolation = false,
+        IReadOnlyList<LinesOfCodeViolation>? linesOfCodeViolations = null,
+        int? linesOfCodeTolerance = null,
+        bool hasLinesOfCodeViolation = false)
     {
         ArgumentNullException.ThrowIfNull(writer);
         cloneGroups ??= [];
@@ -792,14 +853,46 @@ public sealed class ConsoleFormatter : IConsoleFormatter
         verboseComments ??= [];
         repeatedStrings ??= [];
         typeIssues ??= [];
+        linesOfCodeViolations ??= [];
 
         var violatingTypes = typeIssues.Where(i => i.HasViolation).ToList();
+        var locViolations = linesOfCodeViolations.ToList();
         bool hasComments = verboseComments.Count > 0;
         bool hasStrings = repeatedStrings.Count > 0;
         bool hasTypeIssues = violatingTypes.Count > 0;
+        bool hasLocViolations = locViolations.Count > 0;
         int totalCloneCount = cloneGroups.Count + subMethodGroups.Count;
 
-        if (hasTypeViolation && !hasDuplicationViolation && !hasComments && !hasStrings)
+        if (hasLinesOfCodeViolation && !hasDuplicationViolation && !hasComments && !hasStrings && !hasTypeViolation)
+        {
+            writer.WriteLine();
+            writer.WriteLine(Red(Bold("========================================================================")));
+            writer.WriteLine(Red(Bold("[AI AGENT ACTION REQUIRED] Lines of Code Limits Policy Violation (Exit Code: 2)")));
+            writer.WriteLine(Red(Bold("========================================================================")));
+            writer.WriteLine($"Incremental analysis detected {Bold(locViolations.Count.ToString())} declaration(s) exceeding lines of code thresholds (allowed: {linesOfCodeTolerance ?? 0}).");
+            writer.WriteLine();
+
+            for (int i = 0; i < locViolations.Count; i++)
+            {
+                var v = locViolations[i];
+                var relPath = FormatPath(v.FilePath, baseDirectory);
+                writer.WriteLine(Yellow($"Violation #{i + 1} [{v.Kind}, {v.LinesOfCode} LOC > threshold {v.Threshold}]:"));
+                writer.WriteLine($"  • {Cyan(relPath)}:{v.StartLine}-{v.EndLine} in {Bold(v.Identifier)}");
+                writer.WriteLine();
+            }
+
+            writer.WriteLine(Bold("Actionable Instructions for AI Agent:"));
+            writer.WriteLine("  1. Inspect the violating methods or classes listed above.");
+            writer.WriteLine("  2. Methods: Refactor large methods into smaller helpers using Extract Method pattern.");
+            writer.WriteLine("  3. Classes: Refactor large classes into smaller, single-responsibility components or partial classes.");
+            writer.WriteLine("  4. To suppress: Add '[SuppressMessage(\"CodeCondenser\", \"MethodLength\")]' / '[SuppressMessage(\"CodeCondenser\", \"ClassLength\")]' or '// codecondenser:ignore-loc'.");
+            writer.WriteLine("  5. Re-run 'codecondenser --incremental' to confirm the violation is resolved.");
+            writer.WriteLine(Red(Bold("========================================================================")));
+            writer.WriteLine();
+            return;
+        }
+
+        if (hasTypeViolation && !hasDuplicationViolation && !hasComments && !hasStrings && !hasLocViolations)
         {
             writer.WriteLine();
             writer.WriteLine(Red(Bold("========================================================================")));
@@ -853,7 +946,7 @@ public sealed class ConsoleFormatter : IConsoleFormatter
             return;
         }
 
-        if (hasRepeatedStringViolation && !hasDuplicationViolation && !hasComments)
+        if (hasRepeatedStringViolation && !hasDuplicationViolation && !hasComments && !hasTypeIssues && !hasLocViolations)
         {
             writer.WriteLine();
             writer.WriteLine(Red(Bold("========================================================================")));
@@ -905,13 +998,13 @@ public sealed class ConsoleFormatter : IConsoleFormatter
             return;
         }
 
-        if (hasDuplicationViolation && !hasComments && !hasStrings)
+        if (hasDuplicationViolation && !hasComments && !hasStrings && !hasTypeViolation && !hasLocViolations)
         {
             PrintAiActionableDuplicationFeedback(writer, cloneGroups, subMethodGroups, baseDirectory, duplicationTolerance);
             return;
         }
 
-        if (!hasDuplicationViolation && hasComments && !hasStrings)
+        if (!hasDuplicationViolation && hasComments && !hasStrings && !hasTypeViolation && !hasLocViolations)
         {
             writer.WriteLine();
             writer.WriteLine(Red(Bold("========================================================================")));
@@ -947,7 +1040,7 @@ public sealed class ConsoleFormatter : IConsoleFormatter
 
         writer.WriteLine();
         writer.WriteLine(Red(Bold("========================================================================")));
-        var multiTitle = (hasDuplicationViolation || hasCommentViolation || hasRepeatedStringViolation || hasTypeViolation)
+        var multiTitle = (hasDuplicationViolation || hasCommentViolation || hasRepeatedStringViolation || hasTypeViolation || hasLinesOfCodeViolation)
             ? "[AI AGENT ACTION REQUIRED] Incremental Policy Violations (Exit Code: 2)"
             : "[AI AGENT ACTION REQUIRED] Incremental Policy Violations";
         writer.WriteLine(Red(Bold(multiTitle)));
@@ -957,6 +1050,7 @@ public sealed class ConsoleFormatter : IConsoleFormatter
         if (verboseComments.Count > 0) counts.Add($"{Bold(verboseComments.Count.ToString())} new verbose comment(s)");
         if (repeatedStrings.Count > 0) counts.Add($"{Bold(repeatedStrings.Count.ToString())} new repeated string cluster(s)");
         if (violatingTypes.Count > 0) counts.Add($"{Bold(violatingTypes.Count.ToString())} file(s) with multiple types or mismatched names");
+        if (locViolations.Count > 0) counts.Add($"{Bold(locViolations.Count.ToString())} declaration(s) exceeding lines of code thresholds");
 
         string summaryText = counts.Count switch
         {
@@ -1075,6 +1169,19 @@ public sealed class ConsoleFormatter : IConsoleFormatter
             writer.WriteLine();
         }
 
+        if (locViolations.Count > 0)
+        {
+            writer.WriteLine(Bold("Lines of Code Limits Violations:"));
+            for (int i = 0; i < locViolations.Count; i++)
+            {
+                var v = locViolations[i];
+                var relPath = FormatPath(v.FilePath, baseDirectory);
+                writer.WriteLine(Yellow($"  Violation #{i + 1} [{v.Kind}, {v.LinesOfCode} LOC > threshold {v.Threshold}]:"));
+                writer.WriteLine($"    • {Cyan(relPath)}:{v.StartLine}-{v.EndLine} in {Bold(v.Identifier)}");
+            }
+            writer.WriteLine();
+        }
+
         writer.WriteLine(Bold("Actionable Instructions for AI Agent:"));
         if (totalCloneCount > 0)
         {
@@ -1105,6 +1212,13 @@ public sealed class ConsoleFormatter : IConsoleFormatter
             writer.WriteLine("    1. Inspect the verbose comment(s) listed above.");
             writer.WriteLine("    2. Condense: Shorten or rewrite comment text concisely to fit within 120 columns.");
             writer.WriteLine("    3. To suppress: Add 'condense=\"no\"' attribute (XML doc) or '// codecondenser:ignore' (preceding/inline).");
+        }
+        if (locViolations.Count > 0)
+        {
+            writer.WriteLine("  Lines of Code Limits:");
+            writer.WriteLine("    1. Methods: Refactor large methods into smaller helpers using Extract Method pattern.");
+            writer.WriteLine("    2. Classes: Refactor large classes into smaller, single-responsibility components or partial classes.");
+            writer.WriteLine("    3. To suppress: Add '[SuppressMessage(\"CodeCondenser\", \"MethodLength\")]' / '[SuppressMessage(\"CodeCondenser\", \"ClassLength\")]' or '// codecondenser:ignore-loc'.");
         }
         writer.WriteLine("  Verification:");
         writer.WriteLine("    • Re-run 'codecondenser --incremental' to confirm all violations are resolved.");

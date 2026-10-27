@@ -42,8 +42,8 @@ public class SarifReportFormatterTests
         run.Tool.Driver.Name.Should().Be("Pmad.CodeCondenser");
         run.Tool.Driver.Version.Should().NotBeNullOrWhiteSpace();
         run.Tool.Driver.InformationUri.Should().Be("https://github.com/jetelain/PmadCodeCondenser");
-        run.Tool.Driver.Rules.Should().HaveCount(7);
-        run.Tool.Driver.Rules.Select(r => r.Id).Should().Contain(["CC001", "CC002", "CC003", "CC004", "CC005", "CC006", "CC007"]);
+        run.Tool.Driver.Rules.Should().HaveCount(9);
+        run.Tool.Driver.Rules.Select(r => r.Id).Should().Contain(["CC001", "CC002", "CC003", "CC004", "CC005", "CC006", "CC007", "CC008", "CC009"]);
         run.Results.Should().BeEmpty();
     }
 
@@ -465,5 +465,83 @@ public class SarifReportFormatterTests
         res.RuleId.Should().Be("CC007");
         res.Locations[0].PhysicalLocation.Region.StartLine.Should().Be(30);
         res.Locations[0].PhysicalLocation.Region.EndLine.Should().Be(48);
+    }
+
+    [Fact]
+    public async Task FormatAsync_LinesOfCodeViolation_Method_EmitsCC008()
+    {
+        var violation = new LinesOfCodeViolation
+        {
+            FilePath = "c:/repo/src/Service.cs",
+            Identifier = "Service.LongMethod()",
+            Kind = LinesOfCodeKind.Method,
+            LinesOfCode = 180,
+            Threshold = 150,
+            StartLine = 10,
+            EndLine = 200,
+            Category = FileCategory.Production
+        };
+
+        var result = new AnalysisResult
+        {
+            AnalyzedFilesCount = 1,
+            TotalMethodsScanned = 1,
+            CloneGroups = [],
+            VerboseComments = [],
+            SummarizedComments = new Dictionary<string, string>(),
+            LinesOfCodeViolations = [violation]
+        };
+
+        using var writer = new StringWriter();
+        await _formatter.FormatAsync(result, _settings, writer, "c:/repo");
+
+        var sarif = JsonSerializer.Deserialize<SarifLog>(writer.ToString(), new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase });
+        sarif!.Runs[0].Results.Should().HaveCount(1);
+
+        var res = sarif.Runs[0].Results[0];
+        res.RuleId.Should().Be("CC008");
+        res.Level.Should().Be("warning");
+        res.Message.Text.Should().Contain("Method 'Service.LongMethod()' has 180 lines of code");
+        res.Locations[0].PhysicalLocation.Region.StartLine.Should().Be(10);
+        res.Locations[0].PhysicalLocation.Region.EndLine.Should().Be(200);
+    }
+
+    [Fact]
+    public async Task FormatAsync_LinesOfCodeViolation_Class_EmitsCC009()
+    {
+        var violation = new LinesOfCodeViolation
+        {
+            FilePath = "c:/repo/src/LargeClass.cs",
+            Identifier = "LargeClass",
+            Kind = LinesOfCodeKind.Class,
+            LinesOfCode = 1600,
+            Threshold = 1500,
+            StartLine = 5,
+            EndLine = 1700,
+            Category = FileCategory.Production
+        };
+
+        var result = new AnalysisResult
+        {
+            AnalyzedFilesCount = 1,
+            TotalMethodsScanned = 10,
+            CloneGroups = [],
+            VerboseComments = [],
+            SummarizedComments = new Dictionary<string, string>(),
+            LinesOfCodeViolations = [violation]
+        };
+
+        using var writer = new StringWriter();
+        await _formatter.FormatAsync(result, _settings, writer, "c:/repo");
+
+        var sarif = JsonSerializer.Deserialize<SarifLog>(writer.ToString(), new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase });
+        sarif!.Runs[0].Results.Should().HaveCount(1);
+
+        var res = sarif.Runs[0].Results[0];
+        res.RuleId.Should().Be("CC009");
+        res.Level.Should().Be("warning");
+        res.Message.Text.Should().Contain("Class 'LargeClass' has 1600 lines of code");
+        res.Locations[0].PhysicalLocation.Region.StartLine.Should().Be(5);
+        res.Locations[0].PhysicalLocation.Region.EndLine.Should().Be(1700);
     }
 }

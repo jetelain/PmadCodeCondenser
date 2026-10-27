@@ -99,6 +99,10 @@ public sealed class ApplyCommand : ICommand
         {
             formatter.PrintTypeFileIssues(output, result.TypeFileIssues, baseDirectory, settings.TypeLineTolerance);
         }
+        if (result.LinesOfCodeViolations.Count > 0)
+        {
+            formatter.PrintLinesOfCodeViolations(output, result.LinesOfCodeViolations, baseDirectory);
+        }
 
         var modifiedFiles = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         if (engine is CodeCondenserEngine cce)
@@ -178,7 +182,8 @@ public sealed class ApplyCommand : ICommand
             result.RepeatedStringGroups.Count,
             null,
             null,
-            result.TypeFileIssues.Count(i => i.HasViolation));
+            result.TypeFileIssues.Count(i => i.HasViolation),
+            result.LinesOfCodeViolations.Count);
 
         if (options.Incremental)
         {
@@ -225,7 +230,16 @@ public sealed class ApplyCommand : ICommand
             bool typeViolation = settings.TypeTolerance.HasValue && gatedTypeIssues.Count > settings.TypeTolerance.Value;
             bool hasTypeIssue = settings.TypeTolerance.HasValue ? typeViolation : gatedTypeIssues.Count > 0;
 
-            if (duplicationViolation || hasCommentIssue || hasRepeatedStringIssue || hasTypeIssue)
+            var gatedLocViolations = settings.EnableLinesOfCodeDetection
+                ? result.LinesOfCodeViolations
+                    .Where(v => v.Category != FileCategory.Test || settings.EnforceTestDuplication)
+                    .ToList()
+                : [];
+
+            bool locViolation = settings.LinesOfCodeTolerance.HasValue && gatedLocViolations.Count > settings.LinesOfCodeTolerance.Value;
+            bool hasLocIssue = settings.LinesOfCodeTolerance.HasValue ? locViolation : gatedLocViolations.Count > 0;
+
+            if (duplicationViolation || hasCommentIssue || hasRepeatedStringIssue || hasTypeIssue || hasLocIssue)
             {
                 formatter.PrintAiActionableIncrementalFeedback(
                     output,
@@ -241,7 +255,10 @@ public sealed class ApplyCommand : ICommand
                     hasRepeatedStringViolation: repeatedStringViolation,
                     typeIssues: gatedTypeIssues,
                     typeTolerance: settings.TypeTolerance,
-                    hasTypeViolation: typeViolation);
+                    hasTypeViolation: typeViolation,
+                    linesOfCodeViolations: gatedLocViolations,
+                    linesOfCodeTolerance: settings.LinesOfCodeTolerance,
+                    hasLinesOfCodeViolation: locViolation);
 
                 if (duplicationViolation)
                 {
@@ -261,6 +278,11 @@ public sealed class ApplyCommand : ICommand
                 if (typeViolation)
                 {
                     return settings.TypeExitCode;
+                }
+
+                if (locViolation)
+                {
+                    return settings.LinesOfCodeExitCode;
                 }
             }
         }

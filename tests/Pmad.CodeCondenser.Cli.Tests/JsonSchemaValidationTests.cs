@@ -33,6 +33,7 @@ public class JsonSchemaValidationTests
         doc.RootElement.GetProperty("properties").TryGetProperty("summary", out _).Should().BeTrue();
         doc.RootElement.GetProperty("properties").TryGetProperty("cloneClusters", out _).Should().BeTrue();
         doc.RootElement.GetProperty("properties").TryGetProperty("subMethodClusters", out _).Should().BeTrue();
+        doc.RootElement.GetProperty("properties").TryGetProperty("linesOfCodeViolations", out _).Should().BeTrue();
         doc.RootElement.GetProperty("properties").TryGetProperty("verboseComments", out _).Should().BeTrue();
     }
 }

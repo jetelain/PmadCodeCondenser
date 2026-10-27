@@ -25,6 +25,8 @@ public sealed record CodeCondenserJsonReport
     public List<JsonVerboseComment> VerboseComments { get; init; } = [];
 
     public List<JsonTypeFileIssue> TypeFileIssues { get; init; } = [];
+
+    public List<JsonLinesOfCodeViolation> LinesOfCodeViolations { get; init; } = [];
 }
 
 /// <summary>
@@ -55,6 +57,8 @@ public sealed record JsonReportSummary
     public int RepeatedStringsCount { get; init; }
 
     public int TypeFileIssuesCount { get; init; }
+
+    public int LinesOfCodeViolationsCount { get; init; }
 
     public int VerboseCommentsCount { get; init; }
 
@@ -259,5 +263,27 @@ public sealed record JsonExtractedType
     public int EndLine { get; init; }
 
     public string TargetFileName { get; init; } = string.Empty;
+}
+
+/// <summary>
+/// Method or class exceeding lines of code threshold.
+/// </summary>
+public sealed record JsonLinesOfCodeViolation
+{
+    public string FilePath { get; init; } = string.Empty;
+
+    public string Identifier { get; init; } = string.Empty;
+
+    public string Kind { get; init; } = string.Empty;
+
+    public int LinesOfCode { get; init; }
+
+    public int Threshold { get; init; }
+
+    public int StartLine { get; init; }
+
+    public int EndLine { get; init; }
+
+    public string Category { get; init; } = string.Empty;
 }
 

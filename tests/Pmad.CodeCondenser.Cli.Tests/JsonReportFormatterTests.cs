@@ -377,4 +377,49 @@ public class JsonReportFormatterTests
         jsonIssue.TypesToExtract.Should().HaveCount(1);
         jsonIssue.TypesToExtract[0].TypeName.Should().Be("OrderItem");
     }
+
+    [Fact]
+    public async Task FormatAsync_LinesOfCodeViolations_EmitsExpectedJson()
+    {
+        var violation = new LinesOfCodeViolation
+        {
+            FilePath = "c:/repo/src/HugeService.cs",
+            Identifier = "HugeService",
+            Kind = LinesOfCodeKind.Class,
+            LinesOfCode = 1600,
+            Threshold = 1500,
+            StartLine = 1,
+            EndLine = 1800,
+            Category = FileCategory.Production
+        };
+
+        var result = new AnalysisResult
+        {
+            AnalyzedFilesCount = 1,
+            TotalMethodsScanned = 10,
+            CloneGroups = [],
+            VerboseComments = [],
+            SummarizedComments = new Dictionary<string, string>(),
+            LinesOfCodeViolations = [violation]
+        };
+
+        using var writer = new StringWriter();
+        await _formatter.FormatAsync(result, _settings, writer, "c:/repo");
+
+        var json = writer.ToString();
+        var report = JsonSerializer.Deserialize<CodeCondenserJsonReport>(json, new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase });
+
+        report.Should().NotBeNull();
+        report!.Summary.LinesOfCodeViolationsCount.Should().Be(1);
+        report.LinesOfCodeViolations.Should().HaveCount(1);
+
+        var jsonViolation = report.LinesOfCodeViolations[0];
+        jsonViolation.FilePath.Should().Be("src/HugeService.cs");
+        jsonViolation.Identifier.Should().Be("HugeService");
+        jsonViolation.Kind.Should().Be("Class");
+        jsonViolation.LinesOfCode.Should().Be(1600);
+        jsonViolation.Threshold.Should().Be(1500);
+        jsonViolation.StartLine.Should().Be(1);
+        jsonViolation.EndLine.Should().Be(1800);
+    }
 }

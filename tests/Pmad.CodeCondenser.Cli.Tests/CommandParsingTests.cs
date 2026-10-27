@@ -299,4 +299,34 @@ public class CommandParsingTests
         versionOpt.Should().NotBeNull();
         versionOpt!.Aliases.Should().Contain("-v");
     }
+
+    [Fact]
+    public void Parse_LinesOfCodeFlags_BindsCorrectly()
+    {
+        var (root, globals) = CreateRoot();
+        var parseResult = root.Parse(["analyze", "--no-loc", "--threshold-method-lines", "200", "--threshold-class-lines", "2000", "--loc-tolerance", "5"]);
+
+        parseResult.Errors.Should().BeEmpty();
+        var options = globals.BindCliOptions(parseResult, CliOptions.CommandAnalyze, ".");
+
+        options.EnableLinesOfCodeDetection.Should().BeFalse();
+        options.MethodLinesOfCodeThreshold.Should().Be(200);
+        options.ClassLinesOfCodeThreshold.Should().Be(2000);
+        options.LinesOfCodeTolerance.Should().Be(5);
+    }
+
+    [Fact]
+    public void Parse_LinesOfCodeAliases_BindsCorrectly()
+    {
+        var (root, globals) = CreateRoot();
+        var parseResult = root.Parse(["analyze", "--enable-loc", "-tml", "120", "-tcl", "1200", "-lt", "3"]);
+
+        parseResult.Errors.Should().BeEmpty();
+        var options = globals.BindCliOptions(parseResult, CliOptions.CommandAnalyze, ".");
+
+        options.EnableLinesOfCodeDetection.Should().BeTrue();
+        options.MethodLinesOfCodeThreshold.Should().Be(120);
+        options.ClassLinesOfCodeThreshold.Should().Be(1200);
+        options.LinesOfCodeTolerance.Should().Be(3);
+    }
 }

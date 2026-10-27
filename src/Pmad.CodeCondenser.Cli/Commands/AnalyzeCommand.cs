@@ -204,7 +204,16 @@ public sealed class AnalyzeCommand : ICommand
             bool typeViolation = settings.TypeTolerance.HasValue && gatedTypeIssues.Count > settings.TypeTolerance.Value;
             bool hasTypeIssue = settings.TypeTolerance.HasValue ? typeViolation : gatedTypeIssues.Count > 0;
 
-            if (duplicationViolation || hasCommentIssue || hasRepeatedStringIssue || hasTypeIssue)
+            var gatedLocViolations = settings.EnableLinesOfCodeDetection
+                ? result.LinesOfCodeViolations
+                    .Where(v => v.Category != FileCategory.Test || settings.EnforceTestDuplication)
+                    .ToList()
+                : [];
+
+            bool locViolation = settings.LinesOfCodeTolerance.HasValue && gatedLocViolations.Count > settings.LinesOfCodeTolerance.Value;
+            bool hasLocIssue = settings.LinesOfCodeTolerance.HasValue ? locViolation : gatedLocViolations.Count > 0;
+
+            if (duplicationViolation || hasCommentIssue || hasRepeatedStringIssue || hasTypeIssue || hasLocIssue)
             {
                 formatter.PrintAiActionableIncrementalFeedback(
                     statusWriter,
@@ -220,7 +229,10 @@ public sealed class AnalyzeCommand : ICommand
                     hasRepeatedStringViolation: repeatedStringViolation,
                     typeIssues: gatedTypeIssues,
                     typeTolerance: settings.TypeTolerance,
-                    hasTypeViolation: typeViolation);
+                    hasTypeViolation: typeViolation,
+                    linesOfCodeViolations: gatedLocViolations,
+                    linesOfCodeTolerance: settings.LinesOfCodeTolerance,
+                    hasLinesOfCodeViolation: locViolation);
 
                 if (duplicationViolation)
                 {
@@ -240,6 +252,11 @@ public sealed class AnalyzeCommand : ICommand
                 if (typeViolation)
                 {
                     return settings.TypeExitCode;
+                }
+
+                if (locViolation)
+                {
+                    return settings.LinesOfCodeExitCode;
                 }
             }
         }

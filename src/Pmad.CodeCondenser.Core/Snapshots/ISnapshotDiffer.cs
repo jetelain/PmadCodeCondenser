@@ -51,6 +51,14 @@ public interface ISnapshotDiffer
         AnalysisSnapshot? baseline);
 
     /// <summary>
+    /// Filters lines of code violations for incremental reporting to retain only those that are new.
+    /// </summary>
+    IReadOnlyList<LinesOfCodeViolation> FilterNewLinesOfCodeViolations(
+        IEnumerable<LinesOfCodeViolation> violations,
+        AnalysisSnapshot? baseline,
+        FileDiffResult? fileDiff = null);
+
+    /// <summary>
     /// Creates or updates an AnalysisSnapshot by preserving unchanged files/methods and updating modified ones.
     /// </summary>
     AnalysisSnapshot CreateOrUpdateSnapshot(
@@ -59,5 +67,6 @@ public interface ISnapshotDiffer
         IEnumerable<MethodCloneInfo> analyzedMethods,
         IReadOnlyDictionary<string, string> commentCache,
         IEnumerable<string>? typeViolationFiles = null,
+        IEnumerable<string>? linesOfCodeViolationKeys = null,
         bool isIncremental = false);
 }

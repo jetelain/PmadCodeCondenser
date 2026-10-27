@@ -332,6 +332,126 @@ public sealed class CodeCondenserSettings
     /// </summary>
     public int TypeExitCode { get; set; } = 2;
 
+    /// <summary>
+    /// When true, enables detection of methods and classes exceeding configured lines of code (LOC) thresholds.
+    /// Default is true.
+    /// </summary>
+    public bool EnableLinesOfCodeDetection { get; set; } = true;
+
+    /// <summary>
+    /// Alias for <see cref="EnableLinesOfCodeDetection"/>.
+    /// </summary>
+    public bool? LinesOfCodeDetection
+    {
+        get => EnableLinesOfCodeDetection;
+        set { if (value.HasValue) EnableLinesOfCodeDetection = value.Value; }
+    }
+
+    /// <summary>
+    /// Alias for <see cref="EnableLinesOfCodeDetection"/>.
+    /// </summary>
+    public bool? EnableLocDetection
+    {
+        get => EnableLinesOfCodeDetection;
+        set { if (value.HasValue) EnableLinesOfCodeDetection = value.Value; }
+    }
+
+    /// <summary>
+    /// Alias for <see cref="EnableLinesOfCodeDetection"/>.
+    /// </summary>
+    public bool? LocDetection
+    {
+        get => EnableLinesOfCodeDetection;
+        set { if (value.HasValue) EnableLinesOfCodeDetection = value.Value; }
+    }
+
+    /// <summary>
+    /// Maximum lines of code (comments and blank lines excluded) permitted in a method before being flagged.
+    /// Default is 150.
+    /// </summary>
+    public int MethodLinesOfCodeThreshold { get; set; } = 150;
+
+    /// <summary>
+    /// Alias for <see cref="MethodLinesOfCodeThreshold"/>.
+    /// </summary>
+    public int? ThresholdMethodLines
+    {
+        get => MethodLinesOfCodeThreshold;
+        set { if (value.HasValue) MethodLinesOfCodeThreshold = value.Value; }
+    }
+
+    /// <summary>
+    /// Alias for <see cref="MethodLinesOfCodeThreshold"/>.
+    /// </summary>
+    public int? MethodLocThreshold
+    {
+        get => MethodLinesOfCodeThreshold;
+        set { if (value.HasValue) MethodLinesOfCodeThreshold = value.Value; }
+    }
+
+    /// <summary>
+    /// Maximum lines of code (comments and blank lines excluded) permitted in a class before being flagged.
+    /// Default is 1500.
+    /// </summary>
+    public int ClassLinesOfCodeThreshold { get; set; } = 1500;
+
+    /// <summary>
+    /// Alias for <see cref="ClassLinesOfCodeThreshold"/>.
+    /// </summary>
+    public int? ThresholdClassLines
+    {
+        get => ClassLinesOfCodeThreshold;
+        set { if (value.HasValue) ClassLinesOfCodeThreshold = value.Value; }
+    }
+
+    /// <summary>
+    /// Alias for <see cref="ClassLinesOfCodeThreshold"/>.
+    /// </summary>
+    public int? ClassLocThreshold
+    {
+        get => ClassLinesOfCodeThreshold;
+        set { if (value.HasValue) ClassLinesOfCodeThreshold = value.Value; }
+    }
+
+    /// <summary>
+    /// Maximum number of new lines of code violations tolerated in incremental mode before failing CI.
+    /// Default is null (does not fail CI on lines of code violations unless configured).
+    /// </summary>
+    public int? LinesOfCodeTolerance { get; set; }
+
+    /// <summary>
+    /// Alias for <see cref="LinesOfCodeTolerance"/>.
+    /// </summary>
+    public int? LocTolerance
+    {
+        get => LinesOfCodeTolerance;
+        set => LinesOfCodeTolerance = value;
+    }
+
+    /// <summary>
+    /// Alias for <see cref="LinesOfCodeTolerance"/>.
+    /// </summary>
+    public int? LinesTolerance
+    {
+        get => LinesOfCodeTolerance;
+        set => LinesOfCodeTolerance = value;
+    }
+
+    /// <summary>
+    /// Exit code returned when additional lines of code violations exceed <see cref="LinesOfCodeTolerance"/> in incremental mode.
+    /// Default is 2.
+    /// </summary>
+    public int LinesOfCodeExitCode { get; set; } = 2;
+
+    /// <summary>
+    /// Alias for <see cref="LinesOfCodeExitCode"/>.
+    /// </summary>
+    public int? LocExitCode
+    {
+        get => LinesOfCodeExitCode;
+        set { if (value.HasValue) LinesOfCodeExitCode = value.Value; }
+    }
+
 
     /// <summary>
     /// When true, includes XML documentation comments (///) in addition to single-line (//) and multi-line (/* */) comments.
@@ -707,7 +827,12 @@ public sealed class CodeCondenserSettings
             EnableTypeRenaming = EnableTypeRenaming,
             TypeLineTolerance = TypeLineTolerance,
             TypeTolerance = TypeTolerance,
-            TypeExitCode = TypeExitCode
+            TypeExitCode = TypeExitCode,
+            EnableLinesOfCodeDetection = EnableLinesOfCodeDetection,
+            MethodLinesOfCodeThreshold = MethodLinesOfCodeThreshold,
+            ClassLinesOfCodeThreshold = ClassLinesOfCodeThreshold,
+            LinesOfCodeTolerance = LinesOfCodeTolerance,
+            LinesOfCodeExitCode = LinesOfCodeExitCode
         };
     }
 }

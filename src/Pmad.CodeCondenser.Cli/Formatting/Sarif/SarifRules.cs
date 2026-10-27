@@ -12,6 +12,8 @@ public static class SarifRules
     public const string SubMethodCodeDuplicationRuleId = "CC005";
     public const string RepeatedInlineStringRuleId = "CC006";
     public const string SingleTypePerFileRuleId = "CC007";
+    public const string MethodLinesOfCodeRuleId = "CC008";
+    public const string ClassLinesOfCodeRuleId = "CC009";
 
     public static IReadOnlyList<SarifReportingDescriptor> AllRules { get; } =
     [
@@ -125,6 +127,42 @@ public static class SarifRules
             {
                 Text = "Split multiple types into dedicated files or rename the file to match the primary type.",
                 Markdown = "Extract auxiliary types into separate `.cs` files matching their names, or rename the file if its primary type does not match.\n\nTo suppress, add `// codecondenser:ignore-type-split` or `[SuppressMessage(\"CodeCondenser\", \"SingleTypePerFile\")]`."
+            },
+            DefaultConfiguration = new SarifReportingConfiguration
+            {
+                Level = "warning"
+            }
+        },
+        new SarifReportingDescriptor
+        {
+            Id = MethodLinesOfCodeRuleId,
+            Name = "MethodTooLong",
+            ShortDescription = new SarifMultiformatMessageString
+            {
+                Text = "Method exceeds configured lines of code threshold."
+            },
+            Help = new SarifMultiformatMessageString
+            {
+                Text = "Refactor method into smaller helper methods using Extract Method pattern.",
+                Markdown = "Refactor method into smaller helper methods using the Extract Method pattern.\n\nTo suppress, add `// codecondenser:ignore-loc` or `[SuppressMessage(\"CodeCondenser\", \"MethodLength\")]`."
+            },
+            DefaultConfiguration = new SarifReportingConfiguration
+            {
+                Level = "warning"
+            }
+        },
+        new SarifReportingDescriptor
+        {
+            Id = ClassLinesOfCodeRuleId,
+            Name = "ClassTooLong",
+            ShortDescription = new SarifMultiformatMessageString
+            {
+                Text = "Class exceeds configured lines of code threshold."
+            },
+            Help = new SarifMultiformatMessageString
+            {
+                Text = "Refactor class into smaller, single-responsibility types or partial class files.",
+                Markdown = "Refactor class into smaller, single-responsibility types or partial class files.\n\nTo suppress, add `// codecondenser:ignore-loc` or `[SuppressMessage(\"CodeCondenser\", \"ClassLength\")]`."
             },
             DefaultConfiguration = new SarifReportingConfiguration
             {

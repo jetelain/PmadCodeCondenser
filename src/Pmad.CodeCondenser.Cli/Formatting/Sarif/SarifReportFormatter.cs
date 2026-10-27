@@ -425,6 +425,44 @@ public sealed class SarifReportFormatter : IReportFormatter
             });
         }
 
+        // 6. Lines of Code Limits (CC008, CC009)
+        foreach (var violation in result.LinesOfCodeViolations)
+        {
+            var relPath = ReportPathHelper.NormalizeRelativePath(violation.FilePath, baseDirectory);
+            var isMethod = violation.Kind == LinesOfCodeKind.Method;
+            var ruleId = isMethod ? SarifRules.MethodLinesOfCodeRuleId : SarifRules.ClassLinesOfCodeRuleId;
+            var entityName = isMethod ? "Method" : "Class";
+            var message = $"{entityName} '{violation.Identifier}' has {violation.LinesOfCode} lines of code, exceeding configured threshold of {violation.Threshold}.";
+
+            run.Results.Add(new SarifResult
+            {
+                RuleId = ruleId,
+                Level = violation.Category == FileCategory.Test ? "note" : "warning",
+                Message = new SarifMessage
+                {
+                    Text = message
+                },
+                Locations =
+                [
+                    new SarifLocation
+                    {
+                        PhysicalLocation = new SarifPhysicalLocation
+                        {
+                            ArtifactLocation = new SarifArtifactLocation
+                            {
+                                Uri = relPath
+                            },
+                            Region = new SarifRegion
+                            {
+                                StartLine = violation.StartLine,
+                                EndLine = violation.EndLine
+                            }
+                        }
+                    }
+                ]
+            });
+        }
+
         return new SarifLog
         {
             Runs = [run]

@@ -222,6 +222,26 @@ public sealed class CommandServices
             settings.TypeTolerance = options.TypeTolerance.Value;
         }
 
+        if (options.EnableLinesOfCodeDetection.HasValue)
+        {
+            settings.EnableLinesOfCodeDetection = options.EnableLinesOfCodeDetection.Value;
+        }
+
+        if (options.MethodLinesOfCodeThreshold.HasValue)
+        {
+            settings.MethodLinesOfCodeThreshold = options.MethodLinesOfCodeThreshold.Value;
+        }
+
+        if (options.ClassLinesOfCodeThreshold.HasValue)
+        {
+            settings.ClassLinesOfCodeThreshold = options.ClassLinesOfCodeThreshold.Value;
+        }
+
+        if (options.LinesOfCodeTolerance.HasValue)
+        {
+            settings.LinesOfCodeTolerance = options.LinesOfCodeTolerance.Value;
+        }
+
         if (!string.IsNullOrWhiteSpace(options.SummarizedCommentsPath))
         {
             settings.SummarizedCommentsFilePath = options.SummarizedCommentsPath;

@@ -195,6 +195,26 @@ public sealed class CliOptions
     public int? TypeTolerance { get; set; }
 
     /// <summary>
+    /// When specified, explicitly enables or disables lines of code detection.
+    /// </summary>
+    public bool? EnableLinesOfCodeDetection { get; set; }
+
+    /// <summary>
+    /// Override maximum lines of code threshold for methods (default: 150).
+    /// </summary>
+    public int? MethodLinesOfCodeThreshold { get; set; }
+
+    /// <summary>
+    /// Override maximum lines of code threshold for classes and records (default: 1500).
+    /// </summary>
+    public int? ClassLinesOfCodeThreshold { get; set; }
+
+    /// <summary>
+    /// Maximum number of new lines of code violations tolerated in incremental mode before returning an error exit code.
+    /// </summary>
+    public int? LinesOfCodeTolerance { get; set; }
+
+    /// <summary>
     /// Path to JSON file stored in git recording summarized comments.
     /// </summary>
     public string? SummarizedCommentsPath { get; set; }

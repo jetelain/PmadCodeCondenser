@@ -45,6 +45,10 @@ public sealed class ConsoleReportFormatter : IReportFormatter
         {
             _consoleFormatter.PrintTypeFileIssues(output, result.TypeFileIssues, baseDirectory, settings.TypeLineTolerance);
         }
+        if (result.LinesOfCodeViolations.Count > 0)
+        {
+            _consoleFormatter.PrintLinesOfCodeViolations(output, result.LinesOfCodeViolations, baseDirectory);
+        }
         _consoleFormatter.PrintVerboseComments(output, result.VerboseComments, result.SummarizedComments, baseDirectory, estimator);
 
         var mode = _isIncremental ? "Dry-Run (Incremental)" : "Dry-Run";
@@ -79,7 +83,8 @@ public sealed class ConsoleReportFormatter : IReportFormatter
             repeatedStringsCount: result.RepeatedStringGroups.Count,
             repeatedStringGainChars: repeatedStringGainChars,
             repeatedStringGainTokens: repeatedStringGainTokens,
-            typeIssuesCount: result.TypeFileIssues.Count(i => i.HasViolation));
+            typeIssuesCount: result.TypeFileIssues.Count(i => i.HasViolation),
+            linesOfCodeViolationsCount: result.LinesOfCodeViolations.Count);
 
         return Task.CompletedTask;
     }
