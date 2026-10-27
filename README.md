@@ -11,8 +11,9 @@ A static analysis developer utility and .NET tool built on **.NET 10** and Rosly
 2. **Compact Repeated Inline Strings**: Detect string literals >= 100 characters used more than once, with estimated character/token savings, minimal constant declaration snippets, and typical usage patterns. Also detects when inline strings match an existing `const` or `static readonly` string (with a lower threshold, default >= 20 characters), recommending referencing the existing constant instead.
 3. **Condense Verbose Comments**: Scan overly verbose regular comments (`//`, `/* */`) and XML documentation comments (`/// <summary>`, `<remarks>`, `<param>`) and condense them into clear, concise summaries using local or cloud LLMs via `Microsoft.Extensions.AI` and Ollama.
 4. **Enforce Single Type Per File (Automatic Splitting & Renaming)**: Keep each class, interface, struct, enum, record, or delegate in its own `.cs` file matching its type name (allowing small inline types like 1-line delegates via configurable line tolerance) to optimize AI agent context window loading and codebase modularity.
-5. **WYSIWYG Guarantee & Incremental Snapshots**: Cache generated comment summaries and AST hashes so that dry-run reviews match applied code without LLM drift, while incremental runs only analyze changed code.
-6. **CI/CD & AI Agent Guardrails**: Enforce strict duplication, repeated string, and single-type-per-file tolerance in CI pipelines and AI coding agent workflows (exit code `2` on new violations).
+5. **Detect Lines of Code Limits**: Automatically flag methods (> 150 LOC) and classes/records (> 1500 LOC) exceeding maintainability thresholds, excluding comments and blank lines (report-only, no auto-fix).
+6. **WYSIWYG Guarantee & Incremental Snapshots**: Cache generated comment summaries and AST hashes so that dry-run reviews match applied code without LLM drift, while incremental runs only analyze changed code.
+7. **CI/CD & AI Agent Guardrails**: Enforce strict duplication, repeated string, single-type-per-file, and lines-of-code tolerance in CI pipelines and AI coding agent workflows (exit code `2` on new violations).
 
 ---
 
@@ -281,6 +282,11 @@ jobs:
 | `--enable-type-split` | | Explicitly enable single type per file splitting | `true` |
 | `--no-type-rename` | | Disable renaming files to match primary type name | `false` |
 | `--enable-type-rename` | | Explicitly enable renaming files to match primary type name | `true` |
+| `--no-loc` | `--disable-loc` | Disable lines of code limits detection | `false` |
+| `--enable-loc` | | Explicitly enable lines of code limits detection | `true` |
+| `-tml, --threshold-method-lines <n>` | `-tml` | Maximum lines of code threshold for methods | `150` |
+| `-tcl, --threshold-class-lines <n>` | `-tcl` | Maximum lines of code threshold for classes and records | `1500` |
+| `-lt, --loc-tolerance <n>` | `-lt` | Maximum new lines of code violations tolerated in incremental mode | `null` |
 | `--summary <mode>` | | Comment summary mode: `disabled`, `summarize`, or `report` | Auto (`summarize` if LLM configured, `report` otherwise) |
 | `--report-only` | | Report-only mode for comments without calling an LLM (alias for `--summary report`) | `false` |
 | `--include <pattern>` | | Add glob pattern of files/directories to include (multi-value) | `[]` *(all .cs files)* |
@@ -349,6 +355,8 @@ Generates standard OASIS SARIF 2.1.0 compatible with GitHub Code Scanning, GitLa
   - `CC005` (`warning`): `SubMethodCodeDuplication`
   - `CC006` (`warning`): `RepeatedInlineString`
   - `CC007` (`warning`): `SingleTypePerFile`
+  - `CC008` (`warning`): `MethodTooLong`
+  - `CC009` (`warning`): `ClassTooLong`
 
 ```bash
 # Export SARIF to file
@@ -405,6 +413,10 @@ Even summarized comments might exceed the character threshold (e.g. 110 characte
 - **Ignore Single Type Per File Splitting**:
   - Comment on secondary type: `// codecondenser:ignore-type-split` or `// codecondenser:ignore`
   - Attribute on secondary type: `[SuppressMessage("CodeCondenser", "SingleTypePerFile")]` or `[SingleTypePerFileIgnore]`
+- **Ignore Lines of Code Limits on a Method or Class**:
+  - Comment above declaration: `// codecondenser:ignore-loc` or `// noloc`
+  - Attribute on method: `[SuppressMessage("CodeCondenser", "MethodLength")]` or `[LinesOfCodeIgnore]`
+  - Attribute on class: `[SuppressMessage("CodeCondenser", "ClassLength")]` or `[LinesOfCodeIgnore]`
 - **Standalone Ignore File (`.codecondenserignore`)**:
   Add glob patterns (like `.gitignore`) to a `.codecondenserignore` file in the repository root to exclude directories or files without modifying `codecondenser.json`.
 
@@ -452,6 +464,11 @@ Even summarized comments might exceed the character threshold (e.g. 110 characte
   "typeLineTolerance": 1,
   "typeTolerance": null,
   "typeExitCode": 2,
+  "enableLinesOfCodeDetection": true,
+  "methodLinesOfCodeThreshold": 150,
+  "classLinesOfCodeThreshold": 1500,
+  "linesOfCodeTolerance": null,
+  "linesOfCodeExitCode": 2,
   "duplicationTolerance": 0,
   "duplicationExitCode": 2,
   "commentTolerance": null,

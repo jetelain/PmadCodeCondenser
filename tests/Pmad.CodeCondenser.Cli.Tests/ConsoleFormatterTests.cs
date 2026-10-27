@@ -886,4 +886,85 @@ public class ConsoleFormatterTests
         output.Should().Contain("Primary Type: PrimaryService (renames file to PrimaryService.cs)");
         output.Should().Contain("• AuxService (class, 20 LOC) → AuxService.cs");
     }
+
+    [Fact]
+    public void PrintLinesOfCodeViolations_OutputsFormattedViolations()
+    {
+        var formatter = new ConsoleFormatter(enableColor: false);
+        using var writer = new StringWriter();
+
+        var violation1 = new LinesOfCodeViolation
+        {
+            FilePath = "src/Service.cs",
+            Identifier = "Service.LongMethod()",
+            Kind = LinesOfCodeKind.Method,
+            LinesOfCode = 180,
+            Threshold = 150,
+            StartLine = 10,
+            EndLine = 200,
+            Category = FileCategory.Production
+        };
+        var violation2 = new LinesOfCodeViolation
+        {
+            FilePath = "src/LargeClass.cs",
+            Identifier = "LargeClass",
+            Kind = LinesOfCodeKind.Class,
+            LinesOfCode = 1600,
+            Threshold = 1500,
+            StartLine = 1,
+            EndLine = 1750,
+            Category = FileCategory.Production
+        };
+
+        formatter.PrintLinesOfCodeViolations(writer, [violation1, violation2], ".");
+
+        var output = writer.ToString();
+        output.Should().Contain("Found 2 Declaration(s) Exceeding Lines of Code Thresholds:");
+        output.Should().Contain("Classes Exceeding Threshold (1):");
+        output.Should().Contain("Class #1 [1600 LOC > threshold 1500]:");
+        output.Should().Contain("src/LargeClass.cs:1-1750");
+        output.Should().Contain("LargeClass");
+        output.Should().Contain("Methods Exceeding Threshold (1):");
+        output.Should().Contain("Method #1 [180 LOC > threshold 150]:");
+        output.Should().Contain("src/Service.cs:10-200");
+        output.Should().Contain("Service.LongMethod()");
+    }
+
+    [Fact]
+    public void PrintAiActionableIncrementalFeedback_WithLinesOfCodeViolation_OutputsDistinctActionableInstructions()
+    {
+        var formatter = new ConsoleFormatter(enableColor: false);
+        using var writer = new StringWriter();
+
+        var violation = new LinesOfCodeViolation
+        {
+            FilePath = "src/Service.cs",
+            Identifier = "Service.BigMethod()",
+            Kind = LinesOfCodeKind.Method,
+            LinesOfCode = 175,
+            Threshold = 150,
+            StartLine = 10,
+            EndLine = 195,
+            Category = FileCategory.Production
+        };
+
+        formatter.PrintAiActionableIncrementalFeedback(
+            writer,
+            cloneGroups: [],
+            subMethodGroups: [],
+            verboseComments: [],
+            baseDirectory: ".",
+            duplicationTolerance: 0,
+            hasDuplicationViolation: false,
+            linesOfCodeViolations: [violation],
+            linesOfCodeTolerance: 0,
+            hasLinesOfCodeViolation: true);
+
+        var output = writer.ToString();
+        output.Should().Contain("[AI AGENT ACTION REQUIRED] Lines of Code Limits Policy Violation (Exit Code: 2)");
+        output.Should().Contain("Violation #1 [Method, 175 LOC > threshold 150]:");
+        output.Should().Contain("src/Service.cs:10-195 in Service.BigMethod()");
+        output.Should().Contain("Methods: Refactor large methods into smaller helpers using Extract Method pattern.");
+        output.Should().Contain("[SuppressMessage(\"CodeCondenser\", \"MethodLength\")]");
+    }
 }

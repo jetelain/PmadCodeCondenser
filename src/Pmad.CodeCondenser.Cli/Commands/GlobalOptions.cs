@@ -205,6 +205,37 @@ public sealed class GlobalOptions
         Recursive = true
     };
 
+    // Lines of code limits thresholds
+    public Option<bool> NoLocOption { get; } = new("--no-loc", "--disable-loc", "--no-lines-of-code")
+    {
+        Description = "Disable lines of code limits detection",
+        Recursive = true
+    };
+
+    public Option<bool> EnableLocOption { get; } = new("--enable-loc", "--enable-lines-of-code")
+    {
+        Description = "Explicitly enable lines of code limits detection",
+        Recursive = true
+    };
+
+    public Option<int?> ThresholdMethodLinesOption { get; } = new("--threshold-method-lines", "-tml", "--method-lines-threshold")
+    {
+        Description = "Maximum lines of code threshold for methods (default: 150)",
+        Recursive = true
+    };
+
+    public Option<int?> ThresholdClassLinesOption { get; } = new("--threshold-class-lines", "-tcl", "--class-lines-threshold")
+    {
+        Description = "Maximum lines of code threshold for classes and records (default: 1500)",
+        Recursive = true
+    };
+
+    public Option<int?> LocToleranceOption { get; } = new("--loc-tolerance", "-lt", "--lines-of-code-tolerance")
+    {
+        Description = "Maximum new lines of code violations tolerated in incremental mode",
+        Recursive = true
+    };
+
     // Comments & XML doc thresholds
     public Option<string?> SummaryOption { get; } = new("--summary", "--summary-mode")
     {
@@ -331,6 +362,12 @@ public sealed class GlobalOptions
         root.Add(TypeLineToleranceOption);
         root.Add(TypeToleranceOption);
 
+        root.Add(NoLocOption);
+        root.Add(EnableLocOption);
+        root.Add(ThresholdMethodLinesOption);
+        root.Add(ThresholdClassLinesOption);
+        root.Add(LocToleranceOption);
+
         root.Add(SummaryOption);
         root.Add(ReportOnlyOption);
         root.Add(NoCommentsOption);
@@ -383,6 +420,10 @@ public sealed class GlobalOptions
 
             TypeLineTolerance = pr.GetValue(TypeLineToleranceOption),
             TypeTolerance = pr.GetValue(TypeToleranceOption),
+
+            MethodLinesOfCodeThreshold = pr.GetValue(ThresholdMethodLinesOption),
+            ClassLinesOfCodeThreshold = pr.GetValue(ThresholdClassLinesOption),
+            LinesOfCodeTolerance = pr.GetValue(LocToleranceOption),
 
             ThresholdComments = pr.GetValue(ThresholdCommentsOption),
             ThresholdXmlSummary = pr.GetValue(ThresholdXmlSummaryOption),
@@ -446,6 +487,15 @@ public sealed class GlobalOptions
         if (pr.GetResult(NoTypeRenameOption) is { Implicit: false } && pr.GetValue(NoTypeRenameOption))
         {
             options.EnableTypeRenaming = false;
+        }
+
+        if (pr.GetResult(NoLocOption) is { Implicit: false } && pr.GetValue(NoLocOption))
+        {
+            options.EnableLinesOfCodeDetection = false;
+        }
+        else if (pr.GetResult(EnableLocOption) is { Implicit: false } && pr.GetValue(EnableLocOption))
+        {
+            options.EnableLinesOfCodeDetection = true;
         }
 
         var summary = pr.GetValue(SummaryOption);

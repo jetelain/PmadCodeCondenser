@@ -40,6 +40,11 @@ codecondenser [command] [path] [options]
 | `--enable-type-split` | | `switch` | `true` | Explicitly enable single type per file splitting |
 | `--no-type-rename` | | `switch` | `false` | Disable renaming files to match primary type name |
 | `--enable-type-rename` | | `switch` | `true` | Explicitly enable renaming files to match primary type name |
+| `--no-loc` | | `switch` | `false` | Disable lines of code limits detection |
+| `--enable-loc` | | `switch` | `true` | Explicitly enable lines of code limits detection |
+| `--threshold-method-lines <n>` | `-tml` | `int` | `150` | Maximum lines of code threshold for methods |
+| `--threshold-class-lines <n>` | `-tcl` | `int` | `1500` | Maximum lines of code threshold for classes and records |
+| `--loc-tolerance <n>` | `-lt` | `int` | `null` | Max new lines of code violations tolerated in incremental mode |
 | `--no-comments` | | `switch` | `false` | Disable comment extraction and LLM summarization |
 | `--enable-comments` | | `switch` | `true` | Explicitly enable comment extraction and summarization |
 | `--no-duplication` | | `switch` | `false` | Disable structural code clone detection |

@@ -70,6 +70,7 @@ public sealed class JsonReportFormatter : IReportFormatter
             SubMethodClustersCount = result.SubMethodCloneGroups.Count,
             RepeatedStringsCount = result.RepeatedStringGroups.Count,
             TypeFileIssuesCount = result.TypeFileIssues.Count(i => i.HasViolation),
+            LinesOfCodeViolationsCount = result.LinesOfCodeViolations.Count,
             VerboseCommentsCount = result.VerboseComments.Count,
             SummaryMode = settings.GetEffectiveSummaryMode().ToString(),
             TotalCommentGainCharacters = commentGainResult.SummarizedCount > 0 ? commentGainResult.GainCharacters : null,
@@ -234,6 +235,18 @@ public sealed class JsonReportFormatter : IReportFormatter
             }).ToList()
         }).ToList();
 
+        var locViolations = result.LinesOfCodeViolations.Select(v => new JsonLinesOfCodeViolation
+        {
+            FilePath = ReportPathHelper.NormalizeRelativePath(v.FilePath, baseDirectory),
+            Identifier = v.Identifier,
+            Kind = v.Kind.ToString(),
+            LinesOfCode = v.LinesOfCode,
+            Threshold = v.Threshold,
+            StartLine = v.StartLine,
+            EndLine = v.EndLine,
+            Category = v.Category.ToString()
+        }).ToList();
+
         return new CodeCondenserJsonReport
         {
             Summary = summary,
@@ -241,7 +254,8 @@ public sealed class JsonReportFormatter : IReportFormatter
             SubMethodClusters = subMethodClusters,
             RepeatedStrings = repeatedStrings,
             VerboseComments = verboseComments,
-            TypeFileIssues = typeFileIssues
+            TypeFileIssues = typeFileIssues,
+            LinesOfCodeViolations = locViolations
         };
     }
 }

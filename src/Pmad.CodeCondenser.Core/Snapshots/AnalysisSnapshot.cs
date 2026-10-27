@@ -40,4 +40,9 @@ public sealed class AnalysisSnapshot
     /// Set of relative file paths that have existing type file violations (split or rename required).
     /// </summary>
     public HashSet<string> TypeViolationFiles { get; set; } = new(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// Set of unique violation keys ("FilePath::Kind::Identifier") that have existing lines of code violations.
+    /// </summary>
+    public HashSet<string> LinesOfCodeViolationKeys { get; set; } = new(StringComparer.OrdinalIgnoreCase);
 }

@@ -190,12 +190,29 @@ public sealed class SnapshotDiffer : ISnapshotDiffer
     }
 
     /// <inheritdoc />
+    public IReadOnlyList<LinesOfCodeViolation> FilterNewLinesOfCodeViolations(
+        IEnumerable<LinesOfCodeViolation> violations,
+        AnalysisSnapshot? baseline,
+        FileDiffResult? fileDiff = null)
+    {
+        ArgumentNullException.ThrowIfNull(violations);
+
+        if (baseline == null)
+        {
+            return violations.ToList();
+        }
+
+        return violations.Where(v => !baseline.LinesOfCodeViolationKeys.Contains(v.Key)).ToList();
+    }
+
+    /// <inheritdoc />
     public AnalysisSnapshot CreateOrUpdateSnapshot(
         AnalysisSnapshot? baseline,
         IReadOnlyDictionary<string, string> currentFileHashes,
         IEnumerable<MethodCloneInfo> analyzedMethods,
         IReadOnlyDictionary<string, string> commentCache,
         IEnumerable<string>? typeViolationFiles = null,
+        IEnumerable<string>? linesOfCodeViolationKeys = null,
         bool isIncremental = false)
     {
         ArgumentNullException.ThrowIfNull(currentFileHashes);
@@ -245,10 +262,44 @@ public sealed class SnapshotDiffer : ISnapshotDiffer
                     }
                 }
             }
+
+            if (linesOfCodeViolationKeys != null)
+            {
+                foreach (var k in linesOfCodeViolationKeys)
+                {
+                    snapshot.LinesOfCodeViolationKeys.Add(k);
+                }
+
+                // In incremental update with a baseline, preserve violations for unchanged files that were not re-analyzed
+                if (baseline != null)
+                {
+                    foreach (var k in baseline.LinesOfCodeViolationKeys)
+                    {
+                        var filePath = k.Split("::")[0];
+                        if (baseline.Files.TryGetValue(filePath, out var oldFileInfo) &&
+                            currentFileHashes.TryGetValue(filePath, out var currentHash) &&
+                            string.Equals(oldFileInfo.FileHash, currentHash, StringComparison.OrdinalIgnoreCase))
+                        {
+                            snapshot.LinesOfCodeViolationKeys.Add(k);
+                        }
+                    }
+                }
+            }
+            else if (baseline != null)
+            {
+                foreach (var k in baseline.LinesOfCodeViolationKeys)
+                {
+                    var filePath = k.Split("::")[0];
+                    if (currentFileHashes.ContainsKey(filePath))
+                    {
+                        snapshot.LinesOfCodeViolationKeys.Add(k);
+                    }
+                }
+            }
         }
         else
         {
-            // Full scan / baseline update: typeViolationFiles is authoritative
+            // Full scan / baseline update: typeViolationFiles and linesOfCodeViolationKeys are authoritative
             if (typeViolationFiles != null)
             {
                 foreach (var f in typeViolationFiles)
@@ -257,6 +308,14 @@ public sealed class SnapshotDiffer : ISnapshotDiffer
                     {
                         snapshot.TypeViolationFiles.Add(f);
                     }
+                }
+            }
+
+            if (linesOfCodeViolationKeys != null)
+            {
+                foreach (var k in linesOfCodeViolationKeys)
+                {
+                    snapshot.LinesOfCodeViolationKeys.Add(k);
                 }
             }
         }

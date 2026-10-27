@@ -1031,6 +1031,69 @@ public class CliIntegrationTests : IDisposable
         capturedSettings.MaxParallelLlmRequests.Should().Be(8);
     }
 
+    [Fact]
+    public async Task Analyze_LinesOfCodeViolation_Incremental_FailsWhenOverTolerance()
+    {
+        var srcDir = Path.Combine(_testDirectory, "src");
+        Directory.CreateDirectory(srcDir);
+
+        var statements = string.Join("\n", Enumerable.Range(1, 20).Select(i => $"        int x{i} = {i};"));
+        var code = $$"""
+            public class BigService
+            {
+                public void LongMethod()
+                {
+            {{statements}}
+                }
+            }
+            """;
+        await File.WriteAllTextAsync(Path.Combine(srcDir, "BigService.cs"), code);
+
+        using var output = new StringWriter();
+        using var error = new StringWriter();
+
+        // Run analyze with incremental mode and loc-tolerance=0, method threshold=10
+        var exitCode = await Program.RunAsync(
+            ["analyze", _testDirectory, "--incremental", "-tml", "10", "-lt", "0", "--no-color", "--no-comments", "--no-duplication"],
+            output,
+            error);
+
+        exitCode.Should().Be(2);
+        output.ToString().Should().Contain("Lines of Code Limits Policy Violation (Exit Code: 2)");
+        output.ToString().Should().Contain("BigService.LongMethod()");
+    }
+
+    [Fact]
+    public async Task Analyze_LinesOfCodeViolation_NoLocFlag_IgnoresViolations()
+    {
+        var srcDir = Path.Combine(_testDirectory, "src");
+        Directory.CreateDirectory(srcDir);
+
+        var statements = string.Join("\n", Enumerable.Range(1, 20).Select(i => $"        int x{i} = {i};"));
+        var code = $$"""
+            public class BigService
+            {
+                public void LongMethod()
+                {
+            {{statements}}
+                }
+            }
+            """;
+        await File.WriteAllTextAsync(Path.Combine(srcDir, "BigService.cs"), code);
+
+        using var output = new StringWriter();
+        using var error = new StringWriter();
+
+        // Run analyze with --no-loc
+        var exitCode = await Program.RunAsync(
+            ["analyze", _testDirectory, "--no-loc", "-tml", "10", "--no-color", "--no-comments", "--no-duplication"],
+            output,
+            error);
+
+        exitCode.Should().Be(0);
+        output.ToString().Should().NotContain("Declaration(s) Exceeding Lines of Code Thresholds");
+    }
+
     private sealed class SettingsCapturingSummarizer : ICommentSummarizer
     {
         private readonly Action<CodeCondenserSettings> _onSummarize;

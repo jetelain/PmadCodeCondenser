@@ -526,6 +526,68 @@ public class SnapshotDifferTests : IDisposable
         snapshot.TypeViolationFiles.Should().BeEmpty();
     }
 
+    [Fact]
+    public void FilterNewLinesOfCodeViolations_WhenBaselineIsNull_ReturnsAllViolations()
+    {
+        var violations = new List<LinesOfCodeViolation>
+        {
+            new() { FilePath = "src/A.cs", Identifier = "A.Method1()", Kind = LinesOfCodeKind.Method, LinesOfCode = 160, Threshold = 150, StartLine = 1, EndLine = 10, Category = FileCategory.Production },
+            new() { FilePath = "src/B.cs", Identifier = "B", Kind = LinesOfCodeKind.Class, LinesOfCode = 1600, Threshold = 1500, StartLine = 1, EndLine = 100, Category = FileCategory.Production }
+        };
+
+        var filtered = _differ.FilterNewLinesOfCodeViolations(violations, null);
+
+        filtered.Should().HaveCount(2);
+    }
+
+    [Fact]
+    public void FilterNewLinesOfCodeViolations_WhenBaselineContainsViolations_FiltersOutBaselineViolations()
+    {
+        var baseline = new AnalysisSnapshot
+        {
+            LinesOfCodeViolationKeys = { "src/A.cs::Method::A.Method1()" }
+        };
+
+        var violations = new List<LinesOfCodeViolation>
+        {
+            new() { FilePath = "src/A.cs", Identifier = "A.Method1()", Kind = LinesOfCodeKind.Method, LinesOfCode = 160, Threshold = 150, StartLine = 1, EndLine = 10, Category = FileCategory.Production },
+            new() { FilePath = "src/B.cs", Identifier = "B", Kind = LinesOfCodeKind.Class, LinesOfCode = 1600, Threshold = 1500, StartLine = 1, EndLine = 100, Category = FileCategory.Production }
+        };
+
+        var filtered = _differ.FilterNewLinesOfCodeViolations(violations, baseline);
+
+        filtered.Should().HaveCount(1);
+        filtered[0].Identifier.Should().Be("B");
+    }
+
+    [Fact]
+    public void CreateOrUpdateSnapshot_StoresAndPreservesLinesOfCodeViolations()
+    {
+        var baseline = new AnalysisSnapshot
+        {
+            Files =
+            {
+                ["src/A.cs"] = new FileSnapshotInfo { FileHash = "h1" }
+            },
+            LinesOfCodeViolationKeys =
+            {
+                "src/A.cs::Method::A.Method1()"
+            }
+        };
+
+        var snapshot = _differ.CreateOrUpdateSnapshot(
+            baseline: baseline,
+            currentFileHashes: new Dictionary<string, string> { ["src/A.cs"] = "h1", ["src/B.cs"] = "h2" },
+            analyzedMethods: [],
+            commentCache: new Dictionary<string, string>(),
+            typeViolationFiles: [],
+            linesOfCodeViolationKeys: ["src/B.cs::Class::B"],
+            isIncremental: true);
+
+        snapshot.LinesOfCodeViolationKeys.Should().Contain("src/A.cs::Method::A.Method1()");
+        snapshot.LinesOfCodeViolationKeys.Should().Contain("src/B.cs::Class::B");
+    }
+
     public void Dispose()
     {
         if (Directory.Exists(_tempDir))

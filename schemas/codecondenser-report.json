@@ -11,7 +11,8 @@
     "subMethodClusters": { "type": "array" },
     "repeatedStrings": { "type": "array" },
     "typeFileIssues": { "type": "array" },
+    "linesOfCodeViolations": { "type": "array" },
     "verboseComments": { "type": "array" }
   },
-  "required": ["$schema", "schemaVersion", "timestamp", "summary", "cloneClusters", "subMethodClusters", "repeatedStrings", "typeFileIssues", "verboseComments"]
+  "required": ["$schema", "schemaVersion", "timestamp", "summary", "cloneClusters", "subMethodClusters", "repeatedStrings", "typeFileIssues", "linesOfCodeViolations", "verboseComments"]
 }

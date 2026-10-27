@@ -33,6 +33,11 @@ public interface IConsoleFormatter
         string baseDirectory,
         int lineTolerance = 1);
 
+    void PrintLinesOfCodeViolations(
+        TextWriter writer,
+        IReadOnlyList<LinesOfCodeViolation> violations,
+        string baseDirectory);
+
     void PrintSummary(
         TextWriter writer,
         int filesAnalyzed,
@@ -53,7 +58,8 @@ public interface IConsoleFormatter
         int? repeatedStringsCount = null,
         int? repeatedStringGainChars = null,
         int? repeatedStringGainTokens = null,
-        int? typeIssuesCount = null);
+        int? typeIssuesCount = null,
+        int? linesOfCodeViolationsCount = null);
 
     void PrintFileApplied(TextWriter writer, string filePath, string baseDirectory);
 
@@ -83,7 +89,10 @@ public interface IConsoleFormatter
         bool hasRepeatedStringViolation = false,
         IReadOnlyList<TypeFileAnalysis>? typeIssues = null,
         int? typeTolerance = null,
-        bool hasTypeViolation = false);
+        bool hasTypeViolation = false,
+        IReadOnlyList<LinesOfCodeViolation>? linesOfCodeViolations = null,
+        int? linesOfCodeTolerance = null,
+        bool hasLinesOfCodeViolation = false);
 
 
     void PrintSkillFile(TextWriter writer, Skills.SkillFileResult fileResult, string baseDirectory);
