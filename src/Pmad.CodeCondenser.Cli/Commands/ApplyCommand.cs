@@ -11,6 +11,30 @@ namespace Pmad.CodeCondenser.Cli.Commands;
 /// </summary>
 public sealed class ApplyCommand : ICommand
 {
+    public static System.CommandLine.Command Create(GlobalOptions globals, CommandServices services)
+    {
+        ArgumentNullException.ThrowIfNull(globals);
+        ArgumentNullException.ThrowIfNull(services);
+
+        var pathArg = new System.CommandLine.Argument<string?>("path")
+        {
+            Description = "Target directory, solution, or C# file to modify (default: current directory)",
+            Arity = System.CommandLine.ArgumentArity.ZeroOrOne
+        };
+
+        var cmd = new System.CommandLine.Command("apply", "Apply summarized comments directly to source files on disk");
+        cmd.Add(pathArg);
+
+        cmd.SetAction(async (parseResult, ct) =>
+        {
+            var path = parseResult.GetValue(pathArg) ?? ".";
+            var options = globals.BindCliOptions(parseResult, CliOptions.CommandApply, path);
+            options.Apply = true;
+            return await services.RunCommandAsync(new ApplyCommand(), options, ct).ConfigureAwait(false);
+        });
+
+        return cmd;
+    }
     public async Task<int> ExecuteAsync(
         CliOptions options,
         CodeCondenserSettings settings,

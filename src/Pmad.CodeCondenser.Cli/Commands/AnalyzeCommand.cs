@@ -20,6 +20,63 @@ public sealed class AnalyzeCommand : ICommand
         _formatterFactory = formatterFactory;
     }
 
+    public static System.CommandLine.Command Create(GlobalOptions globals, CommandServices services)
+    {
+        ArgumentNullException.ThrowIfNull(globals);
+        ArgumentNullException.ThrowIfNull(services);
+
+        var pathArg = new System.CommandLine.Argument<string?>("path")
+        {
+            Description = "Target directory, solution, or C# file to analyze (default: current directory)",
+            Arity = System.CommandLine.ArgumentArity.ZeroOrOne
+        };
+
+        var summaryOpt = new System.CommandLine.Option<string?>("--summary", "--summary-mode")
+        {
+            Description = "Comment summary mode: summarize (default), report, or disabled"
+        };
+
+        var cmd = new System.CommandLine.Command("analyze", "Analyze C# codebase and summarize verbose comments via LLM in dry-run mode");
+        cmd.Add(pathArg);
+        cmd.Add(summaryOpt);
+
+        cmd.SetAction(async (parseResult, ct) =>
+        {
+            var path = parseResult.GetValue(pathArg) ?? ".";
+            var options = globals.BindCliOptions(parseResult, CliOptions.CommandAnalyze, path);
+
+            var summary = parseResult.GetValue(summaryOpt);
+            if (!string.IsNullOrWhiteSpace(summary))
+            {
+                if (summary.Equals("disabled", StringComparison.OrdinalIgnoreCase) ||
+                    summary.Equals("none", StringComparison.OrdinalIgnoreCase) ||
+                    summary.Equals("off", StringComparison.OrdinalIgnoreCase) ||
+                    summary.Equals("false", StringComparison.OrdinalIgnoreCase))
+                {
+                    options.SummaryMode = SummaryMode.Disabled;
+                    options.EnableCommentSummarization = false;
+                }
+                else if (summary.Equals("report", StringComparison.OrdinalIgnoreCase) ||
+                         summary.Equals("report-only", StringComparison.OrdinalIgnoreCase))
+                {
+                    options.SummaryMode = SummaryMode.Report;
+                }
+                else if (summary.Equals("summarize", StringComparison.OrdinalIgnoreCase) ||
+                         summary.Equals("condense", StringComparison.OrdinalIgnoreCase) ||
+                         summary.Equals("llm", StringComparison.OrdinalIgnoreCase) ||
+                         summary.Equals("true", StringComparison.OrdinalIgnoreCase))
+                {
+                    options.SummaryMode = SummaryMode.Summarize;
+                    options.EnableCommentSummarization = true;
+                }
+            }
+
+            return await services.RunCommandAsync(new AnalyzeCommand(), options, ct).ConfigureAwait(false);
+        });
+
+        return cmd;
+    }
+
     public async Task<int> ExecuteAsync(
         CliOptions options,
         CodeCondenserSettings settings,

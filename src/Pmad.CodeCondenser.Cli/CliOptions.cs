@@ -5,6 +5,7 @@ namespace Pmad.CodeCondenser.Cli;
 /// </summary>
 public sealed class CliOptions
 {
+    public const string CommandReport = "report";
     public const string CommandAnalyze = "analyze";
     public const string CommandApply = "apply";
     public const string CommandSnapshot = "snapshot";

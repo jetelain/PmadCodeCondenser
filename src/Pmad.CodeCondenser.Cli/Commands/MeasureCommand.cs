@@ -1,3 +1,4 @@
+using System.CommandLine;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
@@ -18,6 +19,31 @@ public sealed class MeasureCommand : ICommand
         PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
         Converters = { new JsonStringEnumConverter() }
     };
+
+    public static Command Create(GlobalOptions globals, CommandServices services)
+    {
+        ArgumentNullException.ThrowIfNull(globals);
+        ArgumentNullException.ThrowIfNull(services);
+
+        var pathArg = new Argument<string?>("path")
+        {
+            Description = "Target directory, solution, or C# file to measure (default: current directory)",
+            Arity = ArgumentArity.ZeroOrOne
+        };
+
+        var cmd = new Command("measure", "Measure codebase tokens in terms of LLM tokens (total, comments, code) per category");
+        cmd.Add(pathArg);
+
+        cmd.SetAction(async (parseResult, ct) =>
+        {
+            var path = parseResult.GetValue(pathArg) ?? ".";
+            var options = globals.BindCliOptions(parseResult, CliOptions.CommandMeasure, path);
+
+            return await services.RunCommandAsync(options, new MeasureCommand(), ct).ConfigureAwait(false);
+        });
+
+        return cmd;
+    }
 
     public async Task<int> ExecuteAsync(
         CliOptions options,

@@ -36,8 +36,9 @@ public class CliIntegrationTests : IDisposable
         exitCode.Should().Be(0);
         error.ToString().Should().BeEmpty();
         output.ToString().Should().Contain("codecondenser");
-        output.ToString().Should().Contain("--apply");
-        output.ToString().Should().Contain("--incremental");
+        output.ToString().Should().Contain("analyze");
+        output.ToString().Should().Contain("apply");
+        output.ToString().Should().Contain("report");
     }
 
     [Fact]
@@ -50,7 +51,7 @@ public class CliIntegrationTests : IDisposable
 
         exitCode.Should().Be(0);
         error.ToString().Should().BeEmpty();
-        output.ToString().Should().Contain("codecondenser version");
+        output.ToString().Should().Contain("0.1.0-preview");
     }
 
     [Fact]
@@ -59,10 +60,10 @@ public class CliIntegrationTests : IDisposable
         using var output = new StringWriter();
         using var error = new StringWriter();
 
-        var exitCode = await Program.RunAsync(["--unknown-flag"], output, error);
+        var exitCode = await Program.RunAsync(["analyze", "--unknown-flag"], output, error);
 
-        exitCode.Should().Be(1);
-        error.ToString().Should().Contain("Unrecognized option: '--unknown-flag'");
+        exitCode.Should().NotBe(0);
+        error.ToString().Should().Contain("--unknown-flag");
     }
 
     [Fact]
@@ -72,7 +73,7 @@ public class CliIntegrationTests : IDisposable
         using var error = new StringWriter();
 
         var missingConfig = Path.Combine(_testDirectory, "nonexistent-config.json");
-        var exitCode = await Program.RunAsync([_testDirectory, "--config", missingConfig], output, error);
+        var exitCode = await Program.RunAsync(["analyze", _testDirectory, "--config", missingConfig], output, error);
 
         exitCode.Should().Be(ExitCodes.Error);
         error.ToString().Should().Contain("Configuration file not found");
@@ -86,11 +87,33 @@ public class CliIntegrationTests : IDisposable
         using var error = new StringWriter();
 
         var missingGlobal = Path.Combine(_testDirectory, "nonexistent-global.json");
-        var exitCode = await Program.RunAsync([_testDirectory, "--global-config", missingGlobal], output, error);
+        var exitCode = await Program.RunAsync(["analyze", _testDirectory, "--global-config", missingGlobal], output, error);
 
         exitCode.Should().Be(ExitCodes.Error);
         error.ToString().Should().Contain("Global configuration path not found");
         error.ToString().Should().Contain("nonexistent-global.json");
+    }
+
+    [Fact]
+    public async Task RunAsync_ReportCommand_RunsInReportOnlyMode()
+    {
+        var file = Path.Combine(_testDirectory, "ReportTest.cs");
+        await File.WriteAllTextAsync(file, """
+        public class ReportTest
+        {
+            // This is a very long and verbose explanation that easily exceeds the default threshold of one hundred characters in total length
+            public void Run() {}
+        }
+        """);
+
+        using var output = new StringWriter();
+        using var error = new StringWriter();
+
+        var exitCode = await Program.RunAsync(["report", _testDirectory, "--no-color"], output, error);
+
+        exitCode.Should().Be(0);
+        output.ToString().Should().Contain("Found 1 verbose comment(s) exceeding threshold:");
+        output.ToString().Should().Contain("Recommendation: Condense verbose comment");
     }
 
     [Fact]
@@ -103,7 +126,7 @@ public class CliIntegrationTests : IDisposable
         using var error = new StringWriter();
 
         var exitCode = await Program.RunAsync(
-            [_testDirectory, "--apply", "--no-color"],
+            ["apply", _testDirectory, "--no-color"],
             output,
             error);
 
@@ -133,7 +156,7 @@ public class CliIntegrationTests : IDisposable
             commentSummarizer: mockSummarizer);
 
         var exitCode = await Program.RunAsync(
-            [file, "--apply", "--no-color"],
+            ["apply", file, "--no-color"],
             output,
             error,
             customEngine: engine);
@@ -204,7 +227,7 @@ public class CliIntegrationTests : IDisposable
 
         // Act
         var exitCode = await Program.RunAsync(
-            [_testDirectory, "--no-color"],
+            ["analyze", _testDirectory, "--no-color"],
             output,
             error,
             customEngine: engine);
@@ -253,7 +276,7 @@ public class CliIntegrationTests : IDisposable
 
         // Act
         var exitCode = await Program.RunAsync(
-            [_testDirectory, "--apply", "--no-color"],
+            ["apply", _testDirectory, "--no-color"],
             output,
             error,
             customEngine: engine);
@@ -269,7 +292,7 @@ public class CliIntegrationTests : IDisposable
         // Incremental run immediately after apply should see 0 changed files because snapshot baseline was updated
         using var outInc = new StringWriter();
         var exitInc = await Program.RunAsync(
-            [_testDirectory, "--incremental", "--no-color"],
+            ["analyze", _testDirectory, "--incremental", "--no-color"],
             outInc,
             new StringWriter(),
             customEngine: engine);
@@ -345,7 +368,7 @@ public class CliIntegrationTests : IDisposable
         // Second run: incremental with no changes
         using var out2 = new StringWriter();
         var exit2 = await Program.RunAsync(
-            [_testDirectory, "--incremental", "--no-color"],
+            ["analyze", _testDirectory, "--incremental", "--no-color"],
             out2,
             new StringWriter(),
             customEngine: engine);
@@ -381,7 +404,7 @@ public class CliIntegrationTests : IDisposable
 
         // Threshold comment raised to 300
         var exitCode = await Program.RunAsync(
-            [_testDirectory, "--threshold-comments", "300", "--threshold-statements", "15", "--no-color"],
+            ["analyze", _testDirectory, "--threshold-comments", "300", "--threshold-statements", "15", "--no-color"],
             output,
             error,
             customEngine: engine);
@@ -414,7 +437,7 @@ public class CliIntegrationTests : IDisposable
         using var error = new StringWriter();
 
         var exitCode = await Program.RunAsync(
-            [_testDirectory, "--apply", "--context-size", "16384", "--no-color"],
+            ["apply", _testDirectory, "--context-size", "16384", "--no-color"],
             output,
             error,
             customEngine: engine);
@@ -484,7 +507,7 @@ public class CliIntegrationTests : IDisposable
         using var outInc = new StringWriter();
         using var errInc = new StringWriter();
         var exitCode = await Program.RunAsync(
-            [_testDirectory, "--incremental", "--no-color"],
+            ["analyze", _testDirectory, "--incremental", "--no-color"],
             outInc,
             errInc,
             customEngine: engine);
@@ -541,7 +564,7 @@ public class CliIntegrationTests : IDisposable
         // Step 3: Run incremental with tolerance = 1
         using var outInc = new StringWriter();
         var exitCode = await Program.RunAsync(
-            [_testDirectory, "--incremental", "--duplication-tolerance", "1", "--no-color"],
+            ["analyze", _testDirectory, "--incremental", "--duplication-tolerance", "1", "--no-color"],
             outInc,
             new StringWriter(),
             customEngine: engine);
@@ -580,7 +603,7 @@ public class CliIntegrationTests : IDisposable
 
         using var output = new StringWriter();
         var exitCode = await Program.RunAsync(
-            [_testDirectory, "--no-duplication", "--no-color"],
+            ["analyze", _testDirectory, "--no-duplication", "--no-color"],
             output,
             new StringWriter(),
             customEngine: engine);
@@ -607,7 +630,7 @@ public class CliIntegrationTests : IDisposable
 
         using var output = new StringWriter();
         var exitCode = await Program.RunAsync(
-            [_testDirectory, "--no-comments", "--no-color"],
+            ["analyze", _testDirectory, "--no-comments", "--no-color"],
             output,
             new StringWriter(),
             customEngine: engine);
@@ -635,7 +658,7 @@ public class CliIntegrationTests : IDisposable
 
         using var output = new StringWriter();
         var exitCode = await Program.RunAsync(
-            [_testDirectory, "--no-color"],
+            ["analyze", _testDirectory, "--no-color"],
             output,
             new StringWriter(),
             customEngine: engine);
@@ -682,7 +705,7 @@ public class CliIntegrationTests : IDisposable
         // 3. Run incremental
         using var outInc = new StringWriter();
         var exitCode = await Program.RunAsync(
-            [_testDirectory, "--incremental", "--no-color"],
+            ["analyze", _testDirectory, "--incremental", "--no-color"],
             outInc,
             new StringWriter(),
             customEngine: engine);
@@ -726,7 +749,7 @@ public class CliIntegrationTests : IDisposable
         // 3. Incremental run with --comment-tolerance 0
         using var outInc = new StringWriter();
         var exitCode = await Program.RunAsync(
-            [_testDirectory, "--incremental", "-ct", "0", "--no-color"],
+            ["analyze", _testDirectory, "--incremental", "-ct", "0", "--no-color"],
             outInc,
             new StringWriter(),
             customEngine: engine);
@@ -790,7 +813,7 @@ public class CliIntegrationTests : IDisposable
         // 3. Incremental run
         using var outInc = new StringWriter();
         var exitCode = await Program.RunAsync(
-            [_testDirectory, "--incremental", "--no-color"],
+            ["analyze", _testDirectory, "--incremental", "--no-color"],
             outInc,
             new StringWriter(),
             customEngine: engine);
@@ -845,7 +868,7 @@ public class CliIntegrationTests : IDisposable
         using var error = new StringWriter();
 
         var exitCode = await Program.RunAsync(
-            [_testDirectory, "--global-config", globalConfigFile, "--no-color"],
+            ["analyze", _testDirectory, "--global-config", globalConfigFile, "--no-color"],
             output,
             error,
             customEngine: engine);
@@ -891,7 +914,7 @@ public class CliIntegrationTests : IDisposable
         using var error = new StringWriter();
 
         var exitCode = await Program.RunAsync(
-            [_testDirectory, "--global-config", globalConfigFile, "--summary", "summarize", "--no-color"],
+            ["analyze", _testDirectory, "--global-config", globalConfigFile, "--summary", "summarize", "--no-color"],
             output,
             error,
             customEngine: engine);
@@ -946,7 +969,7 @@ public class CliIntegrationTests : IDisposable
         using var error = new StringWriter();
 
         var exitCode = await Program.RunAsync(
-            [_testDirectory, "--global-config", globalConfigFile, "--no-color"],
+            ["analyze", _testDirectory, "--global-config", globalConfigFile, "--no-color"],
             output,
             error,
             customEngine: engine);

@@ -9,6 +9,30 @@ namespace Pmad.CodeCondenser.Cli.Commands;
 /// </summary>
 public sealed class SnapshotCommand : ICommand
 {
+    public static System.CommandLine.Command Create(GlobalOptions globals, CommandServices services)
+    {
+        ArgumentNullException.ThrowIfNull(globals);
+        ArgumentNullException.ThrowIfNull(services);
+
+        var pathArg = new System.CommandLine.Argument<string?>("path")
+        {
+            Description = "Target directory, solution, or C# file to snapshot (default: current directory)",
+            Arity = System.CommandLine.ArgumentArity.ZeroOrOne
+        };
+
+        var cmd = new System.CommandLine.Command("snapshot", "Create or refresh the snapshot baseline");
+        cmd.Add(pathArg);
+
+        cmd.SetAction(async (parseResult, ct) =>
+        {
+            var path = parseResult.GetValue(pathArg) ?? ".";
+            var options = globals.BindCliOptions(parseResult, CliOptions.CommandSnapshot, path);
+            options.UpdateSnapshot = true;
+            return await services.RunCommandAsync(new SnapshotCommand(), options, ct).ConfigureAwait(false);
+        });
+
+        return cmd;
+    }
     public async Task<int> ExecuteAsync(
         CliOptions options,
         CodeCondenserSettings settings,
