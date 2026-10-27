@@ -452,6 +452,46 @@ public class SnapshotDifferTests : IDisposable
         snapshot.MethodHashes.Should().BeEmpty();
     }
 
+    [Fact]
+    public void CreateOrUpdateSnapshot_PreservesUnchangedBaselineTypeViolationsAndDropsDeletedFiles()
+    {
+        var baseline = new AnalysisSnapshot
+        {
+            Files =
+            {
+                ["src/UnchangedViolation.cs"] = new FileSnapshotInfo { FileHash = "hash1" },
+                ["src/FixedFile.cs"] = new FileSnapshotInfo { FileHash = "oldHashFixed" },
+                ["src/DeletedViolation.cs"] = new FileSnapshotInfo { FileHash = "delHash" }
+            },
+            TypeViolationFiles =
+            {
+                "src/UnchangedViolation.cs",
+                "src/FixedFile.cs",
+                "src/DeletedViolation.cs"
+            }
+        };
+
+        var currentFileHashes = new Dictionary<string, string>
+        {
+            ["src/UnchangedViolation.cs"] = "hash1", // Unchanged
+            ["src/FixedFile.cs"] = "newHashFixed",   // Modified and fixed
+            ["src/NewViolation.cs"] = "newViolHash"   // Added
+            // DeletedViolation.cs deleted
+        };
+
+        var snapshot = _differ.CreateOrUpdateSnapshot(
+            baseline: baseline,
+            currentFileHashes: currentFileHashes,
+            analyzedMethods: [],
+            commentCache: new Dictionary<string, string>(),
+            typeViolationFiles: ["src/NewViolation.cs"]); // Only NewViolation.cs has violation among scanned files
+
+        snapshot.TypeViolationFiles.Should().BeEquivalentTo(
+            ["src/UnchangedViolation.cs", "src/NewViolation.cs"]);
+        snapshot.TypeViolationFiles.Should().NotContain("src/FixedFile.cs");
+        snapshot.TypeViolationFiles.Should().NotContain("src/DeletedViolation.cs");
+    }
+
     public void Dispose()
     {
         if (Directory.Exists(_tempDir))

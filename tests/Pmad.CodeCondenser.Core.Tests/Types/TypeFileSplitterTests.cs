@@ -195,7 +195,8 @@ public class TypeFileSplitterTests
             """;
         var tree = CSharpSyntaxTree.ParseText(code);
         var settings = new CodeCondenserSettings();
-        var filePath = @"C:\repos\MyProject\OrderService.cs";
+        var baseDir = Path.Combine(Path.GetTempPath(), "MyProject");
+        var filePath = Path.Combine(baseDir, "OrderService.cs");
 
         var analysis = _splitter.AnalyzeFile(tree, filePath, settings);
         var split = _splitter.SplitFile(tree, filePath, analysis);
@@ -208,7 +209,7 @@ public class TypeFileSplitterTests
         Assert.DoesNotContain("public class CustomerService", split.PrimaryFileContent);
 
         // New file should be CustomerService.cs
-        var newCustomerFile = @"C:\repos\MyProject\CustomerService.cs";
+        var newCustomerFile = Path.Combine(baseDir, "CustomerService.cs");
         Assert.True(split.NewFiles.ContainsKey(newCustomerFile));
         var customerContent = split.NewFiles[newCustomerFile];
 
@@ -219,5 +220,141 @@ public class TypeFileSplitterTests
         Assert.Contains("Customer service docs.", customerContent);
         Assert.Contains("public class CustomerService", customerContent);
         Assert.DoesNotContain("public class OrderService", customerContent);
+    }
+
+    [Fact]
+    public void AnalyzeFile_PartialClassWithAspectFileName_ReturnsNoAction()
+    {
+        var code = """
+            namespace MyNamespace;
+
+            public partial class OrderService
+            {
+                public void Validate() { }
+            }
+            """;
+        var tree = CSharpSyntaxTree.ParseText(code);
+        var settings = new CodeCondenserSettings();
+
+        var result = _splitter.AnalyzeFile(tree, "OrderService.Validation.cs", settings);
+
+        Assert.Equal(TypeFileAction.None, result.Action);
+        Assert.False(result.HasViolation);
+    }
+
+    [Fact]
+    public void AnalyzeFile_GenericClassWithArityFileName_ReturnsNoAction()
+    {
+        var code = """
+            namespace MyNamespace;
+
+            public class MyClass<T>
+            {
+                public T? Value { get; set; }
+            }
+            """;
+        var tree = CSharpSyntaxTree.ParseText(code);
+        var settings = new CodeCondenserSettings();
+
+        var result = _splitter.AnalyzeFile(tree, "MyClass`1.cs", settings);
+
+        Assert.Equal(TypeFileAction.None, result.Action);
+        Assert.False(result.HasViolation);
+    }
+
+    [Fact]
+    public void AnalyzeFile_SuppressedPrimaryTypeWithCC007_DoesNotRename()
+    {
+        var code = """
+            using System.Diagnostics.CodeAnalysis;
+
+            namespace MyNamespace;
+
+            [SuppressMessage("CodeCondenser", "CC007")]
+            public class OrderService
+            {
+                public void Process() { }
+            }
+            """;
+        var tree = CSharpSyntaxTree.ParseText(code);
+        var settings = new CodeCondenserSettings();
+
+        var result = _splitter.AnalyzeFile(tree, "ServiceHelpers.cs", settings);
+
+        Assert.Equal(TypeFileAction.None, result.Action);
+        Assert.False(result.HasViolation);
+    }
+
+    [Fact]
+    public void SplitFile_GenericOverloadsInSameFile_ExtractsCorrectNodeWithArity()
+    {
+        var code = """
+            namespace MyNamespace;
+
+            public class Serializer
+            {
+                public void SerializeNonGeneric() { }
+            }
+
+            public class Serializer<T>
+            {
+                public void SerializeGeneric(T item) { }
+            }
+            """;
+        var tree = CSharpSyntaxTree.ParseText(code);
+        var settings = new CodeCondenserSettings();
+        var baseDir = Path.Combine(Path.GetTempPath(), "MyProject");
+        var filePath = Path.Combine(baseDir, "Serializer.cs");
+
+        var analysis = _splitter.AnalyzeFile(tree, filePath, settings);
+        Assert.Equal(TypeFileAction.Split, analysis.Action);
+        Assert.Single(analysis.TypesToExtract);
+        Assert.Equal(1, analysis.TypesToExtract[0].Arity);
+
+        var split = _splitter.SplitFile(tree, filePath, analysis);
+
+        // Primary should retain non-generic Serializer
+        Assert.Contains("public class Serializer", split.PrimaryFileContent);
+        Assert.DoesNotContain("public class Serializer<T>", split.PrimaryFileContent);
+
+        // Extracted file should contain generic Serializer<T>
+        var newFile = Path.Combine(baseDir, "Serializer`1.cs");
+        Assert.True(split.NewFiles.ContainsKey(newFile));
+        Assert.Contains("public class Serializer<T>", split.NewFiles[newFile]);
+        Assert.DoesNotContain("public class Serializer\n", split.NewFiles[newFile].Replace("\r\n", "\n"));
+    }
+
+    [Fact]
+    public void SplitFile_DistinctUsingAliases_PreservesAllAliases()
+    {
+        var code = """
+            using ModelA = System.String;
+            using ModelB = System.String;
+
+            namespace MyNamespace;
+
+            public class PrimaryService
+            {
+                public void Run() { }
+            }
+
+            public class SecondaryService
+            {
+                public void Execute() { }
+            }
+            """;
+        var tree = CSharpSyntaxTree.ParseText(code);
+        var settings = new CodeCondenserSettings();
+        var baseDir = Path.Combine(Path.GetTempPath(), "MyProject");
+        var filePath = Path.Combine(baseDir, "PrimaryService.cs");
+
+        var analysis = _splitter.AnalyzeFile(tree, filePath, settings);
+        var split = _splitter.SplitFile(tree, filePath, analysis);
+
+        var newFile = Path.Combine(baseDir, "SecondaryService.cs");
+        Assert.True(split.NewFiles.ContainsKey(newFile));
+        var content = split.NewFiles[newFile];
+        Assert.Contains("using ModelA = System.String;", content);
+        Assert.Contains("using ModelB = System.String;", content);
     }
 }

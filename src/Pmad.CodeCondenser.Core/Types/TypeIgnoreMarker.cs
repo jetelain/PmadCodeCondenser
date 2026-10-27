@@ -74,6 +74,15 @@ public static class TypeIgnoreMarker
         {
             foreach (var attribute in attributeList.Attributes)
             {
+                var attrName = attribute.Name.ToString();
+                foreach (var pattern in AttributeNamePatterns)
+                {
+                    if (attrName.Contains(pattern, StringComparison.OrdinalIgnoreCase))
+                    {
+                        return true;
+                    }
+                }
+
                 if (IsSuppressMessageAttribute(attribute))
                 {
                     return true;
@@ -128,13 +137,15 @@ public static class TypeIgnoreMarker
                 var args = attribute.ArgumentList.Arguments;
                 if (args.Count >= 2)
                 {
-                    var catArg = args[0].ToString();
-                    var checkIdArg = args[1].ToString();
-
-                    bool isCodeCondenser = catArg.Contains("CodeCondenser", StringComparison.OrdinalIgnoreCase);
-                    bool isTypeRule = checkIdArg.Contains("SingleType", StringComparison.OrdinalIgnoreCase) ||
-                                      checkIdArg.Contains("TypeSplit", StringComparison.OrdinalIgnoreCase) ||
-                                      checkIdArg.Contains("CC0004", StringComparison.OrdinalIgnoreCase);
+                    bool isCodeCondenser = args.Any(a => a.ToString().Contains("CodeCondenser", StringComparison.OrdinalIgnoreCase));
+                    bool isTypeRule = args.Any(a =>
+                    {
+                        var text = a.ToString();
+                        return text.Contains("SingleType", StringComparison.OrdinalIgnoreCase) ||
+                               text.Contains("TypeSplit", StringComparison.OrdinalIgnoreCase) ||
+                               text.Contains("CC007", StringComparison.OrdinalIgnoreCase) ||
+                               text.Contains("CC0007", StringComparison.OrdinalIgnoreCase);
+                    });
 
                     if (isCodeCondenser && isTypeRule)
                     {

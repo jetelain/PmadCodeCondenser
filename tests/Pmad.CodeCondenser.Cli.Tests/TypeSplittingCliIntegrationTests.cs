@@ -231,4 +231,68 @@ public class TypeSplittingCliIntegrationTests : IDisposable
         exitCode.Should().Be(0);
         output.ToString().Should().NotContain("Single Type Per File Violations");
     }
+
+    [Fact]
+    public async Task Apply_WhenDestinationFileAlreadyExists_DoesNotOverwriteExistingFile()
+    {
+        var existingFile = Path.Combine(_testDirectory, "NewService.cs");
+        await File.WriteAllTextAsync(existingFile, "// Important existing file content");
+
+        var sourceFile = Path.Combine(_testDirectory, "OldName.cs");
+        await File.WriteAllTextAsync(sourceFile, """
+        namespace App;
+
+        public class NewService
+        {
+            public void Run() {}
+        }
+        """);
+
+        using var output = new StringWriter();
+        using var error = new StringWriter();
+
+        var exitCode = await Program.RunAsync(
+            ["apply", _testDirectory, "--no-color"],
+            output,
+            error);
+
+        exitCode.Should().Be(0);
+
+        // Existing file must be preserved
+        var existingContent = await File.ReadAllTextAsync(existingFile);
+        existingContent.Should().Be("// Important existing file content");
+
+        // Source file must also be preserved (not deleted)
+        File.Exists(sourceFile).Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task Apply_IncrementalMode_DoesNotFailWhenSplitsAreApplied()
+    {
+        var primaryFile = Path.Combine(_testDirectory, "Multi.cs");
+        await File.WriteAllTextAsync(primaryFile, """
+        namespace App;
+
+        public class FirstService
+        {
+            public void Run() { }
+        }
+
+        public class SecondService
+        {
+            public void Help() { }
+        }
+        """);
+
+        using var output = new StringWriter();
+        using var error = new StringWriter();
+
+        var exitCode = await Program.RunAsync(
+            ["apply", _testDirectory, "--incremental", "-tt", "0", "--no-color"],
+            output,
+            error);
+
+        exitCode.Should().Be(0);
+        File.Exists(Path.Combine(_testDirectory, "SecondService.cs")).Should().BeTrue();
+    }
 }

@@ -547,7 +547,8 @@ public sealed class CodeCondenserEngine : ICodeCondenserEngine
                 baseline,
                 currentFileHashes,
                 methodsForSnapshot,
-                cacheForSnapshot);
+                cacheForSnapshot,
+                typeViolationFiles: effectiveSettings.EnableTypeSplitting ? allTypeIssues.Select(i => i.FilePath) : null);
 
             // If duplication detection was disabled, restore baseline method hashes
             if (!effectiveSettings.EnableDuplicationDetection && baseline?.MethodHashes != null)
@@ -666,6 +667,12 @@ public sealed class CodeCondenserEngine : ICodeCondenserEngine
             // 1. Write new extracted files
             foreach (var (newPath, newContent) in splitResult.NewFiles)
             {
+                if (File.Exists(newPath) && !string.Equals(newPath, fullPath, StringComparison.OrdinalIgnoreCase) && !modifiedFiles.Contains(newPath))
+                {
+                    InfoLogged?.Invoke($"[Warning] Skipping extraction to '{newPath}' because a file with that name already exists on disk.");
+                    continue;
+                }
+
                 var dir = Path.GetDirectoryName(newPath);
                 if (!string.IsNullOrEmpty(dir) && !Directory.Exists(dir))
                 {
@@ -679,13 +686,26 @@ public sealed class CodeCondenserEngine : ICodeCondenserEngine
             // 2. Update/rename primary file
             if (splitResult.IsRenamed)
             {
-                await File.WriteAllTextAsync(splitResult.PrimaryFilePath, splitResult.PrimaryFileContent, cancellationToken).ConfigureAwait(false);
-                if (File.Exists(splitResult.OriginalFilePath) && !string.Equals(splitResult.OriginalFilePath, splitResult.PrimaryFilePath, StringComparison.OrdinalIgnoreCase))
+                if (File.Exists(splitResult.PrimaryFilePath) &&
+                    !string.Equals(splitResult.OriginalFilePath, splitResult.PrimaryFilePath, StringComparison.OrdinalIgnoreCase) &&
+                    !modifiedFiles.Contains(splitResult.PrimaryFilePath))
                 {
-                    File.Delete(splitResult.OriginalFilePath);
+                    InfoLogged?.Invoke($"[Warning] Destination file '{splitResult.PrimaryFilePath}' already exists on disk. Preserving destination file and updating original '{splitResult.OriginalFilePath}'.");
+                    await File.WriteAllTextAsync(splitResult.OriginalFilePath, splitResult.PrimaryFileContent, cancellationToken).ConfigureAwait(false);
+                    modifiedFiles.Add(splitResult.OriginalFilePath);
+                    FileApplied?.Invoke(splitResult.OriginalFilePath);
                 }
-                modifiedFiles.Add(splitResult.PrimaryFilePath);
-                FileApplied?.Invoke(splitResult.PrimaryFilePath);
+                else
+                {
+                    await File.WriteAllTextAsync(splitResult.PrimaryFilePath, splitResult.PrimaryFileContent, cancellationToken).ConfigureAwait(false);
+                    if (File.Exists(splitResult.OriginalFilePath) && !string.Equals(splitResult.OriginalFilePath, splitResult.PrimaryFilePath, StringComparison.OrdinalIgnoreCase))
+                    {
+                        File.Delete(splitResult.OriginalFilePath);
+                    }
+                    modifiedFiles.Add(splitResult.PrimaryFilePath);
+                    modifiedFiles.Add(splitResult.OriginalFilePath);
+                    FileApplied?.Invoke(splitResult.PrimaryFilePath);
+                }
             }
             else
             {

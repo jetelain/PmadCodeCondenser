@@ -215,7 +215,10 @@ public sealed class ApplyCommand : ICommand
 
             var gatedTypeIssues = settings.EnableTypeSplitting
                 ? result.TypeFileIssues
-                    .Where(i => i.HasViolation && (i.Category != FileCategory.Test || settings.EnforceTestDuplication))
+                    .Where(i => i.HasViolation &&
+                                (i.Category != FileCategory.Test || settings.EnforceTestDuplication) &&
+                                File.Exists(Path.IsPathRooted(i.FilePath) ? i.FilePath : Path.Combine(baseDirectory, i.FilePath)) &&
+                                !modifiedFiles.Contains(Path.GetFullPath(Path.IsPathRooted(i.FilePath) ? i.FilePath : Path.Combine(baseDirectory, i.FilePath))))
                     .ToList()
                 : [];
 

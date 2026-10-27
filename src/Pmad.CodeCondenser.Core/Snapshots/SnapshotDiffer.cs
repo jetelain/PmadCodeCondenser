@@ -212,14 +212,34 @@ public sealed class SnapshotDiffer : ISnapshotDiffer
         {
             foreach (var f in typeViolationFiles)
             {
-                snapshot.TypeViolationFiles.Add(f);
+                if (currentFileHashes.ContainsKey(f))
+                {
+                    snapshot.TypeViolationFiles.Add(f);
+                }
+            }
+
+            // In incremental update with a baseline, preserve violations for unchanged files that were not re-analyzed
+            if (baseline != null)
+            {
+                foreach (var f in baseline.TypeViolationFiles)
+                {
+                    if (baseline.Files.TryGetValue(f, out var oldFileInfo) &&
+                        currentFileHashes.TryGetValue(f, out var currentHash) &&
+                        string.Equals(oldFileInfo.FileHash, currentHash, StringComparison.OrdinalIgnoreCase))
+                    {
+                        snapshot.TypeViolationFiles.Add(f);
+                    }
+                }
             }
         }
         else if (baseline != null)
         {
             foreach (var f in baseline.TypeViolationFiles)
             {
-                snapshot.TypeViolationFiles.Add(f);
+                if (currentFileHashes.ContainsKey(f))
+                {
+                    snapshot.TypeViolationFiles.Add(f);
+                }
             }
         }
 

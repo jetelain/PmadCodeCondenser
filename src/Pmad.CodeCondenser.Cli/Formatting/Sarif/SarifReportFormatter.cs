@@ -345,8 +345,11 @@ public sealed class SarifReportFormatter : IReportFormatter
         {
             var relPath = ReportPathHelper.NormalizeRelativePath(issue.FilePath, baseDirectory);
             var primaryType = issue.PrimaryType;
-            var startLine = primaryType?.StartLine ?? 1;
-            var endLine = primaryType?.EndLine ?? 1;
+            var targetType = (issue.Action == TypeFileAction.Split && issue.TypesToExtract.Count > 0)
+                ? issue.TypesToExtract[0]
+                : primaryType;
+            var startLine = targetType?.StartLine ?? 1;
+            var endLine = targetType?.EndLine ?? 1;
 
             string message = issue.Action switch
             {

@@ -49,6 +49,14 @@ public sealed class TypeFileSplitter : ITypeFileSplitter
 
         var detectedTypes = new List<ExtractedTypeInfo>();
         var seenFileNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var directory = Path.GetDirectoryName(filePath);
+
+        bool FileExistsOnDisk(string fname)
+        {
+            if (string.IsNullOrEmpty(directory)) return false;
+            var candidate = Path.Combine(directory, fname);
+            return !string.Equals(candidate, filePath, StringComparison.OrdinalIgnoreCase) && File.Exists(candidate);
+        }
 
         foreach (var node in topLevelNodes)
         {
@@ -63,11 +71,11 @@ public sealed class TypeFileSplitter : ITypeFileSplitter
             string baseTargetName = name;
             string targetFileName = baseTargetName + ".cs";
 
-            if (seenFileNames.Contains(targetFileName))
+            if (seenFileNames.Contains(targetFileName) || FileExistsOnDisk(targetFileName))
             {
                 targetFileName = arity > 0 ? $"{baseTargetName}`{arity}.cs" : $"{baseTargetName}2.cs";
                 int counter = 2;
-                while (seenFileNames.Contains(targetFileName))
+                while (seenFileNames.Contains(targetFileName) || FileExistsOnDisk(targetFileName))
                 {
                     counter++;
                     targetFileName = arity > 0 ? $"{baseTargetName}`{arity}_{counter}.cs" : $"{baseTargetName}{counter}.cs";
@@ -94,11 +102,18 @@ public sealed class TypeFileSplitter : ITypeFileSplitter
 
         var currentFileName = Path.GetFileNameWithoutExtension(filePath);
 
+        // Map topLevelNodes by type info for matching
+        var nodeMap = new Dictionary<ExtractedTypeInfo, MemberDeclarationSyntax>();
+        for (int i = 0; i < detectedTypes.Count && i < topLevelNodes.Count; i++)
+        {
+            nodeMap[detectedTypes[i]] = topLevelNodes[i];
+        }
+
         // Select primary type:
-        // 1. Matches file name exactly
+        // 1. Matches file name (exact, partial aspect, or generic arity)
         // 2. Or first non-tolerated, non-suppressed type
         // 3. Or first type
-        ExtractedTypeInfo? primary = detectedTypes.FirstOrDefault(t => t.TypeName.Equals(currentFileName, StringComparison.OrdinalIgnoreCase))
+        ExtractedTypeInfo? primary = detectedTypes.FirstOrDefault(t => IsFileNameMatching(currentFileName, t, nodeMap.GetValueOrDefault(t)))
             ?? detectedTypes.FirstOrDefault(t => !t.IsTolerated && !t.IsSuppressed)
             ?? detectedTypes.FirstOrDefault();
 
@@ -124,14 +139,19 @@ public sealed class TypeFileSplitter : ITypeFileSplitter
         primary = finalTypes.FirstOrDefault(t => t.IsPrimary);
 
         var typesToExtract = finalTypes.Where(t => !t.IsPrimary && !t.IsTolerated && !t.IsSuppressed).ToList();
-        bool nameMatches = primary != null && primary.TypeName.Equals(currentFileName, StringComparison.OrdinalIgnoreCase);
+        var primaryNode = primary != null ? topLevelNodes.FirstOrDefault(n =>
+        {
+            var (name, _, arity) = GetTypeDeclarationInfo(n);
+            return name == primary.TypeName && arity == primary.Arity;
+        }) : null;
+        bool nameMatches = primary != null && IsFileNameMatching(currentFileName, primary, primaryNode);
 
         TypeFileAction action = TypeFileAction.None;
         string? suggestedFileName = null;
 
         if (typesToExtract.Count > 0)
         {
-            if (!nameMatches && settings.EnableTypeRenaming && primary != null)
+            if (!nameMatches && settings.EnableTypeRenaming && primary != null && !primary.IsSuppressed)
             {
                 action = TypeFileAction.SplitAndRename;
                 suggestedFileName = primary.TargetFileName;
@@ -141,7 +161,7 @@ public sealed class TypeFileSplitter : ITypeFileSplitter
                 action = TypeFileAction.Split;
             }
         }
-        else if (!nameMatches && settings.EnableTypeRenaming && primary != null)
+        else if (!nameMatches && settings.EnableTypeRenaming && primary != null && !primary.IsSuppressed)
         {
             action = TypeFileAction.Rename;
             suggestedFileName = primary.TargetFileName;
@@ -178,9 +198,9 @@ public sealed class TypeFileSplitter : ITypeFileSplitter
         // Header trivia before any usings/namespaces (license, nullable, etc.)
         var fileHeaderTrivia = GetFileHeaderTrivia(root);
 
-        // All usings from the file
+        // All usings from the file, deduplicated by exact text
         var allUsings = root.DescendantNodes().OfType<UsingDirectiveSyntax>()
-            .GroupBy(u => u.Name?.ToString() ?? u.ToString())
+            .GroupBy(u => u.ToString().Trim())
             .Select(g => g.First().WithoutTrivia())
             .ToList();
 
@@ -188,8 +208,12 @@ public sealed class TypeFileSplitter : ITypeFileSplitter
         {
             var node = topLevelNodes.FirstOrDefault(n =>
             {
-                var (name, _, _) = GetTypeDeclarationInfo(n);
-                return name == typeToExtract.TypeName;
+                var (name, _, arity) = GetTypeDeclarationInfo(n);
+                var lineSpan = syntaxTree.GetLineSpan(n.Span);
+                int startLine = lineSpan.StartLinePosition.Line + 1;
+                return name == typeToExtract.TypeName &&
+                       arity == typeToExtract.Arity &&
+                       (typeToExtract.StartLine == 0 || startLine == typeToExtract.StartLine);
             });
 
             if (node == null)
@@ -231,6 +255,52 @@ public sealed class TypeFileSplitter : ITypeFileSplitter
             PrimaryFileContent = updatedPrimaryContent,
             NewFiles = newFiles
         };
+    }
+
+    private static bool IsFileNameMatching(string currentFileName, ExtractedTypeInfo type, MemberDeclarationSyntax? node)
+    {
+        if (type.TypeName.Equals(currentFileName, StringComparison.OrdinalIgnoreCase))
+        {
+            return true;
+        }
+
+        // Generic arity convention (e.g. "MyClass`1" or "MyClass{T}")
+        if (type.Arity > 0)
+        {
+            if (currentFileName.Equals($"{type.TypeName}`{type.Arity}", StringComparison.OrdinalIgnoreCase) ||
+                currentFileName.StartsWith($"{type.TypeName}`", StringComparison.OrdinalIgnoreCase) ||
+                currentFileName.StartsWith($"{type.TypeName}{{", StringComparison.OrdinalIgnoreCase))
+            {
+                return true;
+            }
+        }
+
+        // Aspect or sub-part convention (e.g. "OrderService.Validation", "OrderService.Handlers", "OrderService_Events")
+        if (currentFileName.StartsWith(type.TypeName + ".", StringComparison.OrdinalIgnoreCase) ||
+            currentFileName.StartsWith(type.TypeName + "_", StringComparison.OrdinalIgnoreCase))
+        {
+            return true;
+        }
+
+        // Partial class convention: any file starting with type name when class is partial
+        if (node != null && HasPartialModifier(node) &&
+            currentFileName.StartsWith(type.TypeName, StringComparison.OrdinalIgnoreCase))
+        {
+            return true;
+        }
+
+        return false;
+    }
+
+    private static bool HasPartialModifier(MemberDeclarationSyntax member)
+    {
+        SyntaxTokenList modifiers = member switch
+        {
+            BaseTypeDeclarationSyntax b => b.Modifiers,
+            _ => default
+        };
+
+        return modifiers.Any(SyntaxKind.PartialKeyword);
     }
 
     private static List<MemberDeclarationSyntax> GetTopLevelTypeNodes(CompilationUnitSyntax root)
