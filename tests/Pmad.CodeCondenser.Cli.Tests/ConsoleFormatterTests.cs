@@ -641,7 +641,7 @@ public class ConsoleFormatterTests
             ],
             Category = CloneCategory.Production,
             SuggestedConstantName = "PendingOrdersQuery",
-            SuggestedClassName = "MyConstants",
+            SuggestedClassName = "Constants",
             TargetNamespace = "ApplicationNamespace"
         };
 
@@ -652,10 +652,177 @@ public class ConsoleFormatterTests
         output.Should().Contain($"[PRODUCTION REPEATED STRING #1] ({longStr.Length} chars, 2 occurrences");
         output.Should().Contain("OrderService.cs:15:20 in GetPendingOrders");
         output.Should().Contain("OrderRepo.cs:45:25 in QueryOrders");
-        output.Should().Contain("Suggested Constant: MyConstants.PendingOrdersQuery");
+        output.Should().Contain("Suggested Constant: Constants.PendingOrdersQuery");
         output.Should().Contain("Minimal Declaration:");
-        output.Should().Contain("static class MyConstants");
+        output.Should().Contain("static class Constants");
         output.Should().Contain("internal const string PendingOrdersQuery = \"...\";");
+    }
+
+    [Fact]
+    public void PrintRepeatedStringGroups_ExistingConstant_OutputsCleanRecommendation()
+    {
+        var formatter = new ConsoleFormatter(enableColor: false);
+        using var writer = new StringWriter();
+
+        var str = "https://api.example.com/v1/resource";
+        var constOcc = new RepeatedStringOccurrence
+        {
+            FilePath = "src/Common/Routes.cs",
+            StartLine = 12,
+            EndLine = 12,
+            StartColumn = 25,
+            EndColumn = 25 + str.Length,
+            StringValue = str,
+            IsConstDeclaration = true,
+            ConstantName = "ResourceRoute",
+            ConstantTypeName = "Routes"
+        };
+        var inlineOcc = new RepeatedStringOccurrence
+        {
+            FilePath = "src/Services/Client.cs",
+            StartLine = 30,
+            EndLine = 30,
+            StartColumn = 18,
+            EndColumn = 18 + str.Length,
+            StringValue = str,
+            EnclosingMember = "FetchResource",
+            Category = FileCategory.Production
+        };
+
+        var group = new RepeatedStringGroup
+        {
+            Value = str,
+            Occurrences = [constOcc, inlineOcc],
+            ExistingConstantDeclarations = [constOcc],
+            Category = CloneCategory.Production,
+            SuggestedConstantName = "ResourceRoute",
+            SuggestedClassName = "Routes",
+            TargetNamespace = "Common"
+        };
+
+        formatter.PrintRepeatedStringGroups(writer, [group], ".");
+
+        var output = writer.ToString();
+        output.Should().Contain("[PRODUCTION EXISTING CONSTANT #1]");
+        output.Should().Contain("1 inline occurrence(s)");
+        output.Should().Contain("Existing Constant: Routes.ResourceRoute in src/Common/Routes.cs:12:25");
+        output.Should().Contain("Inline Occurrences (1):");
+        output.Should().Contain("Client.cs:30:18 in FetchResource");
+        output.Should().Contain("Recommendation: Use existing constant 'Routes.ResourceRoute' instead of inline value.");
+        output.Should().NotContain("Minimal Declaration:");
+    }
+
+    [Fact]
+    public void PrintRepeatedStringGroups_PrivateConstantWithExternalOccurrence_IncludesPromotionNote()
+    {
+        var formatter = new ConsoleFormatter(enableColor: false);
+        using var writer = new StringWriter();
+
+        var str = "https://internal.service.local/api/v1/auth";
+        var constOcc = new RepeatedStringOccurrence
+        {
+            FilePath = "src/Internal/AuthModule.cs",
+            StartLine = 10,
+            EndLine = 10,
+            StartColumn = 20,
+            EndColumn = 20 + str.Length,
+            StringValue = str,
+            IsConstDeclaration = true,
+            IsPrivateConstant = true,
+            ConstantName = "AuthUrl",
+            ConstantTypeName = "AuthModule"
+        };
+        var inlineOcc = new RepeatedStringOccurrence
+        {
+            FilePath = "src/Consumers/ApiConsumer.cs",
+            StartLine = 45,
+            EndLine = 45,
+            StartColumn = 12,
+            EndColumn = 12 + str.Length,
+            StringValue = str
+        };
+
+        var group = new RepeatedStringGroup
+        {
+            Value = str,
+            Occurrences = [constOcc, inlineOcc],
+            ExistingConstantDeclarations = [constOcc],
+            Category = CloneCategory.Production,
+            SuggestedConstantName = "AuthUrl",
+            SuggestedClassName = "AuthModule"
+        };
+
+        formatter.PrintRepeatedStringGroups(writer, [group], ".");
+
+        var output = writer.ToString();
+        output.Should().Contain("Recommendation: Use existing constant 'AuthModule.AuthUrl' instead of inline value (promote to internal/public if needed).");
+    }
+
+    [Fact]
+    public void PrintAiActionableIncrementalFeedback_MultiViolationWithExistingConstant_PrintsExistingConstantInfoAndUpdatedInstructions()
+    {
+        var formatter = new ConsoleFormatter(enableColor: false);
+        using var writer = new StringWriter();
+
+        var str = "https://internal.service.local/api/v1/data";
+        var constOcc = new RepeatedStringOccurrence
+        {
+            FilePath = "src/Config.cs",
+            StartLine = 5,
+            EndLine = 5,
+            StartColumn = 10,
+            EndColumn = 10 + str.Length,
+            StringValue = str,
+            IsConstDeclaration = true,
+            IsPrivateConstant = false,
+            ConstantName = "DataEndpoint",
+            ConstantTypeName = "Config"
+        };
+        var inlineOcc = new RepeatedStringOccurrence
+        {
+            FilePath = "src/Services/DataService.cs",
+            StartLine = 22,
+            EndLine = 22,
+            StartColumn = 14,
+            EndColumn = 14 + str.Length,
+            StringValue = str
+        };
+
+        var strGroup = new RepeatedStringGroup
+        {
+            Value = str,
+            Occurrences = [constOcc, inlineOcc],
+            ExistingConstantDeclarations = [constOcc],
+            Category = CloneCategory.Production,
+            SuggestedConstantName = "DataEndpoint",
+            SuggestedClassName = "Config"
+        };
+
+        var cloneMethods = new List<MethodCloneInfo>
+        {
+            new("src/ServiceA.cs", "DoSomething", 1, 10, 8, "hashA", "void DoSomething()"),
+            new("src/ServiceB.cs", "DoSomething", 1, 10, 8, "hashA", "void DoSomething()")
+        };
+        var cloneGroup = new CodeCloneGroup("hashA", cloneMethods, CloneCategory.Production, 8);
+
+        formatter.PrintAiActionableIncrementalFeedback(
+            writer,
+            cloneGroups: [cloneGroup],
+            subMethodGroups: [],
+            verboseComments: [],
+            baseDirectory: ".",
+            duplicationTolerance: 0,
+            hasDuplicationViolation: true,
+            repeatedStrings: [strGroup],
+            repeatedStringTolerance: 0,
+            hasRepeatedStringViolation: true);
+
+        var output = writer.ToString();
+        output.Should().Contain("[AI AGENT ACTION REQUIRED] Incremental Policy Violations (Exit Code: 2)");
+        output.Should().Contain("1 inline occurrence(s)");
+        output.Should().Contain("Existing Constant: Config.DataEndpoint");
+        output.Should().Contain("Recommendation: Use existing constant 'Config.DataEndpoint' instead of inline value.");
+        output.Should().Contain("Replace inline strings with existing constants when available, or extract duplicate strings into a shared constant");
     }
 
     [Fact]

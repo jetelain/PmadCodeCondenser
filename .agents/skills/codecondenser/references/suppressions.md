@@ -234,3 +234,40 @@ The following types are automatically exempted from splitting without needing ex
 1. **`file`-scoped types**: Any type with the C# 11 `file` modifier (e.g. `file class CacheHolder`).
 2. **Line tolerance**: Types whose pure lines of code (comments and blank lines excluded) do not exceed `--type-line-tolerance` / `-tlt` (default: `1`, e.g. `public delegate void Callback(int val);`).
 
+---
+
+## 5. Repeated Inline String Suppressions
+
+CodeCondenser scans for repeated inline strings exceeding length thresholds (default: 100 characters for new constants, 20 characters when matching existing `const` or `static readonly` string declarations).
+
+### A. Inline or Preceding Comment Marker
+Place `// codecondenser:ignore-string` (or `// nocondense`) on the line directly preceding or inline with the string literal:
+
+```csharp
+// codecondenser:ignore-string
+string query = "SELECT id, name, email, created_at, status, last_login_time FROM users WHERE is_active = 1";
+```
+
+*Supported comment markers*:
+- `codecondenser:ignore-string`
+- `codecondenser:ignore-strings`
+- `codecondenser:ignore`
+- `nocondense`
+
+### B. Suppression Attribute
+Apply `[SuppressMessage]` to the enclosing method, property, or class:
+
+```csharp
+[SuppressMessage("CodeCondenser", "RepeatedString", Justification = "Long SQL query intentionally inlined for readability")]
+public async Task<List<User>> GetActiveUsersAsync()
+{
+    // ...
+}
+```
+
+*Supported attributes*:
+- `[SuppressMessage("CodeCondenser", "RepeatedString")]`
+- `[SuppressMessage("CodeCondenser", "CC006")]`
+- `[CodeCondenserIgnore]`
+
+

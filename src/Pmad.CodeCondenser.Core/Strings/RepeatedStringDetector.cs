@@ -44,20 +44,55 @@ public sealed class RepeatedStringDetector : IRepeatedStringDetector
         ArgumentNullException.ThrowIfNull(settings);
 
         var minOccurrences = Math.Max(2, settings.RepeatedStringMinOccurrences);
-        var minLength = settings.RepeatedStringLengthThreshold;
+        var minRepeatedLength = settings.RepeatedStringLengthThreshold;
+        var minExistingConstLength = settings.ExistingConstantStringLengthThreshold;
 
         var grouped = occurrences
             .Where(o => (o.EndColumn - o.StartColumn > 0) || !string.IsNullOrEmpty(o.FilePath))
-            .GroupBy(o => o.StringValue, StringComparer.Ordinal)
-            .Where(g => !string.IsNullOrEmpty(g.Key) && g.Key.Length >= minLength && g.Count() >= minOccurrences)
-            .ToList();
+            .GroupBy(o => o.StringValue, StringComparer.Ordinal);
 
-        var result = new List<RepeatedStringGroup>(grouped.Count);
+        var result = new List<RepeatedStringGroup>();
 
         foreach (var group in grouped)
         {
             var stringValue = group.Key;
+            if (string.IsNullOrEmpty(stringValue))
+            {
+                continue;
+            }
+
             var occList = group.ToList();
+            var constOccurrences = occList.Where(o => o.IsConstDeclaration).ToList();
+            var inlineOccurrences = occList.Where(o => !o.IsConstDeclaration).ToList();
+
+            bool hasExistingConst = constOccurrences.Count > 0;
+
+            if (hasExistingConst)
+            {
+                // If a constant already exists, we only recommend using it if inline values exist.
+                if (inlineOccurrences.Count == 0)
+                {
+                    continue;
+                }
+
+                // Lower threshold for existing constants (declaration cost already paid),
+                // but also accept if it satisfies standard repeated string thresholds.
+                bool meetsExistingConstThreshold = stringValue.Length >= minExistingConstLength;
+                bool meetsStandardThreshold = stringValue.Length >= minRepeatedLength && occList.Count >= minOccurrences;
+
+                if (!meetsExistingConstThreshold && !meetsStandardThreshold)
+                {
+                    continue;
+                }
+            }
+            else
+            {
+                // Standard repeated string threshold
+                if (stringValue.Length < minRepeatedLength || occList.Count < minOccurrences)
+                {
+                    continue;
+                }
+            }
 
             // Determine clone category across occurrences
             var categories = occList.Select(o =>
@@ -83,9 +118,23 @@ public sealed class RepeatedStringDetector : IRepeatedStringDetector
                 clusterCategory = CloneCategory.CrossBoundary;
             }
 
-            var constantName = ConstantNamingHelper.SuggestConstantName(stringValue);
+            string constantName;
+            string className;
+            string targetNamespace;
 
-            var targetNamespace = occList.Select(o => o.Namespace).FirstOrDefault(n => !string.IsNullOrEmpty(n)) ?? "ApplicationNamespace";
+            if (hasExistingConst)
+            {
+                var primaryConst = constOccurrences[0];
+                constantName = primaryConst.ConstantName ?? ConstantNamingHelper.SuggestConstantName(stringValue);
+                className = primaryConst.ConstantTypeName ?? "Constants";
+                targetNamespace = primaryConst.Namespace ?? "ApplicationNamespace";
+            }
+            else
+            {
+                constantName = ConstantNamingHelper.SuggestConstantName(stringValue);
+                className = "Constants";
+                targetNamespace = occList.Select(o => o.Namespace).FirstOrDefault(n => !string.IsNullOrEmpty(n)) ?? "ApplicationNamespace";
+            }
 
             result.Add(new RepeatedStringGroup
             {
@@ -93,14 +142,15 @@ public sealed class RepeatedStringDetector : IRepeatedStringDetector
                 Occurrences = occList,
                 Category = clusterCategory,
                 SuggestedConstantName = constantName,
-                SuggestedClassName = "MyConstants",
-                TargetNamespace = targetNamespace
+                SuggestedClassName = className,
+                TargetNamespace = targetNamespace,
+                ExistingConstantDeclarations = constOccurrences
             });
         }
 
-        // Sort by impact (characters occupied by repetitions) descending
+        // Sort by impact (characters occupied by inline repetitions or repeated occurrences) descending
         return result
-            .OrderByDescending(g => g.Length * g.Occurrences.Count)
+            .OrderByDescending(g => g.Length * (g.HasExistingConstant ? g.InlineOccurrences.Count : g.Occurrences.Count))
             .ToList();
     }
 
@@ -153,7 +203,8 @@ public sealed class RepeatedStringDetector : IRepeatedStringDetector
 
         private void ProcessString(ExpressionSyntax node, string value)
         {
-            if (string.IsNullOrEmpty(value) || value.Length < _settings.RepeatedStringLengthThreshold)
+            var minThreshold = Math.Min(_settings.RepeatedStringLengthThreshold, _settings.ExistingConstantStringLengthThreshold);
+            if (string.IsNullOrEmpty(value) || value.Length < minThreshold)
             {
                 return;
             }
@@ -168,7 +219,8 @@ public sealed class RepeatedStringDetector : IRepeatedStringDetector
                 return;
             }
 
-            if (CheckIsConstDeclaration(node))
+            var constInfo = GetConstDeclarationInfo(node);
+            if (constInfo.IsConst && !constInfo.IsShareable)
             {
                 return;
             }
@@ -179,7 +231,7 @@ public sealed class RepeatedStringDetector : IRepeatedStringDetector
             int startCol = lineSpan.StartLinePosition.Character + 1;
             int endCol = lineSpan.EndLinePosition.Character + 1;
 
-            string? enclosingMember = FindEnclosingMember(node);
+            string? enclosingMember = constInfo.IsConst ? constInfo.ConstantName : FindEnclosingMember(node);
             string? enclosingNamespace = FindEnclosingNamespace(node);
 
             _occurrences.Add(new RepeatedStringOccurrence
@@ -193,29 +245,51 @@ public sealed class RepeatedStringDetector : IRepeatedStringDetector
                 Namespace = enclosingNamespace,
                 ProjectId = _projectId,
                 Category = _fileCategory,
-                IsConstDeclaration = false,
+                IsConstDeclaration = constInfo.IsConst,
+                IsPrivateConstant = constInfo.IsPrivate,
+                ConstantName = constInfo.ConstantName,
+                ConstantTypeName = constInfo.TypeName,
                 StringValue = value
             });
         }
 
-        private static bool CheckIsConstDeclaration(ExpressionSyntax node)
+        private static (bool IsConst, string? ConstantName, string? TypeName, bool IsShareable, bool IsPrivate) GetConstDeclarationInfo(ExpressionSyntax node)
         {
             if (node.Parent is EqualsValueClauseSyntax evc &&
                 evc.Parent is VariableDeclaratorSyntax vd &&
                 vd.Parent is VariableDeclarationSyntax vdecl)
             {
-                if (vdecl.Parent is FieldDeclarationSyntax fd && fd.Modifiers.Any(SyntaxKind.ConstKeyword))
+                if (vdecl.Parent is FieldDeclarationSyntax fd)
                 {
-                    return true;
+                    bool isConst = fd.Modifiers.Any(SyntaxKind.ConstKeyword);
+                    bool isStaticReadOnly = fd.Modifiers.Any(SyntaxKind.StaticKeyword) && fd.Modifiers.Any(SyntaxKind.ReadOnlyKeyword);
+
+                    if (isConst || isStaticReadOnly)
+                    {
+                        bool isPrivate = fd.Modifiers.Any(SyntaxKind.PrivateKeyword) ||
+                            (!fd.Modifiers.Any(SyntaxKind.PublicKeyword) &&
+                             !fd.Modifiers.Any(SyntaxKind.InternalKeyword) &&
+                             !fd.Modifiers.Any(SyntaxKind.ProtectedKeyword));
+
+                        var typeNames = new List<string>();
+                        var currentType = fd.FirstAncestorOrSelf<TypeDeclarationSyntax>();
+                        while (currentType != null)
+                        {
+                            typeNames.Insert(0, currentType.Identifier.ValueText);
+                            currentType = currentType.Parent as TypeDeclarationSyntax;
+                        }
+                        var typeName = typeNames.Count > 0 ? string.Join(".", typeNames) : "Constants";
+                        return (true, vd.Identifier.ValueText, typeName, true, isPrivate);
+                    }
                 }
 
                 if (vdecl.Parent is LocalDeclarationStatementSyntax ld && ld.Modifiers.Any(SyntaxKind.ConstKeyword))
                 {
-                    return true;
+                    return (true, vd.Identifier.ValueText, null, false, true);
                 }
             }
 
-            return false;
+            return (false, null, null, false, false);
         }
 
         private static string? FindEnclosingMember(SyntaxNode node)

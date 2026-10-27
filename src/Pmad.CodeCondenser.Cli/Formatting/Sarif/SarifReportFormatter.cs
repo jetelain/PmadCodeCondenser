@@ -263,21 +263,51 @@ public sealed class SarifReportFormatter : IReportFormatter
             var correlationGuid = DeterministicGuid.GenerateCorrelationGuid(strGroup.Value).ToString("D");
             var stringHash = Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(strGroup.Value)));
 
-            var normalizedOccPaths = strGroup.Occurrences
+            var occurrencesToReport = strGroup.HasExistingConstant
+                ? strGroup.InlineOccurrences
+                : strGroup.Occurrences;
+
+            var normalizedOccPaths = occurrencesToReport
                 .Select(occ => ReportPathHelper.NormalizeRelativePath(occ.FilePath, baseDirectory))
                 .ToArray();
 
-            for (int i = 0; i < strGroup.Occurrences.Count; i++)
+            for (int i = 0; i < occurrencesToReport.Count; i++)
             {
-                var occ = strGroup.Occurrences[i];
+                var occ = occurrencesToReport[i];
                 var relPath = normalizedOccPaths[i];
 
                 var relatedLocations = new List<SarifRelatedLocation>();
                 int relatedId = 1;
-                for (int j = 0; j < strGroup.Occurrences.Count; j++)
+
+                if (strGroup.HasExistingConstant && strGroup.ExistingConstantDeclaration != null)
+                {
+                    var constDecl = strGroup.ExistingConstantDeclaration;
+                    var constRelPath = ReportPathHelper.NormalizeRelativePath(constDecl.FilePath, baseDirectory);
+                    relatedLocations.Add(new SarifRelatedLocation
+                    {
+                        Id = relatedId++,
+                        PhysicalLocation = new SarifPhysicalLocation
+                        {
+                            ArtifactLocation = new SarifArtifactLocation { Uri = constRelPath },
+                            Region = new SarifRegion
+                            {
+                                StartLine = constDecl.StartLine,
+                                EndLine = constDecl.EndLine,
+                                StartColumn = constDecl.StartColumn,
+                                EndColumn = constDecl.EndColumn
+                            }
+                        },
+                        Message = new SarifMessage
+                        {
+                            Text = $"Existing constant '{strGroup.SuggestedClassName}.{strGroup.SuggestedConstantName}' declared in {Path.GetFileName(constDecl.FilePath)} (line {constDecl.StartLine})"
+                        }
+                    });
+                }
+
+                for (int j = 0; j < occurrencesToReport.Count; j++)
                 {
                     if (j == i) continue;
-                    var other = strGroup.Occurrences[j];
+                    var other = occurrencesToReport[j];
                     var otherRelPath = normalizedOccPaths[j];
 
                     relatedLocations.Add(new SarifRelatedLocation
@@ -304,6 +334,14 @@ public sealed class SarifReportFormatter : IReportFormatter
                 var preview = strGroup.Value.Length > 40 ? strGroup.Value[..37] + "..." : strGroup.Value;
                 var escapedPreview = preview.Replace("\r", " ").Replace("\n", " ");
 
+                var promoNote = (strGroup.IsExistingConstantPrivate && strGroup.InlineOccurrences.Any(o => o.FilePath != strGroup.ExistingConstantDeclaration?.FilePath))
+                    ? " (promote to internal/public if needed)"
+                    : string.Empty;
+
+                var messageText = strGroup.HasExistingConstant
+                    ? $"String literal \"{escapedPreview}\" ({strGroup.Length} chars) matches existing constant '{strGroup.SuggestedClassName}.{strGroup.SuggestedConstantName}'. Use the constant instead of inline value{promoNote}."
+                    : $"String literal \"{escapedPreview}\" ({strGroup.Length} chars) repeated {strGroup.Occurrences.Count} times. Extract into shared constant '{strGroup.SuggestedClassName}.{strGroup.SuggestedConstantName}'.";
+
                 run.Results.Add(new SarifResult
                 {
                     RuleId = SarifRules.RepeatedInlineStringRuleId,
@@ -316,7 +354,7 @@ public sealed class SarifReportFormatter : IReportFormatter
                     },
                     Message = new SarifMessage
                     {
-                        Text = $"String literal \"{escapedPreview}\" ({strGroup.Length} chars) repeated {strGroup.Occurrences.Count} times. Extract into shared constant '{strGroup.SuggestedClassName}.{strGroup.SuggestedConstantName}'."
+                        Text = messageText
                     },
                     Locations =
                     [

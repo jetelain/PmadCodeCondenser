@@ -187,6 +187,11 @@ public sealed class CommandServices
             settings.RepeatedStringLengthThreshold = options.ThresholdRepeatedStrings.Value;
         }
 
+        if (options.ThresholdExistingConstants.HasValue)
+        {
+            settings.ExistingConstantStringLengthThreshold = options.ThresholdExistingConstants.Value;
+        }
+
         if (options.ThresholdStringOccurrences.HasValue)
         {
             settings.RepeatedStringMinOccurrences = options.ThresholdStringOccurrences.Value;

@@ -68,7 +68,11 @@ public class RepeatedStringDetectorTests
             }
             """;
         var tree = CSharpSyntaxTree.ParseText(code);
-        var settings = new CodeCondenserSettings { RepeatedStringLengthThreshold = 50 };
+        var settings = new CodeCondenserSettings
+        {
+            RepeatedStringLengthThreshold = 50,
+            ExistingConstantStringLengthThreshold = 50
+        };
 
         var occurrences = _detector.ExtractStringLiterals(tree, "src/Service.cs", settings);
 
@@ -76,11 +80,11 @@ public class RepeatedStringDetectorTests
     }
 
     [Fact]
-    public void ExtractStringLiterals_InConstDeclaration_AreFilteredOut()
+    public void ExtractStringLiterals_InConstDeclaration_ExtractsConstantMetadata()
     {
         var longString = "This is a very long constant string that exceeds fifty characters in length.";
         var code = $$"""
-            public static class MyConstants
+            public static class Constants
             {
                 public const string ExistingConstant = "{{longString}}";
             }
@@ -88,9 +92,207 @@ public class RepeatedStringDetectorTests
         var tree = CSharpSyntaxTree.ParseText(code);
         var settings = new CodeCondenserSettings { RepeatedStringLengthThreshold = 50 };
 
-        var occurrences = _detector.ExtractStringLiterals(tree, "src/MyConstants.cs", settings);
+        var occurrences = _detector.ExtractStringLiterals(tree, "src/Constants.cs", settings);
 
-        occurrences.Should().BeEmpty();
+        occurrences.Should().HaveCount(1);
+        var occ = occurrences[0];
+        occ.IsConstDeclaration.Should().BeTrue();
+        occ.ConstantName.Should().Be("ExistingConstant");
+        occ.ConstantTypeName.Should().Be("Constants");
+        occ.StringValue.Should().Be(longString);
+
+        // When only constant declarations exist without any inline occurrences, no groups are formed
+        var groups = _detector.GroupRepeatedStrings(occurrences, settings);
+        groups.Should().BeEmpty();
+    }
+
+    [Fact]
+    public void GroupRepeatedStrings_WhenExistingConstantExists_RecommendsExistingConstant()
+    {
+        var constCode = """
+            namespace MyApp;
+
+            public static class AppConstants
+            {
+                public const string ApiEndpoint = "https://api.example.com/v1/users";
+            }
+            """;
+        var usageCode = """
+            namespace MyApp;
+
+            public class UserService
+            {
+                public void Fetch()
+                {
+                    var url = "https://api.example.com/v1/users";
+                }
+            }
+            """;
+        var constTree = CSharpSyntaxTree.ParseText(constCode);
+        var usageTree = CSharpSyntaxTree.ParseText(usageCode);
+        var settings = new CodeCondenserSettings
+        {
+            RepeatedStringLengthThreshold = 100, // String is 35 chars, well below 100!
+            ExistingConstantStringLengthThreshold = 20 // Above existing constant threshold
+        };
+
+        var constOccs = _detector.ExtractStringLiterals(constTree, "src/AppConstants.cs", settings);
+        var usageOccs = _detector.ExtractStringLiterals(usageTree, "src/UserService.cs", settings);
+
+        var allOccs = constOccs.Concat(usageOccs).ToList();
+        var groups = _detector.GroupRepeatedStrings(allOccs, settings);
+
+        groups.Should().HaveCount(1);
+        var group = groups[0];
+        group.HasExistingConstant.Should().BeTrue();
+        group.SuggestedConstantName.Should().Be("ApiEndpoint");
+        group.SuggestedClassName.Should().Be("AppConstants");
+        group.GenerateTypicalUsage().Should().Be("AppConstants.ApiEndpoint");
+        group.InlineOccurrences.Should().HaveCount(1);
+        group.InlineOccurrences[0].FilePath.Should().Be("src/UserService.cs");
+        group.ExistingConstantDeclaration.Should().NotBeNull();
+        group.ExistingConstantDeclaration!.FilePath.Should().Be("src/AppConstants.cs");
+        group.ExistingConstantDeclaration.ConstantName.Should().Be("ApiEndpoint");
+    }
+
+    [Fact]
+    public void GroupRepeatedStrings_WithoutExistingConstant_BelowNormalThreshold_IsIgnored()
+    {
+        // Two inline occurrences of a 35-char string without any constant declaration
+        var code = """
+            public class Service
+            {
+                public void M1() { var a = "https://api.example.com/v1/users"; }
+                public void M2() { var b = "https://api.example.com/v1/users"; }
+            }
+            """;
+        var tree = CSharpSyntaxTree.ParseText(code);
+        var settings = new CodeCondenserSettings
+        {
+            RepeatedStringLengthThreshold = 100,
+            ExistingConstantStringLengthThreshold = 20
+        };
+
+        var occs = _detector.ExtractStringLiterals(tree, "src/Service.cs", settings);
+        var groups = _detector.GroupRepeatedStrings(occs, settings);
+
+        // Since no constant declaration exists and 35 < 100, no group is formed!
+        groups.Should().BeEmpty();
+    }
+
+    [Fact]
+    public void ExtractStringLiterals_NestedTypeConstant_CapturesFullTypeName()
+    {
+        var code = """
+            public class OuterClass
+            {
+                public class InnerClass
+                {
+                    public const string NestedConst = "A string constant inside nested type hierarchy.";
+                }
+            }
+            """;
+        var tree = CSharpSyntaxTree.ParseText(code);
+        var settings = new CodeCondenserSettings { ExistingConstantStringLengthThreshold = 20 };
+
+        var occs = _detector.ExtractStringLiterals(tree, "src/Outer.cs", settings);
+        occs.Should().HaveCount(1);
+        occs[0].IsConstDeclaration.Should().BeTrue();
+        occs[0].ConstantName.Should().Be("NestedConst");
+        occs[0].ConstantTypeName.Should().Be("OuterClass.InnerClass");
+    }
+
+    [Fact]
+    public void ExtractStringLiterals_StaticReadOnlyField_ExtractsAsConstant()
+    {
+        var code = """
+            public class Config
+            {
+                public static readonly string DefaultKey = "This is a static readonly default key string.";
+            }
+            """;
+        var tree = CSharpSyntaxTree.ParseText(code);
+        var settings = new CodeCondenserSettings { ExistingConstantStringLengthThreshold = 20 };
+
+        var occs = _detector.ExtractStringLiterals(tree, "src/Config.cs", settings);
+        occs.Should().HaveCount(1);
+        occs[0].IsConstDeclaration.Should().BeTrue();
+        occs[0].ConstantName.Should().Be("DefaultKey");
+        occs[0].ConstantTypeName.Should().Be("Config");
+    }
+
+    [Fact]
+    public void ExtractStringLiterals_PrivateConstant_DetectsPrivateAccessibility()
+    {
+        var code = """
+            public class Config
+            {
+                private const string PrivateSecret = "This is a private constant string in the class.";
+            }
+            """;
+        var tree = CSharpSyntaxTree.ParseText(code);
+        var settings = new CodeCondenserSettings { ExistingConstantStringLengthThreshold = 20 };
+
+        var occs = _detector.ExtractStringLiterals(tree, "src/Config.cs", settings);
+        occs.Should().HaveCount(1);
+        occs[0].IsConstDeclaration.Should().BeTrue();
+        occs[0].IsPrivateConstant.Should().BeTrue();
+    }
+
+    [Fact]
+    public void ExtractStringLiterals_PublicConstant_DetectsNonPrivateAccessibility()
+    {
+        var code = """
+            public class Config
+            {
+                public const string PublicSecret = "This is a public constant string in the class.";
+            }
+            """;
+        var tree = CSharpSyntaxTree.ParseText(code);
+        var settings = new CodeCondenserSettings { ExistingConstantStringLengthThreshold = 20 };
+
+        var occs = _detector.ExtractStringLiterals(tree, "src/Config.cs", settings);
+        occs.Should().HaveCount(1);
+        occs[0].IsConstDeclaration.Should().BeTrue();
+        occs[0].IsPrivateConstant.Should().BeFalse();
+    }
+
+    [Fact]
+    public void GroupRepeatedStrings_WhenExistingConstantThresholdHigherThanRepeatedThreshold_StillDetectsQualifyingStrings()
+    {
+        var constCode = """
+            public static class Common
+            {
+                public const string Query = "SELECT id, name, email, department, salary, hire_date FROM employees WHERE is_active = 1";
+            }
+            """;
+        var usageCode = """
+            public class Service
+            {
+                public void Fetch()
+                {
+                    var sql = "SELECT id, name, email, department, salary, hire_date FROM employees WHERE is_active = 1";
+                }
+            }
+            """;
+        var constTree = CSharpSyntaxTree.ParseText(constCode);
+        var usageTree = CSharpSyntaxTree.ParseText(usageCode);
+
+        // Misconfiguration where existing constant threshold is set higher than repeated threshold
+        var settings = new CodeCondenserSettings
+        {
+            RepeatedStringLengthThreshold = 50,
+            ExistingConstantStringLengthThreshold = 150, // 89 chars is below 150, but >= 50 and count >= 2
+            RepeatedStringMinOccurrences = 2
+        };
+
+        var constOccs = _detector.ExtractStringLiterals(constTree, "src/Common.cs", settings);
+        var usageOccs = _detector.ExtractStringLiterals(usageTree, "src/Service.cs", settings);
+
+        var groups = _detector.GroupRepeatedStrings(constOccs.Concat(usageOccs), settings);
+        groups.Should().HaveCount(1);
+        groups[0].HasExistingConstant.Should().BeTrue();
+        groups[0].SuggestedConstantName.Should().Be("Query");
     }
 
     [Fact]
@@ -185,7 +387,7 @@ public class RepeatedStringDetectorTests
         group.Value.Should().Be(longString);
         group.Occurrences.Should().HaveCount(2);
         group.Category.Should().Be(CloneCategory.Production);
-        group.SuggestedClassName.Should().Be("MyConstants");
+        group.SuggestedClassName.Should().Be("Constants");
         group.SuggestedConstantName.Should().NotBeNullOrWhiteSpace();
     }
 
@@ -202,17 +404,17 @@ public class RepeatedStringDetectorTests
             Occurrences = [occ1, occ2],
             Category = CloneCategory.Production,
             SuggestedConstantName = "TestConstant",
-            SuggestedClassName = "MyConstants",
+            SuggestedClassName = "Constants",
             TargetNamespace = "ApplicationNamespace"
         };
 
         var decl = group.GenerateMinimalDeclaration();
         decl.Should().Contain("namespace ApplicationNamespace;");
-        decl.Should().Contain("static class MyConstants");
+        decl.Should().Contain("static class Constants");
         decl.Should().Contain("internal const string TestConstant = \"");
 
         var usage = group.GenerateTypicalUsage();
-        usage.Should().Be("MyConstants.TestConstant");
+        usage.Should().Be("Constants.TestConstant");
     }
 
     [Fact]
@@ -316,7 +518,7 @@ public class RepeatedStringDetectorTests
             Occurrences = [occ1, occ2],
             Category = CloneCategory.Production,
             SuggestedConstantName = "SpecialConstant",
-            SuggestedClassName = "MyConstants",
+            SuggestedClassName = "Constants",
             TargetNamespace = "TestNamespace"
         };
 

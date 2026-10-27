@@ -137,4 +137,71 @@ public class RepeatedStringGainEstimatorTests
         int expectedTokens = group1.EstimateGainTokens() + group2.EstimateGainTokens();
         totalTokens.Should().Be(expectedTokens);
     }
+
+    [Fact]
+    public void EstimateGainCharacters_WithExistingConstant_CalculatesSavingsWithoutDeclarationOverhead()
+    {
+        var str = "https://api.example.com/v1/customers"; // 36 chars
+        var constOcc = new RepeatedStringOccurrence
+        {
+            FilePath = "src/ApiRoutes.cs",
+            StartLine = 5,
+            EndLine = 5,
+            StartColumn = 10,
+            EndColumn = 46,
+            StringValue = str,
+            IsConstDeclaration = true,
+            ConstantName = "CustomersEndpoint",
+            ConstantTypeName = "ApiRoutes"
+        };
+        var inlineOcc1 = CreateOccurrence("src/ClientA.cs", str);
+        var inlineOcc2 = CreateOccurrence("src/ClientB.cs", str);
+
+        var group = new RepeatedStringGroup
+        {
+            Value = str,
+            Occurrences = [constOcc, inlineOcc1, inlineOcc2],
+            ExistingConstantDeclarations = [constOcc],
+            SuggestedConstantName = "CustomersEndpoint",
+            SuggestedClassName = "ApiRoutes"
+        };
+
+        group.HasExistingConstant.Should().BeTrue();
+        // 2 inline occurrences
+        // Current chars: 2 * (36 + 2) = 76
+        // Usage: "ApiRoutes.CustomersEndpoint" = 27 chars -> 2 * 27 = 54
+        // Expected gain: 76 - 54 = 22
+        group.EstimateGainCharacters().Should().Be(22);
+    }
+
+    [Fact]
+    public void EstimateGainTokens_WithExistingConstant_CalculatesTokensSavedWithoutDeclarationOverhead()
+    {
+        var longText = "SELECT CustomerId, OrderId, OrderDate, TotalAmount, Status FROM Orders WHERE Status = 'Pending' ORDER BY OrderDate DESC";
+        var constOcc = new RepeatedStringOccurrence
+        {
+            FilePath = "src/Queries.cs",
+            StartLine = 10,
+            EndLine = 10,
+            StartColumn = 10,
+            EndColumn = 100,
+            StringValue = longText,
+            IsConstDeclaration = true,
+            ConstantName = "PendingOrdersQuery",
+            ConstantTypeName = "Queries"
+        };
+        var inlineOcc = CreateOccurrence("src/Service.cs", longText);
+
+        var group = new RepeatedStringGroup
+        {
+            Value = longText,
+            Occurrences = [constOcc, inlineOcc],
+            ExistingConstantDeclarations = [constOcc],
+            SuggestedConstantName = "PendingOrdersQuery",
+            SuggestedClassName = "Queries"
+        };
+
+        int gainTokens = group.EstimateGainTokens();
+        gainTokens.Should().BeGreaterThan(0);
+    }
 }

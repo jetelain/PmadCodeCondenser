@@ -186,7 +186,13 @@ public sealed record JsonRepeatedStringCluster
 
     public string SuggestedConstantName { get; init; } = string.Empty;
 
-    public string SuggestedClassName { get; init; } = "MyConstants";
+    public string SuggestedClassName { get; init; } = "Constants";
+
+    public bool HasExistingConstant { get; init; }
+
+    public string? ExistingConstant { get; init; }
+
+    public bool IsExistingConstantPrivate { get; init; }
 
     public List<JsonRepeatedStringOccurrence> Occurrences { get; init; } = [];
 
@@ -213,6 +219,10 @@ public sealed record JsonRepeatedStringOccurrence
     public int EndColumn { get; init; }
 
     public string? EnclosingMember { get; init; }
+
+    public bool IsConstDeclaration { get; init; }
+
+    public bool IsPrivateConstant { get; init; }
 }
 
 /// <summary>

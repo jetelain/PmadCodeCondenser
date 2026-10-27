@@ -289,6 +289,73 @@ public class SarifReportFormatterTests
     }
 
     [Fact]
+    public async Task FormatAsync_ExistingConstant_EmitsDiagnosticOnlyOnInlineOccurrence()
+    {
+        var str = "https://api.example.com/v1/resource";
+        var constOcc = new RepeatedStringOccurrence
+        {
+            FilePath = "c:/repo/src/Routes.cs",
+            StartLine = 8,
+            EndLine = 8,
+            StartColumn = 25,
+            EndColumn = 25 + str.Length,
+            StringValue = str,
+            IsConstDeclaration = true,
+            ConstantName = "ResourceUrl",
+            ConstantTypeName = "Routes",
+            Category = FileCategory.Production
+        };
+        var inlineOcc = new RepeatedStringOccurrence
+        {
+            FilePath = "c:/repo/src/Client.cs",
+            StartLine = 42,
+            EndLine = 42,
+            StartColumn = 15,
+            EndColumn = 15 + str.Length,
+            StringValue = str,
+            IsConstDeclaration = false,
+            Category = FileCategory.Production
+        };
+
+        var strGroup = new RepeatedStringGroup
+        {
+            Value = str,
+            Occurrences = [constOcc, inlineOcc],
+            ExistingConstantDeclarations = [constOcc],
+            Category = CloneCategory.Production,
+            SuggestedConstantName = "ResourceUrl",
+            SuggestedClassName = "Routes"
+        };
+
+        var result = new AnalysisResult
+        {
+            AnalyzedFilesCount = 2,
+            TotalMethodsScanned = 0,
+            CloneGroups = [],
+            VerboseComments = [],
+            SummarizedComments = new Dictionary<string, string>(),
+            RepeatedStringGroups = [strGroup]
+        };
+
+        using var writer = new StringWriter();
+        await _formatter.FormatAsync(result, _settings, writer, "c:/repo");
+
+        var sarif = JsonSerializer.Deserialize<SarifLog>(writer.ToString(), new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase });
+        // Diagnostic emitted ONLY for the inline occurrence (1 result), NOT the constant declaration
+        sarif!.Runs[0].Results.Should().HaveCount(1);
+
+        var res = sarif.Runs[0].Results[0];
+        res.RuleId.Should().Be("CC006");
+        res.Locations[0].PhysicalLocation.ArtifactLocation.Uri.Should().Be("src/Client.cs");
+        res.Locations[0].PhysicalLocation.Region.StartLine.Should().Be(42);
+        res.Message.Text.Should().Contain("matches existing constant 'Routes.ResourceUrl'. Use the constant instead of inline value.");
+        // Related location points to the existing constant
+        res.RelatedLocations.Should().HaveCount(1);
+        res.RelatedLocations![0].PhysicalLocation.ArtifactLocation.Uri.Should().Be("src/Routes.cs");
+        res.RelatedLocations[0].Message.Text.Should().Contain("Existing constant 'Routes.ResourceUrl' declared in Routes.cs (line 8)");
+    }
+
+    [Fact]
     public async Task FormatAsync_SingleTypePerFileIssue_EmitsCC007Result()
     {
         var primaryType = new ExtractedTypeInfo { TypeName = "MyClass", Kind = "class", LinesOfCode = 10, StartLine = 1, EndLine = 20, TargetFileName = "MyClass.cs", IsPrimary = true };

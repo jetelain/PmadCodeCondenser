@@ -147,11 +147,21 @@ public sealed class JsonReportFormatter : IReportFormatter
                 EndLine = occ.EndLine,
                 StartColumn = occ.StartColumn,
                 EndColumn = occ.EndColumn,
-                EnclosingMember = occ.EnclosingMember
+                EnclosingMember = occ.EnclosingMember,
+                IsConstDeclaration = occ.IsConstDeclaration,
+                IsPrivateConstant = occ.IsPrivateConstant
             }).ToList();
 
             var gainChars = strGroup.EstimateGainCharacters(preExistingClass: true);
             var gainTokens = strGroup.EstimateGainTokens(estimator);
+
+            var promoNote = (strGroup.IsExistingConstantPrivate && strGroup.InlineOccurrences.Any(o => o.FilePath != strGroup.ExistingConstantDeclaration?.FilePath))
+                ? " (promote to internal/public if needed)"
+                : string.Empty;
+
+            var recommendation = strGroup.HasExistingConstant
+                ? $"Use existing constant '{strGroup.SuggestedClassName}.{strGroup.SuggestedConstantName}' instead of inline value{promoNote}."
+                : "Extract repeated inline string literal into a shared constant.";
 
             repeatedStrings.Add(new JsonRepeatedStringCluster
             {
@@ -162,8 +172,11 @@ public sealed class JsonReportFormatter : IReportFormatter
                 Category = strGroup.Category.ToString(),
                 SuggestedConstantName = strGroup.SuggestedConstantName,
                 SuggestedClassName = strGroup.SuggestedClassName,
+                HasExistingConstant = strGroup.HasExistingConstant,
+                ExistingConstant = strGroup.HasExistingConstant ? $"{strGroup.SuggestedClassName}.{strGroup.SuggestedConstantName}" : null,
+                IsExistingConstantPrivate = strGroup.IsExistingConstantPrivate,
                 Occurrences = occurrences,
-                Recommendation = "Extract repeated inline string literal into a shared constant.",
+                Recommendation = recommendation,
                 PotentialGainCharacters = gainChars > 0 ? gainChars : null,
                 PotentialGainTokens = gainTokens > 0 ? gainTokens : null
             });

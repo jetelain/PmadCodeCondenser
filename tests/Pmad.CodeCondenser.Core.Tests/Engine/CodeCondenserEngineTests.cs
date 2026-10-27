@@ -199,6 +199,70 @@ public class CodeCondenserEngineTests : IDisposable
     }
 
     [Fact]
+    public async Task AnalyzeAsync_IncrementalMode_ExistingConstantOnlyTouched_DoesNotFlagUntouchedInlineStrings()
+    {
+        // Arrange
+        var constFile = Path.Combine(_testDir, "AppConstants.cs");
+        var constCode = """
+            namespace MyTest;
+            public static class AppConstants
+            {
+                public const string ApiEndpoint = "https://api.example.com/v1/customers";
+            }
+            """;
+        await File.WriteAllTextAsync(constFile, constCode);
+
+        var serviceFile = Path.Combine(_testDir, "UserService.cs");
+        var serviceCode = """
+            namespace MyTest;
+            public class UserService
+            {
+                public void Fetch()
+                {
+                    var url = "https://api.example.com/v1/customers";
+                }
+            }
+            """;
+        await File.WriteAllTextAsync(serviceFile, serviceCode);
+
+        var engine = new CodeCondenserEngine(
+            snapshotStore: _snapshotStore,
+            commentSummarizer: _commentSummarizer);
+
+        var settings = new CodeCondenserSettings
+        {
+            EnableRepeatedStringDetection = true,
+            ExistingConstantStringLengthThreshold = 20,
+            RepeatedStringLengthThreshold = 100
+        };
+
+        // Create baseline snapshot with baseline files
+        await engine.UpdateSnapshotBaselineAsync(_testDir, settings);
+
+        // Modify only the constant file (e.g. adding a comment)
+        await File.AppendAllTextAsync(constFile, "\n// Touch constants file");
+
+        // Act 1: Incremental run when only constant file is touched
+        var incResult1 = await engine.AnalyzeAsync(_testDir, settings, incremental: true);
+
+        // Assert 1: The untouched inline occurrence in UserService.cs should NOT trigger a violation
+        incResult1.RepeatedStringGroups.Should().BeEmpty();
+
+        // Reset baseline to current state
+        await engine.UpdateSnapshotBaselineAsync(_testDir, settings);
+
+        // Modify both the constant file and the service file
+        await File.AppendAllTextAsync(constFile, "\n// Touch constants file again");
+        await File.AppendAllTextAsync(serviceFile, "\n// Touch service file");
+
+        var incResult2 = await engine.AnalyzeAsync(_testDir, settings, incremental: true);
+
+        // Assert 2: Since both files were modified, the violation is reported
+        incResult2.RepeatedStringGroups.Should().HaveCount(1);
+        incResult2.RepeatedStringGroups[0].HasExistingConstant.Should().BeTrue();
+    }
+
+    [Fact]
     public async Task UpdateSnapshotBaselineAsync_CreatesBaselineInSnapshotStore()
     {
         // Arrange

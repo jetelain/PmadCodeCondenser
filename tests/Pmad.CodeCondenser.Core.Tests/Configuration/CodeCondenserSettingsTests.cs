@@ -28,6 +28,7 @@ public class CodeCondenserSettingsTests
         settings.SnapshotFilePath.Should().Be(".codecondenser/snapshot.json");
         settings.EnableRepeatedStringDetection.Should().BeTrue();
         settings.RepeatedStringLengthThreshold.Should().Be(100);
+        settings.ExistingConstantStringLengthThreshold.Should().Be(20);
         settings.RepeatedStringMinOccurrences.Should().Be(2);
         settings.RepeatedStringTolerance.Should().BeNull();
         settings.RepeatedStringExitCode.Should().Be(2);
@@ -185,5 +186,32 @@ public class CodeCondenserSettingsTests
 
         var cloned = original.Clone();
         cloned.MaxSummarizationRetries.Should().Be(4);
+    }
+
+    [Fact]
+    public void ExistingConstantLengthThreshold_AliasesWorkCorrectly()
+    {
+        var settings = new CodeCondenserSettings();
+        settings.ExistingConstantLengthThreshold = 25;
+        settings.ExistingConstantStringLengthThreshold.Should().Be(25);
+        settings.ExistingConstantLengthThreshold.Should().Be(25);
+
+        settings.ThresholdExistingConstantLength = 30;
+        settings.ExistingConstantStringLengthThreshold.Should().Be(30);
+
+        settings.ThresholdExistingConstants = 15;
+        settings.ExistingConstantStringLengthThreshold.Should().Be(15);
+    }
+
+    [Fact]
+    public void Clone_CopiesExistingConstantStringLengthThreshold()
+    {
+        var original = new CodeCondenserSettings
+        {
+            ExistingConstantStringLengthThreshold = 35
+        };
+
+        var cloned = original.Clone();
+        cloned.ExistingConstantStringLengthThreshold.Should().Be(35);
     }
 }

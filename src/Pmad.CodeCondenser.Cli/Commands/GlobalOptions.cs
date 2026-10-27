@@ -168,6 +168,12 @@ public sealed class GlobalOptions
         Recursive = true
     };
 
+    public Option<int?> ThresholdExistingConstantsOption { get; } = new("--threshold-existing-constants", "-tec", "--threshold-existing-constant-strings", "--existing-constant-threshold")
+    {
+        Description = "Minimum character length to flag inline strings when an existing constant already exists (default: 20)",
+        Recursive = true
+    };
+
     // Type splitting & Single type per file thresholds
     public Option<bool> NoTypeSplitOption { get; } = new("--no-type-split", "--no-split-types", "--no-single-type-per-file")
     {
@@ -317,6 +323,7 @@ public sealed class GlobalOptions
         root.Add(EnableStringsOption);
         root.Add(ThresholdRepeatedStringsOption);
         root.Add(ThresholdStringOccurrencesOption);
+        root.Add(ThresholdExistingConstantsOption);
 
         root.Add(NoTypeSplitOption);
         root.Add(EnableTypeSplitOption);
@@ -372,6 +379,7 @@ public sealed class GlobalOptions
 
             ThresholdRepeatedStrings = pr.GetValue(ThresholdRepeatedStringsOption),
             ThresholdStringOccurrences = pr.GetValue(ThresholdStringOccurrencesOption),
+            ThresholdExistingConstants = pr.GetValue(ThresholdExistingConstantsOption),
 
             TypeLineTolerance = pr.GetValue(TypeLineToleranceOption),
             TypeTolerance = pr.GetValue(TypeToleranceOption),

@@ -229,7 +229,7 @@ public class JsonReportFormatterTests
             Occurrences = occurrences,
             Category = CloneCategory.Production,
             SuggestedConstantName = "TestMessage",
-            SuggestedClassName = "MyConstants",
+            SuggestedClassName = "Constants",
             TargetNamespace = "ApplicationNamespace"
         };
 
@@ -263,8 +263,75 @@ public class JsonReportFormatterTests
         cluster.Occurrences[0].StartLine.Should().Be(10);
         cluster.Occurrences[0].StartColumn.Should().Be(15);
         cluster.SuggestedConstantName.Should().Be("TestMessage");
-        cluster.SuggestedClassName.Should().Be("MyConstants");
+        cluster.SuggestedClassName.Should().Be("Constants");
+        cluster.HasExistingConstant.Should().BeFalse();
+        cluster.ExistingConstant.Should().BeNull();
         cluster.Recommendation.Should().Contain("Extract repeated inline string literal");
+    }
+
+    [Fact]
+    public async Task FormatAsync_ExistingConstant_EmitsExpectedJsonWithExistingConstantMetadata()
+    {
+        var str = "https://api.example.com/v1/resource";
+        var constOcc = new RepeatedStringOccurrence
+        {
+            FilePath = "c:/repo/src/Routes.cs",
+            StartLine = 8,
+            EndLine = 8,
+            StartColumn = 25,
+            EndColumn = 25 + str.Length,
+            StringValue = str,
+            IsConstDeclaration = true,
+            ConstantName = "ResourceUrl",
+            ConstantTypeName = "Routes"
+        };
+        var inlineOcc = new RepeatedStringOccurrence
+        {
+            FilePath = "c:/repo/src/Client.cs",
+            StartLine = 42,
+            EndLine = 42,
+            StartColumn = 15,
+            EndColumn = 15 + str.Length,
+            StringValue = str,
+            IsConstDeclaration = false
+        };
+
+        var group = new RepeatedStringGroup
+        {
+            Value = str,
+            Occurrences = [constOcc, inlineOcc],
+            ExistingConstantDeclarations = [constOcc],
+            Category = CloneCategory.Production,
+            SuggestedConstantName = "ResourceUrl",
+            SuggestedClassName = "Routes"
+        };
+
+        var result = new AnalysisResult
+        {
+            AnalyzedFilesCount = 2,
+            TotalMethodsScanned = 0,
+            CloneGroups = [],
+            VerboseComments = [],
+            SummarizedComments = new Dictionary<string, string>(),
+            RepeatedStringGroups = [group]
+        };
+
+        using var writer = new StringWriter();
+        await _formatter.FormatAsync(result, _settings, writer, "c:/repo");
+
+        var json = writer.ToString();
+        var report = JsonSerializer.Deserialize<CodeCondenserJsonReport>(json, new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase });
+
+        report.Should().NotBeNull();
+        report!.RepeatedStrings.Should().HaveCount(1);
+
+        var cluster = report.RepeatedStrings[0];
+        cluster.HasExistingConstant.Should().BeTrue();
+        cluster.ExistingConstant.Should().Be("Routes.ResourceUrl");
+        cluster.Recommendation.Should().Be("Use existing constant 'Routes.ResourceUrl' instead of inline value.");
+        cluster.Occurrences.Should().HaveCount(2);
+        cluster.Occurrences[0].IsConstDeclaration.Should().BeTrue();
+        cluster.Occurrences[1].IsConstDeclaration.Should().BeFalse();
     }
 
     [Fact]
