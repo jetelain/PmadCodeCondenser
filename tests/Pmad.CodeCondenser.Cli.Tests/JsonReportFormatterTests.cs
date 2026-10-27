@@ -229,7 +229,7 @@ public class JsonReportFormatterTests
             Occurrences = occurrences,
             Category = CloneCategory.Production,
             SuggestedConstantName = "TestMessage",
-            SuggestedClassName = "MyConstants",
+            SuggestedClassName = "Constants",
             TargetNamespace = "ApplicationNamespace"
         };
 
@@ -263,7 +263,7 @@ public class JsonReportFormatterTests
         cluster.Occurrences[0].StartLine.Should().Be(10);
         cluster.Occurrences[0].StartColumn.Should().Be(15);
         cluster.SuggestedConstantName.Should().Be("TestMessage");
-        cluster.SuggestedClassName.Should().Be("MyConstants");
+        cluster.SuggestedClassName.Should().Be("Constants");
         cluster.HasExistingConstant.Should().BeFalse();
         cluster.ExistingConstant.Should().BeNull();
         cluster.Recommendation.Should().Contain("Extract repeated inline string literal");

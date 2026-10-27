@@ -122,13 +122,13 @@ public sealed class RepeatedStringDetector : IRepeatedStringDetector
             {
                 var primaryConst = constOccurrences[0];
                 constantName = primaryConst.ConstantName ?? ConstantNamingHelper.SuggestConstantName(stringValue);
-                className = primaryConst.ConstantTypeName ?? "MyConstants";
+                className = primaryConst.ConstantTypeName ?? "Constants";
                 targetNamespace = primaryConst.Namespace ?? "ApplicationNamespace";
             }
             else
             {
                 constantName = ConstantNamingHelper.SuggestConstantName(stringValue);
-                className = "MyConstants";
+                className = "Constants";
                 targetNamespace = occList.Select(o => o.Namespace).FirstOrDefault(n => !string.IsNullOrEmpty(n)) ?? "ApplicationNamespace";
             }
 
@@ -268,7 +268,7 @@ public sealed class RepeatedStringDetector : IRepeatedStringDetector
                             typeNames.Insert(0, currentType.Identifier.ValueText);
                             currentType = currentType.Parent as TypeDeclarationSyntax;
                         }
-                        var typeName = typeNames.Count > 0 ? string.Join(".", typeNames) : "MyConstants";
+                        var typeName = typeNames.Count > 0 ? string.Join(".", typeNames) : "Constants";
                         return (true, vd.Identifier.ValueText, typeName, true);
                     }
                 }

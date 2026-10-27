@@ -186,7 +186,7 @@ public sealed record JsonRepeatedStringCluster
 
     public string SuggestedConstantName { get; init; } = string.Empty;
 
-    public string SuggestedClassName { get; init; } = "MyConstants";
+    public string SuggestedClassName { get; init; } = "Constants";
 
     public bool HasExistingConstant { get; init; }
 

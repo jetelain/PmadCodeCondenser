@@ -233,13 +233,13 @@ When no existing constant exists and a string is repeated >= 100 characters, min
 ```csharp
 namespace ApplicationNamespace;
 
-static class MyConstants
+static class Constants
 {
     internal const string NameOfMyConstant = "...";
 }
 ```
 Typical usage:
-`MyConstants.NameOfMyConstant`
+`Constants.NameOfMyConstant`
 
 ---
 

@@ -641,7 +641,7 @@ public class ConsoleFormatterTests
             ],
             Category = CloneCategory.Production,
             SuggestedConstantName = "PendingOrdersQuery",
-            SuggestedClassName = "MyConstants",
+            SuggestedClassName = "Constants",
             TargetNamespace = "ApplicationNamespace"
         };
 
@@ -652,9 +652,9 @@ public class ConsoleFormatterTests
         output.Should().Contain($"[PRODUCTION REPEATED STRING #1] ({longStr.Length} chars, 2 occurrences");
         output.Should().Contain("OrderService.cs:15:20 in GetPendingOrders");
         output.Should().Contain("OrderRepo.cs:45:25 in QueryOrders");
-        output.Should().Contain("Suggested Constant: MyConstants.PendingOrdersQuery");
+        output.Should().Contain("Suggested Constant: Constants.PendingOrdersQuery");
         output.Should().Contain("Minimal Declaration:");
-        output.Should().Contain("static class MyConstants");
+        output.Should().Contain("static class Constants");
         output.Should().Contain("internal const string PendingOrdersQuery = \"...\";");
     }
 

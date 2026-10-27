@@ -84,7 +84,7 @@ public class RepeatedStringDetectorTests
     {
         var longString = "This is a very long constant string that exceeds fifty characters in length.";
         var code = $$"""
-            public static class MyConstants
+            public static class Constants
             {
                 public const string ExistingConstant = "{{longString}}";
             }
@@ -92,13 +92,13 @@ public class RepeatedStringDetectorTests
         var tree = CSharpSyntaxTree.ParseText(code);
         var settings = new CodeCondenserSettings { RepeatedStringLengthThreshold = 50 };
 
-        var occurrences = _detector.ExtractStringLiterals(tree, "src/MyConstants.cs", settings);
+        var occurrences = _detector.ExtractStringLiterals(tree, "src/Constants.cs", settings);
 
         occurrences.Should().HaveCount(1);
         var occ = occurrences[0];
         occ.IsConstDeclaration.Should().BeTrue();
         occ.ConstantName.Should().Be("ExistingConstant");
-        occ.ConstantTypeName.Should().Be("MyConstants");
+        occ.ConstantTypeName.Should().Be("Constants");
         occ.StringValue.Should().Be(longString);
 
         // When only constant declarations exist without any inline occurrences, no groups are formed
@@ -313,7 +313,7 @@ public class RepeatedStringDetectorTests
         group.Value.Should().Be(longString);
         group.Occurrences.Should().HaveCount(2);
         group.Category.Should().Be(CloneCategory.Production);
-        group.SuggestedClassName.Should().Be("MyConstants");
+        group.SuggestedClassName.Should().Be("Constants");
         group.SuggestedConstantName.Should().NotBeNullOrWhiteSpace();
     }
 
@@ -330,17 +330,17 @@ public class RepeatedStringDetectorTests
             Occurrences = [occ1, occ2],
             Category = CloneCategory.Production,
             SuggestedConstantName = "TestConstant",
-            SuggestedClassName = "MyConstants",
+            SuggestedClassName = "Constants",
             TargetNamespace = "ApplicationNamespace"
         };
 
         var decl = group.GenerateMinimalDeclaration();
         decl.Should().Contain("namespace ApplicationNamespace;");
-        decl.Should().Contain("static class MyConstants");
+        decl.Should().Contain("static class Constants");
         decl.Should().Contain("internal const string TestConstant = \"");
 
         var usage = group.GenerateTypicalUsage();
-        usage.Should().Be("MyConstants.TestConstant");
+        usage.Should().Be("Constants.TestConstant");
     }
 
     [Fact]
@@ -444,7 +444,7 @@ public class RepeatedStringDetectorTests
             Occurrences = [occ1, occ2],
             Category = CloneCategory.Production,
             SuggestedConstantName = "SpecialConstant",
-            SuggestedClassName = "MyConstants",
+            SuggestedClassName = "Constants",
             TargetNamespace = "TestNamespace"
         };
 

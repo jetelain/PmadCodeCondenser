@@ -33,9 +33,9 @@ public sealed record RepeatedStringGroup
     public required string SuggestedConstantName { get; init; }
 
     /// <summary>
-    /// Suggested static class name containing the constant (default: "MyConstants").
+    /// Suggested static class name containing the constant (default: "Constants").
     /// </summary>
-    public string SuggestedClassName { get; init; } = "MyConstants";
+    public string SuggestedClassName { get; init; } = "Constants";
 
     /// <summary>
     /// Suggested namespace for the constant declaration.
@@ -134,7 +134,7 @@ public sealed record RepeatedStringGroup
 
         int currentTokens = count * literalTokens;
         // Declaration: literalTokens + ~8 overhead tokens for 'internal const string Name = "";'
-        // Usage: ~3 tokens for 'MyConstants.Name' per occurrence
+        // Usage: ~3 tokens for 'Constants.Name' per occurrence
         int extractedTokens = (literalTokens + 8) + (count * 3);
 
         return Math.Max(0, currentTokens - extractedTokens);
