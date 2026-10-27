@@ -263,6 +263,74 @@ public sealed class ConsoleFormatter : IConsoleFormatter
         }
     }
 
+    public void PrintTypeFileIssues(
+        TextWriter writer,
+        IReadOnlyList<TypeFileAnalysis> typeIssues,
+        string baseDirectory,
+        int lineTolerance = 1)
+    {
+        ArgumentNullException.ThrowIfNull(writer);
+        ArgumentNullException.ThrowIfNull(typeIssues);
+
+        var violations = typeIssues.Where(i => i.HasViolation).ToList();
+        if (violations.Count == 0)
+        {
+            return;
+        }
+
+        writer.WriteLine(Yellow(Bold($"Found {violations.Count} File(s) with Multiple Types or Mismatched Names:")));
+        writer.WriteLine();
+
+        for (int i = 0; i < violations.Count; i++)
+        {
+            var issue = violations[i];
+            var relPath = FormatPath(issue.FilePath, baseDirectory);
+            var primary = issue.PrimaryType;
+
+            switch (issue.Action)
+            {
+                case TypeFileAction.Rename:
+                    writer.WriteLine(Yellow($"[RENAME FILE #{i + 1}] {Cyan(relPath)} → {Cyan(issue.SuggestedFileName ?? "")}:"));
+                    writer.WriteLine($"  File contains single type '{Bold(primary?.TypeName ?? "")}' ({primary?.Kind}) which does not match the file name.");
+                    break;
+
+                case TypeFileAction.Split:
+                    writer.WriteLine(Yellow($"[SPLIT FILE #{i + 1}] {Cyan(relPath)} (Contains {issue.Types.Count} types):"));
+                    writer.WriteLine($"  Primary Type: {Bold(primary?.TypeName ?? "")} (stays in {Path.GetFileName(relPath)})");
+                    writer.WriteLine($"  Types to Extract ({issue.TypesToExtract.Count}):");
+                    foreach (var ext in issue.TypesToExtract)
+                    {
+                        writer.WriteLine($"    • {Bold(ext.TypeName)} ({ext.Kind}, {ext.LinesOfCode} LOC) → {Cyan(ext.TargetFileName)}");
+                    }
+                    var toleratedCount = issue.Types.Count(t => t.IsTolerated && !t.IsPrimary);
+                    if (toleratedCount > 0)
+                    {
+                        writer.WriteLine(Dim($"    (Plus {toleratedCount} tolerated auxiliary type(s) ≤ {lineTolerance} LOC)"));
+                    }
+                    break;
+
+                case TypeFileAction.SplitAndRename:
+                    writer.WriteLine(Yellow($"[SPLIT & RENAME FILE #{i + 1}] {Cyan(relPath)} → {Cyan(issue.SuggestedFileName ?? "")}:"));
+                    writer.WriteLine($"  Primary Type: {Bold(primary?.TypeName ?? "")} (renames file to {issue.SuggestedFileName})");
+                    writer.WriteLine($"  Types to Extract ({issue.TypesToExtract.Count}):");
+                    foreach (var ext in issue.TypesToExtract)
+                    {
+                        writer.WriteLine($"    • {Bold(ext.TypeName)} ({ext.Kind}, {ext.LinesOfCode} LOC) → {Cyan(ext.TargetFileName)}");
+                    }
+                    var tolCount = issue.Types.Count(t => t.IsTolerated && !t.IsPrimary);
+                    if (tolCount > 0)
+                    {
+                        writer.WriteLine(Dim($"    (Plus {tolCount} tolerated auxiliary type(s) ≤ {lineTolerance} LOC)"));
+                    }
+                    break;
+            }
+
+            writer.WriteLine(Dim("  Recommendation: Run 'codecondenser apply' to automatically split and rename files."));
+            writer.WriteLine(Dim("  To suppress: Add '[SuppressMessage(\"CodeCondenser\", \"SingleTypePerFile\")]' or '// codecondenser:ignore-type-split'."));
+            writer.WriteLine();
+        }
+    }
+
     public void PrintVerboseComments(
         TextWriter writer,
         IReadOnlyList<VerboseComment> comments,
@@ -399,7 +467,8 @@ public sealed class ConsoleFormatter : IConsoleFormatter
         int? cloneGainTokens = null,
         int? repeatedStringsCount = null,
         int? repeatedStringGainChars = null,
-        int? repeatedStringGainTokens = null)
+        int? repeatedStringGainTokens = null,
+        int? typeIssuesCount = null)
     {
         ArgumentNullException.ThrowIfNull(writer);
 
@@ -452,6 +521,11 @@ public sealed class ConsoleFormatter : IConsoleFormatter
         {
             var tokensSuffix = repeatedStringGainTokens.HasValue ? $", ~{repeatedStringGainTokens.Value} tokens" : string.Empty;
             writer.WriteLine($"  String Gain:       {Green($"+{repeatedStringGainChars.Value} chars{tokensSuffix} (potential)")}");
+        }
+
+        if (typeIssuesCount.HasValue)
+        {
+            writer.WriteLine($"  Type File Issues:  {(typeIssuesCount.Value > 0 ? Yellow(typeIssuesCount.Value.ToString()) : Green("0"))}");
         }
 
         writer.WriteLine($"  Verbose Comments:  {(verboseCommentsCount > 0 ? Cyan(verboseCommentsCount.ToString()) : Green("0"))}");
@@ -647,17 +721,77 @@ public sealed class ConsoleFormatter : IConsoleFormatter
         bool hasCommentViolation = false,
         IReadOnlyList<RepeatedStringGroup>? repeatedStrings = null,
         int? repeatedStringTolerance = null,
-        bool hasRepeatedStringViolation = false)
+        bool hasRepeatedStringViolation = false,
+        IReadOnlyList<TypeFileAnalysis>? typeIssues = null,
+        int? typeTolerance = null,
+        bool hasTypeViolation = false)
     {
         ArgumentNullException.ThrowIfNull(writer);
         cloneGroups ??= [];
         subMethodGroups ??= [];
         verboseComments ??= [];
         repeatedStrings ??= [];
+        typeIssues ??= [];
 
+        var violatingTypes = typeIssues.Where(i => i.HasViolation).ToList();
         bool hasComments = verboseComments.Count > 0;
         bool hasStrings = repeatedStrings.Count > 0;
+        bool hasTypeIssues = violatingTypes.Count > 0;
         int totalCloneCount = cloneGroups.Count + subMethodGroups.Count;
+
+        if (hasTypeViolation && !hasDuplicationViolation && !hasComments && !hasStrings)
+        {
+            writer.WriteLine();
+            writer.WriteLine(Red(Bold("========================================================================")));
+            writer.WriteLine(Red(Bold("[AI AGENT ACTION REQUIRED] Single Type Per File Policy Violation (Exit Code: 2)")));
+            writer.WriteLine(Red(Bold("========================================================================")));
+            writer.WriteLine($"Incremental analysis detected {Bold(violatingTypes.Count.ToString())} file(s) with multiple types or mismatched names exceeding tolerance margin (allowed: {typeTolerance ?? 0}).");
+            writer.WriteLine();
+
+            for (int i = 0; i < violatingTypes.Count; i++)
+            {
+                var issue = violatingTypes[i];
+                var relPath = FormatPath(issue.FilePath, baseDirectory);
+                var primary = issue.PrimaryType;
+
+                if (issue.Action == TypeFileAction.Rename)
+                {
+                    writer.WriteLine(Yellow($"Issue #{i + 1} [Rename]: {Cyan(relPath)} → {Cyan(issue.SuggestedFileName ?? "")}"));
+                    writer.WriteLine($"  File contains single type '{Bold(primary?.TypeName ?? "")}' ({primary?.Kind}) which does not match file name.");
+                }
+                else if (issue.Action == TypeFileAction.SplitAndRename)
+                {
+                    writer.WriteLine(Yellow($"Issue #{i + 1} [Split & Rename]: {Cyan(relPath)} → {Cyan(issue.SuggestedFileName ?? "")} (Contains {issue.Types.Count} types)"));
+                    writer.WriteLine($"  Primary Type: {Bold(primary?.TypeName ?? "")} (renames file to {issue.SuggestedFileName})");
+                    writer.WriteLine($"  Types to Extract ({issue.TypesToExtract.Count}):");
+                    foreach (var ext in issue.TypesToExtract)
+                    {
+                        writer.WriteLine($"    • {Bold(ext.TypeName)} ({ext.Kind}, {ext.LinesOfCode} LOC) → {Cyan(ext.TargetFileName)}");
+                    }
+                }
+                else
+                {
+                    writer.WriteLine(Yellow($"Issue #{i + 1} [Split]: {Cyan(relPath)} (Contains {issue.Types.Count} types)"));
+                    writer.WriteLine($"  Primary Type: {Bold(primary?.TypeName ?? "")} (stays in {Path.GetFileName(relPath)})");
+                    writer.WriteLine($"  Types to Extract ({issue.TypesToExtract.Count}):");
+                    foreach (var ext in issue.TypesToExtract)
+                    {
+                        writer.WriteLine($"    • {Bold(ext.TypeName)} ({ext.Kind}, {ext.LinesOfCode} LOC) → {Cyan(ext.TargetFileName)}");
+                    }
+                }
+                writer.WriteLine();
+            }
+
+            writer.WriteLine(Bold("Actionable Instructions for AI Agent:"));
+            writer.WriteLine("  1. Inspect the multi-type or misnamed file(s) listed above.");
+            writer.WriteLine("  2. Apply Automatic Fix: Run 'codecondenser apply' to automatically split and rename files.");
+            writer.WriteLine("  3. Or Manual Fix: Extract auxiliary types into dedicated '<TypeName>.cs' files.");
+            writer.WriteLine("  4. To suppress: Add '[SuppressMessage(\"CodeCondenser\", \"SingleTypePerFile\")]' or '// codecondenser:ignore-type-split'.");
+            writer.WriteLine("  5. Re-run 'codecondenser --incremental' to confirm the violation is resolved.");
+            writer.WriteLine(Red(Bold("========================================================================")));
+            writer.WriteLine();
+            return;
+        }
 
         if (hasRepeatedStringViolation && !hasDuplicationViolation && !hasComments)
         {
@@ -736,7 +870,7 @@ public sealed class ConsoleFormatter : IConsoleFormatter
 
         writer.WriteLine();
         writer.WriteLine(Red(Bold("========================================================================")));
-        var multiTitle = (hasDuplicationViolation || hasCommentViolation || hasRepeatedStringViolation)
+        var multiTitle = (hasDuplicationViolation || hasCommentViolation || hasRepeatedStringViolation || hasTypeViolation)
             ? "[AI AGENT ACTION REQUIRED] Incremental Policy Violations (Exit Code: 2)"
             : "[AI AGENT ACTION REQUIRED] Incremental Policy Violations";
         writer.WriteLine(Red(Bold(multiTitle)));
@@ -745,6 +879,7 @@ public sealed class ConsoleFormatter : IConsoleFormatter
         if (totalCloneCount > 0) counts.Add($"{Bold(totalCloneCount.ToString())} new duplication cluster(s)");
         if (verboseComments.Count > 0) counts.Add($"{Bold(verboseComments.Count.ToString())} new verbose comment(s)");
         if (repeatedStrings.Count > 0) counts.Add($"{Bold(repeatedStrings.Count.ToString())} new repeated string cluster(s)");
+        if (violatingTypes.Count > 0) counts.Add($"{Bold(violatingTypes.Count.ToString())} file(s) with multiple types or mismatched names");
 
         string summaryText = counts.Count switch
         {
@@ -807,6 +942,29 @@ public sealed class ConsoleFormatter : IConsoleFormatter
             writer.WriteLine();
         }
 
+        if (violatingTypes.Count > 0)
+        {
+            writer.WriteLine(Bold("Single Type Per File Violations:"));
+            for (int i = 0; i < violatingTypes.Count; i++)
+            {
+                var issue = violatingTypes[i];
+                var relPath = FormatPath(issue.FilePath, baseDirectory);
+                if (issue.Action == TypeFileAction.Rename)
+                {
+                    writer.WriteLine(Yellow($"  File #{i + 1} [Rename]: {Cyan(relPath)} → {Cyan(issue.SuggestedFileName ?? "")}"));
+                }
+                else if (issue.Action == TypeFileAction.SplitAndRename)
+                {
+                    writer.WriteLine(Yellow($"  File #{i + 1} [Split & Rename]: {Cyan(relPath)} → {Cyan(issue.SuggestedFileName ?? "")} ({issue.TypesToExtract.Count} types to extract)"));
+                }
+                else
+                {
+                    writer.WriteLine(Yellow($"  File #{i + 1} [Split]: {Cyan(relPath)} ({issue.TypesToExtract.Count} types to extract)"));
+                }
+            }
+            writer.WriteLine();
+        }
+
         if (verboseComments.Count > 0)
         {
             writer.WriteLine(Bold("Verbose Comments:"));
@@ -837,6 +995,13 @@ public sealed class ConsoleFormatter : IConsoleFormatter
             writer.WriteLine("    2. Extract each into a shared constant (e.g. 'internal const string Name = \"...\";' in a static constants class).");
             writer.WriteLine("    3. Replace inline occurrences with references to the constant.");
             writer.WriteLine("    4. To suppress: Add '[SuppressMessage(\"CodeCondenser\", \"RepeatedString\")]' or '// codecondenser:ignore-string'.");
+        }
+        if (violatingTypes.Count > 0)
+        {
+            writer.WriteLine("  Single Type Per File:");
+            writer.WriteLine("    1. Apply Automatic Fix: Run 'codecondenser apply' to automatically split and rename files.");
+            writer.WriteLine("    2. Or Manual Fix: Extract auxiliary types into dedicated '<TypeName>.cs' files.");
+            writer.WriteLine("    3. To suppress: Add '[SuppressMessage(\"CodeCondenser\", \"SingleTypePerFile\")]' or '// codecondenser:ignore-type-split'.");
         }
         if (verboseComments.Count > 0)
         {

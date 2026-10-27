@@ -10,8 +10,9 @@ A static analysis developer utility and .NET tool built on **.NET 10** and Rosly
 1. **Detect Structural Code Clones (Type-2 Clones)**: Identify methods sharing identical AST logic structures (ignoring variable, parameter, and constant renames) and provide actionable refactoring advice.
 2. **Compact Repeated Inline Strings**: Detect string literals >= 100 characters used more than once, with estimated character/token savings, minimal constant declaration snippets, and typical usage patterns.
 3. **Condense Verbose Comments**: Scan overly verbose regular comments (`//`, `/* */`) and XML documentation comments (`/// <summary>`, `<remarks>`, `<param>`) and condense them into clear, concise summaries using local or cloud LLMs via `Microsoft.Extensions.AI` and Ollama.
-4. **WYSIWYG Guarantee & Incremental Snapshots**: Cache generated comment summaries and AST hashes so that dry-run reviews match applied code without LLM drift, while incremental runs only analyze changed code.
-5. **CI/CD & AI Agent Guardrails**: Enforce strict duplication and repeated string tolerance in CI pipelines and AI coding agent workflows (exit code `2` on new violations).
+4. **Enforce Single Type Per File (Automatic Splitting & Renaming)**: Keep each class, interface, struct, enum, record, or delegate in its own `.cs` file matching its type name (allowing small inline types like 1-line delegates via configurable line tolerance) to optimize AI agent context window loading and codebase modularity.
+5. **WYSIWYG Guarantee & Incremental Snapshots**: Cache generated comment summaries and AST hashes so that dry-run reviews match applied code without LLM drift, while incremental runs only analyze changed code.
+6. **CI/CD & AI Agent Guardrails**: Enforce strict duplication, repeated string, and single-type-per-file tolerance in CI pipelines and AI coding agent workflows (exit code `2` on new violations).
 
 ---
 
@@ -138,7 +139,23 @@ codecondenser apply ./src
 > [!TIP]
 > **WYSIWYG Guarantee**: `apply` reuses the exact LLM summaries generated and cached during dry-run analysis. No second LLM call is made, guaranteeing zero drift between review and commit.
 
-### Scenario E: Incremental Analysis (Modified Files Only)
+### Scenario E: Single Type Per File Splitting & Renaming
+
+CodeCondenser automatically ensures that each class, interface, struct, enum, record, or delegate has its own `.cs` file matching its type name:
+
+```bash
+# Dry run: view files requiring splitting or renaming
+codecondenser analyze ./src
+
+# Apply: split auxiliary types into new .cs files and rename mismatched files
+codecondenser apply ./src
+```
+
+- **Line Tolerance**: Types with pure lines of code (comments and blank lines excluded) within the line tolerance (default: `1`, e.g. a one-line delegate) remain inline without triggering a split.
+- **SDK Compatibility**: SDK-style `.csproj` projects automatically glob newly created `.cs` files without project file edits.
+- **Opt-out**: Pass `--no-type-split` to disable splitting or `--no-type-rename` to disable file renaming.
+
+### Scenario F: Incremental Analysis (Modified Files Only)
 
 Analyze only files that were added or modified since the last snapshot baseline:
 
@@ -146,9 +163,9 @@ Analyze only files that were added or modified since the last snapshot baseline:
 codecondenser analyze ./src --incremental
 ```
 
-In incremental mode, if new duplication or verbose comments are detected, CodeCondenser outputs unified **actionable feedback only once at the end**, complete with suppression instructions (`condense="no"`, `// codecondenser:ignore`, or `[SuppressMessage]`).
+In incremental mode, if new duplication, verbose comments, or type violations are detected, CodeCondenser outputs unified **actionable feedback only once at the end**, complete with suppression instructions (`condense="no"`, `// codecondenser:ignore`, `// codecondenser:ignore-type-split`, or `[SuppressMessage]`).
 
-### Scenario F: Refresh Snapshot Baseline
+### Scenario G: Refresh Snapshot Baseline
 
 Update or create the baseline snapshot stored in `.codecondenser/snapshot.json`:
 
@@ -156,7 +173,7 @@ Update or create the baseline snapshot stored in `.codecondenser/snapshot.json`:
 codecondenser snapshot ./src
 ```
 
-### Scenario G: Install or Update Workspace AI Agent Skills
+### Scenario H: Install or Update Workspace AI Agent Skills
 
 Install or synchronize the bundled AI agent skills into a workspace's `.agents/skills` directory so AI coding agents understand how to use `Pmad.CodeCondenser`:
 
@@ -258,6 +275,12 @@ jobs:
 | `-dt, --duplication-tolerance <n>` | `-dt` | Maximum new clone clusters tolerated in incremental mode | `0` |
 | `-ct, --comment-tolerance <n>` | `-ct` | Maximum new verbose comments tolerated in incremental mode | `null` |
 | `-st, --string-tolerance <n>` | `-st` | Maximum new repeated string groups tolerated in incremental mode | `null` |
+| `-tt, --type-tolerance <n>` | `-tt` | Maximum new type file issues tolerated in incremental mode | `null` |
+| `-tlt, --type-line-tolerance <n>` | `-tlt` | Maximum pure lines of code (comments excluded) tolerated inline | `1` |
+| `--no-type-split` | | Disable single type per file splitting | `false` |
+| `--enable-type-split` | | Explicitly enable single type per file splitting | `true` |
+| `--no-type-rename` | | Disable renaming files to match primary type name | `false` |
+| `--enable-type-rename` | | Explicitly enable renaming files to match primary type name | `true` |
 | `--summary <mode>` | | Comment summary mode: `disabled`, `summarize`, or `report` | Auto (`summarize` if LLM configured, `report` otherwise) |
 | `--report-only` | | Report-only mode for comments without calling an LLM (alias for `--summary report`) | `false` |
 | `--include <pattern>` | | Add glob pattern of files/directories to include (multi-value) | `[]` *(all .cs files)* |
@@ -302,7 +325,7 @@ jobs:
 | :---: | :--- | :--- |
 | `0` | **Success** | Analysis clean; no policy violations. |
 | `1` | **General Error** | Invalid arguments, missing file, or unhandled exception. |
-| `2` | **Policy Violation** | In incremental mode, newly introduced code clones exceed `duplicationTolerance`, new verbose comments exceed `commentTolerance`, or new repeated strings exceed `repeatedStringTolerance`. Outputs refactoring and suppression advice for developers and AI agents. |
+| `2` | **Policy Violation** | In incremental mode, newly introduced code clones exceed `duplicationTolerance`, new verbose comments exceed `commentTolerance`, new repeated strings exceed `repeatedStringTolerance`, or new type file issues exceed `typeTolerance`. Outputs refactoring and suppression advice for developers and AI agents. |
 | `130` | **Canceled** | Execution canceled by user (`Ctrl+C`). |
 
 ---
@@ -324,6 +347,7 @@ Generates standard OASIS SARIF 2.1.0 compatible with GitHub Code Scanning, GitLa
   - `CC004` (`warning`): `CrossBoundaryDuplication`
   - `CC005` (`warning`): `SubMethodCodeDuplication`
   - `CC006` (`warning`): `RepeatedInlineString`
+  - `CC007` (`warning`): `SingleTypePerFile`
 
 ```bash
 # Export SARIF to file
@@ -377,6 +401,9 @@ Even summarized comments might exceed the character threshold (e.g. 110 characte
 - **Ignore a Repeated Inline String**:
   - Comment on the line preceding or inline: `// codecondenser:ignore-string` or `// nocondense`
   - Attribute on enclosing member or class: `[SuppressMessage("CodeCondenser", "RepeatedString")]`
+- **Ignore Single Type Per File Splitting**:
+  - Comment on secondary type: `// codecondenser:ignore-type-split` or `// codecondenser:ignore`
+  - Attribute on secondary type: `[SuppressMessage("CodeCondenser", "SingleTypePerFile")]` or `[SingleTypePerFileIgnore]`
 - **Standalone Ignore File (`.codecondenserignore`)**:
   Add glob patterns (like `.gitignore`) to a `.codecondenserignore` file in the repository root to exclude directories or files without modifying `codecondenser.json`.
 
@@ -419,6 +446,11 @@ Even summarized comments might exceed the character threshold (e.g. 110 characte
   "enableCommentSummarization": true,
   "enableDuplicationDetection": true,
   "enableRepeatedStringDetection": true,
+  "enableTypeSplitting": true,
+  "enableTypeRenaming": true,
+  "typeLineTolerance": 1,
+  "typeTolerance": null,
+  "typeExitCode": 2,
   "duplicationTolerance": 0,
   "duplicationExitCode": 2,
   "commentTolerance": null,

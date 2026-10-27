@@ -197,6 +197,26 @@ public sealed class CommandServices
             settings.RepeatedStringTolerance = options.RepeatedStringTolerance.Value;
         }
 
+        if (options.EnableTypeSplitting.HasValue)
+        {
+            settings.EnableTypeSplitting = options.EnableTypeSplitting.Value;
+        }
+
+        if (options.EnableTypeRenaming.HasValue)
+        {
+            settings.EnableTypeRenaming = options.EnableTypeRenaming.Value;
+        }
+
+        if (options.TypeLineTolerance.HasValue)
+        {
+            settings.TypeLineTolerance = options.TypeLineTolerance.Value;
+        }
+
+        if (options.TypeTolerance.HasValue)
+        {
+            settings.TypeTolerance = options.TypeTolerance.Value;
+        }
+
         if (!string.IsNullOrWhiteSpace(options.SummarizedCommentsPath))
         {
             settings.SummarizedCommentsFilePath = options.SummarizedCommentsPath;

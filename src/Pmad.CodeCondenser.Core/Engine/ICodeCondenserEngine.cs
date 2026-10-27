@@ -31,6 +31,14 @@ public interface ICodeCondenserEngine
         CancellationToken cancellationToken = default);
 
     /// <summary>
+    /// Applies recommended type splitting and renaming directly to source files on disk.
+    /// </summary>
+    Task ApplyTypeSplitsAsync(
+        AnalysisResult analysisResult,
+        CodeCondenserSettings settings,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>
     /// Measures codebase tokens in terms of LLM tokens (total, comments, code) per category (production, tests).
     /// </summary>
     Task<CodeMeasurementResult> MeasureAsync(

@@ -11,6 +11,7 @@ public static class SarifRules
     public const string CrossBoundaryDuplicationRuleId = "CC004";
     public const string SubMethodCodeDuplicationRuleId = "CC005";
     public const string RepeatedInlineStringRuleId = "CC006";
+    public const string SingleTypePerFileRuleId = "CC007";
 
     public static IReadOnlyList<SarifReportingDescriptor> AllRules { get; } =
     [
@@ -106,6 +107,24 @@ public static class SarifRules
             {
                 Text = "Extract repeated string literal into a shared constant (e.g. 'internal const string Name = \"...\";').",
                 Markdown = "Extract repeated string literal into a shared constant (e.g. `internal const string Name = \"...\";`).\n\nTo suppress, add `// codecondenser:ignore-string` or `[SuppressMessage(\"CodeCondenser\", \"RepeatedString\")]`."
+            },
+            DefaultConfiguration = new SarifReportingConfiguration
+            {
+                Level = "warning"
+            }
+        },
+        new SarifReportingDescriptor
+        {
+            Id = SingleTypePerFileRuleId,
+            Name = "SingleTypePerFile",
+            ShortDescription = new SarifMultiformatMessageString
+            {
+                Text = "Each top-level type should have its own C# file matching its name."
+            },
+            Help = new SarifMultiformatMessageString
+            {
+                Text = "Split multiple types into dedicated files or rename the file to match the primary type.",
+                Markdown = "Extract auxiliary types into separate `.cs` files matching their names, or rename the file if its primary type does not match.\n\nTo suppress, add `// codecondenser:ignore-type-split` or `[SuppressMessage(\"CodeCondenser\", \"SingleTypePerFile\")]`."
             },
             DefaultConfiguration = new SarifReportingConfiguration
             {

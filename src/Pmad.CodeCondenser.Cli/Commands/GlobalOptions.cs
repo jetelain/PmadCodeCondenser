@@ -168,6 +168,37 @@ public sealed class GlobalOptions
         Recursive = true
     };
 
+    // Type splitting & Single type per file thresholds
+    public Option<bool> NoTypeSplitOption { get; } = new("--no-type-split", "--no-split-types", "--no-single-type-per-file")
+    {
+        Description = "Disable single-type-per-file enforcement and type splitting",
+        Recursive = true
+    };
+
+    public Option<bool> EnableTypeSplitOption { get; } = new("--enable-type-split", "--enable-type-splitting", "--enable-single-type-per-file")
+    {
+        Description = "Explicitly enable single-type-per-file enforcement and type splitting",
+        Recursive = true
+    };
+
+    public Option<bool> NoTypeRenameOption { get; } = new("--no-type-rename", "--disable-type-rename")
+    {
+        Description = "Disable renaming files whose primary type does not match the file name",
+        Recursive = true
+    };
+
+    public Option<int?> TypeLineToleranceOption { get; } = new("--type-line-tolerance", "-tlt", "--threshold-type-lines")
+    {
+        Description = "Maximum lines of code (comments excluded) for an auxiliary type to be tolerated inline (default: 1)",
+        Recursive = true
+    };
+
+    public Option<int?> TypeToleranceOption { get; } = new("--type-tolerance", "-tt", "--single-type-tolerance")
+    {
+        Description = "Maximum new type file violations tolerated in incremental mode",
+        Recursive = true
+    };
+
     // Comments & XML doc thresholds
     public Option<string?> SummaryOption { get; } = new("--summary", "--summary-mode")
     {
@@ -287,6 +318,12 @@ public sealed class GlobalOptions
         root.Add(ThresholdRepeatedStringsOption);
         root.Add(ThresholdStringOccurrencesOption);
 
+        root.Add(NoTypeSplitOption);
+        root.Add(EnableTypeSplitOption);
+        root.Add(NoTypeRenameOption);
+        root.Add(TypeLineToleranceOption);
+        root.Add(TypeToleranceOption);
+
         root.Add(SummaryOption);
         root.Add(ReportOnlyOption);
         root.Add(NoCommentsOption);
@@ -336,6 +373,9 @@ public sealed class GlobalOptions
             ThresholdRepeatedStrings = pr.GetValue(ThresholdRepeatedStringsOption),
             ThresholdStringOccurrences = pr.GetValue(ThresholdStringOccurrencesOption),
 
+            TypeLineTolerance = pr.GetValue(TypeLineToleranceOption),
+            TypeTolerance = pr.GetValue(TypeToleranceOption),
+
             ThresholdComments = pr.GetValue(ThresholdCommentsOption),
             ThresholdXmlSummary = pr.GetValue(ThresholdXmlSummaryOption),
             ThresholdXmlParam = pr.GetValue(ThresholdXmlParamOption),
@@ -384,6 +424,20 @@ public sealed class GlobalOptions
         else if (pr.GetResult(EnableStringsOption) is { Implicit: false } && pr.GetValue(EnableStringsOption))
         {
             options.EnableRepeatedStrings = true;
+        }
+
+        if (pr.GetResult(NoTypeSplitOption) is { Implicit: false } && pr.GetValue(NoTypeSplitOption))
+        {
+            options.EnableTypeSplitting = false;
+        }
+        else if (pr.GetResult(EnableTypeSplitOption) is { Implicit: false } && pr.GetValue(EnableTypeSplitOption))
+        {
+            options.EnableTypeSplitting = true;
+        }
+
+        if (pr.GetResult(NoTypeRenameOption) is { Implicit: false } && pr.GetValue(NoTypeRenameOption))
+        {
+            options.EnableTypeRenaming = false;
         }
 
         var summary = pr.GetValue(SummaryOption);

@@ -266,4 +266,48 @@ public class JsonReportFormatterTests
         cluster.SuggestedClassName.Should().Be("MyConstants");
         cluster.Recommendation.Should().Contain("Extract repeated inline string literal");
     }
+
+    [Fact]
+    public async Task FormatAsync_TypeFileIssues_EmitsExpectedJson()
+    {
+        var primaryType = new ExtractedTypeInfo { TypeName = "Order", Kind = "class", LinesOfCode = 15, StartLine = 1, EndLine = 20, TargetFileName = "Order.cs", IsPrimary = true };
+        var secondaryType = new ExtractedTypeInfo { TypeName = "OrderItem", Kind = "class", LinesOfCode = 8, StartLine = 22, EndLine = 35, TargetFileName = "OrderItem.cs" };
+
+        var issue = new TypeFileAnalysis
+        {
+            FilePath = "c:/repo/src/Order.cs",
+            Action = TypeFileAction.Split,
+            SuggestedFileName = "Order.cs",
+            Types = [primaryType, secondaryType],
+            Category = FileCategory.Production
+        };
+
+        var result = new AnalysisResult
+        {
+            AnalyzedFilesCount = 1,
+            TotalMethodsScanned = 0,
+            CloneGroups = [],
+            VerboseComments = [],
+            SummarizedComments = new Dictionary<string, string>(),
+            TypeFileIssues = [issue]
+        };
+
+        using var writer = new StringWriter();
+        await _formatter.FormatAsync(result, _settings, writer, "c:/repo");
+
+        var json = writer.ToString();
+        var report = JsonSerializer.Deserialize<CodeCondenserJsonReport>(json, new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase });
+
+        report.Should().NotBeNull();
+        report!.Summary.TypeFileIssuesCount.Should().Be(1);
+        report.TypeFileIssues.Should().HaveCount(1);
+
+        var jsonIssue = report.TypeFileIssues[0];
+        jsonIssue.FilePath.Should().Be("src/Order.cs");
+        jsonIssue.Action.Should().Be("Split");
+        jsonIssue.SuggestedFileName.Should().Be("Order.cs");
+        jsonIssue.PrimaryType.Should().Be("Order");
+        jsonIssue.TypesToExtract.Should().HaveCount(1);
+        jsonIssue.TypesToExtract[0].TypeName.Should().Be("OrderItem");
+    }
 }

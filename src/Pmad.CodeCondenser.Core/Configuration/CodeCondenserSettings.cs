@@ -197,6 +197,108 @@ public sealed class CodeCondenserSettings
     /// </summary>
     public ISet<string> IgnoredStrings { get; set; } = new HashSet<string>(StringComparer.Ordinal);
 
+    /// <summary>
+    /// When true, enables enforcement of having a single top-level type per C# file.
+    /// Default is true.
+    /// </summary>
+    public bool EnableTypeSplitting { get; set; } = true;
+
+    /// <summary>
+    /// Alias for <see cref="EnableTypeSplitting"/>.
+    /// </summary>
+    public bool? EnableSingleTypePerFile
+    {
+        get => EnableTypeSplitting;
+        set { if (value.HasValue) EnableTypeSplitting = value.Value; }
+    }
+
+    /// <summary>
+    /// Alias for <see cref="EnableTypeSplitting"/>.
+    /// </summary>
+    public bool? TypeSplitting
+    {
+        get => EnableTypeSplitting;
+        set { if (value.HasValue) EnableTypeSplitting = value.Value; }
+    }
+
+    /// <summary>
+    /// Alias for <see cref="EnableTypeSplitting"/>.
+    /// </summary>
+    public bool? SingleTypePerFile
+    {
+        get => EnableTypeSplitting;
+        set { if (value.HasValue) EnableTypeSplitting = value.Value; }
+    }
+
+    /// <summary>
+    /// When true, flags files for renaming if the primary type does not match the file name.
+    /// Default is true.
+    /// </summary>
+    public bool EnableTypeRenaming { get; set; } = true;
+
+    /// <summary>
+    /// Alias for <see cref="EnableTypeRenaming"/>.
+    /// </summary>
+    public bool? EnableTypeRename
+    {
+        get => EnableTypeRenaming;
+        set { if (value.HasValue) EnableTypeRenaming = value.Value; }
+    }
+
+    /// <summary>
+    /// Alias for <see cref="EnableTypeRenaming"/>.
+    /// </summary>
+    public bool? TypeRenaming
+    {
+        get => EnableTypeRenaming;
+        set { if (value.HasValue) EnableTypeRenaming = value.Value; }
+    }
+
+    /// <summary>
+    /// Maximum lines of code (comments and blank lines excluded) for an auxiliary type to be tolerated inline.
+    /// Default is 1.
+    /// </summary>
+    public int TypeLineTolerance { get; set; } = 1;
+
+    /// <summary>
+    /// Alias for <see cref="TypeLineTolerance"/>.
+    /// </summary>
+    public int? ThresholdTypeLines
+    {
+        get => TypeLineTolerance;
+        set { if (value.HasValue) TypeLineTolerance = value.Value; }
+    }
+
+    /// <summary>
+    /// Alias for <see cref="TypeLineTolerance"/>.
+    /// </summary>
+    public int? TypeLinesOfCodeTolerance
+    {
+        get => TypeLineTolerance;
+        set { if (value.HasValue) TypeLineTolerance = value.Value; }
+    }
+
+    /// <summary>
+    /// Maximum number of new type file violations tolerated in incremental mode before failing CI.
+    /// Default is null (does not fail CI on type file violations unless configured).
+    /// </summary>
+    public int? TypeTolerance { get; set; }
+
+    /// <summary>
+    /// Alias for <see cref="TypeTolerance"/>.
+    /// </summary>
+    public int? SingleTypeTolerance
+    {
+        get => TypeTolerance;
+        set => TypeTolerance = value;
+    }
+
+    /// <summary>
+    /// Exit code returned when additional type file violations exceed <see cref="TypeTolerance"/> in incremental mode.
+    /// Default is 2.
+    /// </summary>
+    public int TypeExitCode { get; set; } = 2;
+
 
     /// <summary>
     /// When true, includes XML documentation comments (///) in addition to single-line (//) and multi-line (/* */) comments.
@@ -566,7 +668,12 @@ public sealed class CodeCondenserSettings
             RepeatedStringMinOccurrences = RepeatedStringMinOccurrences,
             RepeatedStringTolerance = RepeatedStringTolerance,
             RepeatedStringExitCode = RepeatedStringExitCode,
-            IgnoredStrings = new HashSet<string>(IgnoredStrings, StringComparer.Ordinal)
+            IgnoredStrings = new HashSet<string>(IgnoredStrings, StringComparer.Ordinal),
+            EnableTypeSplitting = EnableTypeSplitting,
+            EnableTypeRenaming = EnableTypeRenaming,
+            TypeLineTolerance = TypeLineTolerance,
+            TypeTolerance = TypeTolerance,
+            TypeExitCode = TypeExitCode
         };
     }
 }

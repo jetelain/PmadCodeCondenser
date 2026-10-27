@@ -194,7 +194,9 @@ public sealed class SnapshotDiffer : ISnapshotDiffer
         AnalysisSnapshot? baseline,
         IReadOnlyDictionary<string, string> currentFileHashes,
         IEnumerable<MethodCloneInfo> analyzedMethods,
-        IReadOnlyDictionary<string, string> commentCache)
+        IReadOnlyDictionary<string, string> commentCache,
+        IEnumerable<string>? typeViolationFiles = null,
+        bool isIncremental = false)
     {
         ArgumentNullException.ThrowIfNull(currentFileHashes);
         ArgumentNullException.ThrowIfNull(analyzedMethods);
@@ -206,6 +208,58 @@ public sealed class SnapshotDiffer : ISnapshotDiffer
             NormalizerVersion = baseline?.NormalizerVersion ?? AnalysisSnapshot.CurrentNormalizerVersion,
             CreatedAt = DateTimeOffset.UtcNow
         };
+
+        if (isIncremental)
+        {
+            if (typeViolationFiles != null)
+            {
+                foreach (var f in typeViolationFiles)
+                {
+                    if (currentFileHashes.ContainsKey(f))
+                    {
+                        snapshot.TypeViolationFiles.Add(f);
+                    }
+                }
+
+                // In incremental update with a baseline, preserve violations for unchanged files that were not re-analyzed
+                if (baseline != null)
+                {
+                    foreach (var f in baseline.TypeViolationFiles)
+                    {
+                        if (baseline.Files.TryGetValue(f, out var oldFileInfo) &&
+                            currentFileHashes.TryGetValue(f, out var currentHash) &&
+                            string.Equals(oldFileInfo.FileHash, currentHash, StringComparison.OrdinalIgnoreCase))
+                        {
+                            snapshot.TypeViolationFiles.Add(f);
+                        }
+                    }
+                }
+            }
+            else if (baseline != null)
+            {
+                foreach (var f in baseline.TypeViolationFiles)
+                {
+                    if (currentFileHashes.ContainsKey(f))
+                    {
+                        snapshot.TypeViolationFiles.Add(f);
+                    }
+                }
+            }
+        }
+        else
+        {
+            // Full scan / baseline update: typeViolationFiles is authoritative
+            if (typeViolationFiles != null)
+            {
+                foreach (var f in typeViolationFiles)
+                {
+                    if (currentFileHashes.ContainsKey(f))
+                    {
+                        snapshot.TypeViolationFiles.Add(f);
+                    }
+                }
+            }
+        }
 
         // 1. Files
         foreach (var (path, hash) in currentFileHashes)

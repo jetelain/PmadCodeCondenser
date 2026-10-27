@@ -42,8 +42,8 @@ public class SarifReportFormatterTests
         run.Tool.Driver.Name.Should().Be("Pmad.CodeCondenser");
         run.Tool.Driver.Version.Should().NotBeNullOrWhiteSpace();
         run.Tool.Driver.InformationUri.Should().Be("https://github.com/jetelain/PmadCodeCondenser");
-        run.Tool.Driver.Rules.Should().HaveCount(6);
-        run.Tool.Driver.Rules.Select(r => r.Id).Should().Contain(["CC001", "CC002", "CC003", "CC004", "CC005", "CC006"]);
+        run.Tool.Driver.Rules.Should().HaveCount(7);
+        run.Tool.Driver.Rules.Select(r => r.Id).Should().Contain(["CC001", "CC002", "CC003", "CC004", "CC005", "CC006", "CC007"]);
         run.Results.Should().BeEmpty();
     }
 
@@ -286,5 +286,117 @@ public class SarifReportFormatterTests
         res.RelatedLocations![0].PhysicalLocation.ArtifactLocation.Uri.Should().Be("src/FileB.cs");
         res.PartialFingerprints.Should().ContainKey("stringHash/v1");
         res.PartialFingerprints.Should().ContainKey("locationKey/v1");
+    }
+
+    [Fact]
+    public async Task FormatAsync_SingleTypePerFileIssue_EmitsCC007Result()
+    {
+        var primaryType = new ExtractedTypeInfo { TypeName = "MyClass", Kind = "class", LinesOfCode = 10, StartLine = 1, EndLine = 20, TargetFileName = "MyClass.cs", IsPrimary = true };
+        var secondaryType = new ExtractedTypeInfo { TypeName = "OtherClass", Kind = "class", LinesOfCode = 10, StartLine = 22, EndLine = 35, TargetFileName = "OtherClass.cs" };
+
+        var issue = new TypeFileAnalysis
+        {
+            FilePath = "c:/repo/src/MyFile.cs",
+            Action = TypeFileAction.Split,
+            SuggestedFileName = "MyClass.cs",
+            Types = [primaryType, secondaryType],
+            Category = FileCategory.Production
+        };
+
+        var result = new AnalysisResult
+        {
+            AnalyzedFilesCount = 1,
+            TotalMethodsScanned = 0,
+            CloneGroups = [],
+            VerboseComments = [],
+            SummarizedComments = new Dictionary<string, string>(),
+            TypeFileIssues = [issue]
+        };
+
+        using var writer = new StringWriter();
+        await _formatter.FormatAsync(result, _settings, writer, "c:/repo");
+
+        var sarif = JsonSerializer.Deserialize<SarifLog>(writer.ToString(), new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase });
+        sarif!.Runs[0].Results.Should().HaveCount(1);
+
+        var res = sarif.Runs[0].Results[0];
+        res.RuleId.Should().Be("CC007");
+        res.Level.Should().Be("warning");
+        res.Locations[0].PhysicalLocation.ArtifactLocation.Uri.Should().Be("src/MyFile.cs");
+        res.Locations[0].PhysicalLocation.Region.StartLine.Should().Be(22);
+        res.Locations[0].PhysicalLocation.Region.EndLine.Should().Be(35);
+    }
+
+    [Fact]
+    public async Task FormatAsync_SingleTypePerFileIssue_Rename_EmitsPrimaryTypeLocation()
+    {
+        var primaryType = new ExtractedTypeInfo { TypeName = "MyClass", Kind = "class", LinesOfCode = 20, StartLine = 5, EndLine = 25, TargetFileName = "MyClass.cs", IsPrimary = true };
+
+        var issue = new TypeFileAnalysis
+        {
+            FilePath = "c:/repo/src/WrongName.cs",
+            Action = TypeFileAction.Rename,
+            SuggestedFileName = "MyClass.cs",
+            Types = [primaryType],
+            Category = FileCategory.Production
+        };
+
+        var result = new AnalysisResult
+        {
+            AnalyzedFilesCount = 1,
+            TotalMethodsScanned = 0,
+            CloneGroups = [],
+            VerboseComments = [],
+            SummarizedComments = new Dictionary<string, string>(),
+            TypeFileIssues = [issue]
+        };
+
+        using var writer = new StringWriter();
+        await _formatter.FormatAsync(result, _settings, writer, "c:/repo");
+
+        var sarif = JsonSerializer.Deserialize<SarifLog>(writer.ToString(), new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase });
+        sarif!.Runs[0].Results.Should().HaveCount(1);
+
+        var res = sarif.Runs[0].Results[0];
+        res.RuleId.Should().Be("CC007");
+        res.Locations[0].PhysicalLocation.Region.StartLine.Should().Be(5);
+        res.Locations[0].PhysicalLocation.Region.EndLine.Should().Be(25);
+    }
+
+    [Fact]
+    public async Task FormatAsync_SingleTypePerFileIssue_SplitAndRename_PointsToAuxiliaryTypeLocation()
+    {
+        var primaryType = new ExtractedTypeInfo { TypeName = "PrimaryService", Kind = "class", LinesOfCode = 20, StartLine = 5, EndLine = 25, TargetFileName = "PrimaryService.cs", IsPrimary = true };
+        var secondaryType = new ExtractedTypeInfo { TypeName = "AuxService", Kind = "class", LinesOfCode = 15, StartLine = 30, EndLine = 48, TargetFileName = "AuxService.cs" };
+
+        var issue = new TypeFileAnalysis
+        {
+            FilePath = "c:/repo/src/OldName.cs",
+            Action = TypeFileAction.SplitAndRename,
+            SuggestedFileName = "PrimaryService.cs",
+            Types = [primaryType, secondaryType],
+            Category = FileCategory.Production
+        };
+
+        var result = new AnalysisResult
+        {
+            AnalyzedFilesCount = 1,
+            TotalMethodsScanned = 0,
+            CloneGroups = [],
+            VerboseComments = [],
+            SummarizedComments = new Dictionary<string, string>(),
+            TypeFileIssues = [issue]
+        };
+
+        using var writer = new StringWriter();
+        await _formatter.FormatAsync(result, _settings, writer, "c:/repo");
+
+        var sarif = JsonSerializer.Deserialize<SarifLog>(writer.ToString(), new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase });
+        sarif!.Runs[0].Results.Should().HaveCount(1);
+
+        var res = sarif.Runs[0].Results[0];
+        res.RuleId.Should().Be("CC007");
+        res.Locations[0].PhysicalLocation.Region.StartLine.Should().Be(30);
+        res.Locations[0].PhysicalLocation.Region.EndLine.Should().Be(48);
     }
 }

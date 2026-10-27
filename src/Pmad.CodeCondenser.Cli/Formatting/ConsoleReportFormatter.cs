@@ -41,6 +41,10 @@ public sealed class ConsoleReportFormatter : IReportFormatter
         {
             _consoleFormatter.PrintRepeatedStringGroups(output, result.RepeatedStringGroups, baseDirectory, estimator);
         }
+        if (result.TypeFileIssues.Any(i => i.HasViolation))
+        {
+            _consoleFormatter.PrintTypeFileIssues(output, result.TypeFileIssues, baseDirectory, settings.TypeLineTolerance);
+        }
         _consoleFormatter.PrintVerboseComments(output, result.VerboseComments, result.SummarizedComments, baseDirectory, estimator);
 
         var mode = _isIncremental ? "Dry-Run (Incremental)" : "Dry-Run";
@@ -74,7 +78,8 @@ public sealed class ConsoleReportFormatter : IReportFormatter
             CloneGainEstimator.EstimateTotalGainTokens(result.CloneGroups, result.SubMethodCloneGroups, estimator, baseDirectory),
             repeatedStringsCount: result.RepeatedStringGroups.Count,
             repeatedStringGainChars: repeatedStringGainChars,
-            repeatedStringGainTokens: repeatedStringGainTokens);
+            repeatedStringGainTokens: repeatedStringGainTokens,
+            typeIssuesCount: result.TypeFileIssues.Count(i => i.HasViolation));
 
         return Task.CompletedTask;
     }
