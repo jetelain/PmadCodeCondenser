@@ -679,4 +679,209 @@ public class PredicateCloneDetectorTests
         Assert.All(group.InlineOccurrences, o => Assert.False(o.IsNegatedAtCallSite));
         Assert.Contains("||", group.NormalizedSignature);
     }
+
+    [Fact]
+    public void GroupPredicates_UnextractedDirectlyNegatedCondition_WithPositiveCondition_GroupsIntoSingleClusterWithCanonicalPolarity()
+    {
+        var code = """
+            namespace MyNamespace;
+
+            public class Service
+            {
+                public void Method1(int firstValue, int secondValue, int thirdValue)
+                {
+                    if (firstValue > 0 && secondValue > 0 && thirdValue > 0) Process();
+                }
+
+                public void Method2(int alpha, int beta, int gamma)
+                {
+                    if (!(alpha > 0 && beta > 0 && gamma > 0)) return;
+                }
+            }
+            """;
+
+        var occurrences = _detector.ExtractPredicates(CSharpSyntaxTree.ParseText(code), "Service.cs", _settings);
+        var groups = _detector.GroupPredicates(occurrences, _settings);
+
+        Assert.Single(groups);
+        var group = groups[0];
+
+        Assert.Equal(2, group.Occurrences.Count);
+        Assert.False(group.HasExistingHelper);
+        Assert.Contains("&&", group.NormalizedSignature);
+        Assert.DoesNotContain("||", group.NormalizedSignature);
+
+        var positiveOcc = group.InlineOccurrences.Single(o => !o.IsNegatedAtCallSite);
+        var negatedOcc = group.InlineOccurrences.Single(o => o.IsNegatedAtCallSite);
+
+        var posUsage = group.GenerateTypicalUsage(positiveOcc);
+        var negUsage = group.GenerateTypicalUsage(negatedOcc);
+
+        Assert.False(posUsage.StartsWith('!'));
+        Assert.True(negUsage.StartsWith('!'));
+    }
+
+    [Fact]
+    public void GroupPredicates_UnextractedDirectlyNegatedCondition_WithDeMorganCondition_GroupsIntoSingleCluster()
+    {
+        var code = """
+            namespace MyNamespace;
+
+            public class Service
+            {
+                public void Method1(int firstValue, int secondValue, int thirdValue)
+                {
+                    if (!(firstValue > 0 && secondValue > 0 && thirdValue > 0)) return;
+                }
+
+                public void Method2(int alpha, int beta, int gamma)
+                {
+                    if (alpha <= 0 || beta <= 0 || gamma <= 0) return;
+                }
+            }
+            """;
+
+        var occurrences = _detector.ExtractPredicates(CSharpSyntaxTree.ParseText(code), "Service.cs", _settings);
+        var groups = _detector.GroupPredicates(occurrences, _settings);
+
+        Assert.Single(groups);
+        var group = groups[0];
+
+        Assert.Equal(2, group.Occurrences.Count);
+        // Canonical polarity favors positive && form over negated || form
+        Assert.Contains("&&", group.NormalizedSignature);
+        Assert.DoesNotContain("||", group.NormalizedSignature);
+        Assert.All(group.InlineOccurrences, o => Assert.True(o.IsNegatedAtCallSite));
+    }
+
+    [Fact]
+    public void GroupPredicates_ImplicitPrivateHelper_DoesNotMatchDifferentClass_MatchesSameClass()
+    {
+        var codeA = """
+            namespace MyNamespace;
+
+            public class ServiceA
+            {
+                // Implicit private (no accessibility modifier)
+                static bool IsAutonomous(int? taskId, string? stageId) =>
+                    taskId.HasValue && taskId.Value > 0 && !string.Equals(stageId, "Ideation", StringComparison.OrdinalIgnoreCase);
+
+                public void RunSelf(int? taskId, string? stageId)
+                {
+                    if (taskId.HasValue && taskId.Value > 0 && !string.Equals(stageId, "Ideation", StringComparison.OrdinalIgnoreCase))
+                    {
+                        Process();
+                    }
+                }
+            }
+            """;
+
+        var codeB = """
+            namespace MyNamespace;
+
+            public class ServiceB
+            {
+                public void RunExternal(int? taskId, string? stageId)
+                {
+                    if (taskId.HasValue && taskId.Value > 0 && !string.Equals(stageId, "Ideation", StringComparison.OrdinalIgnoreCase))
+                    {
+                        Process();
+                    }
+                }
+            }
+            """;
+
+        var occurrences = new List<PredicateOccurrence>();
+        occurrences.AddRange(_detector.ExtractPredicates(CSharpSyntaxTree.ParseText(codeA), "ServiceA.cs", _settings));
+        occurrences.AddRange(_detector.ExtractPredicates(CSharpSyntaxTree.ParseText(codeB), "ServiceB.cs", _settings));
+
+        var groups = _detector.GroupPredicates(occurrences, _settings);
+
+        // Only ServiceA.RunSelf should match ServiceA.IsAutonomous; ServiceB.RunExternal cannot access it.
+        Assert.Single(groups);
+        var group = groups[0];
+        Assert.True(group.HasExistingHelper);
+        Assert.Equal("ServiceA", group.ExistingHelper?.DeclaringTypeName);
+        Assert.Single(group.InlineOccurrences);
+        Assert.Equal("ServiceA.cs", group.InlineOccurrences[0].FilePath);
+    }
+
+    [Fact]
+    public void GroupPredicates_DirectlyNegatedCallSite_MatchingExistingDeMorganHelper_CancelsDoubleNegation()
+    {
+        var helperCode = """
+            namespace MyNamespace;
+
+            public static class TaskHelper
+            {
+                public static bool IsInvalidTask(int? taskId, string? stageId) =>
+                    !taskId.HasValue || taskId.Value <= 0 || string.Equals(stageId, "Ideation", StringComparison.OrdinalIgnoreCase);
+            }
+            """;
+
+        var callerCode = """
+            namespace MyNamespace;
+
+            public class Consumer
+            {
+                public void Run(int? taskId, string? stageId)
+                {
+                    if (!(taskId.HasValue && taskId.Value > 0 && !string.Equals(stageId, "Ideation", StringComparison.OrdinalIgnoreCase)))
+                    {
+                        Process();
+                    }
+                }
+            }
+            """;
+
+        var occurrences = new List<PredicateOccurrence>();
+        occurrences.AddRange(_detector.ExtractPredicates(CSharpSyntaxTree.ParseText(helperCode), "TaskHelper.cs", _settings));
+        occurrences.AddRange(_detector.ExtractPredicates(CSharpSyntaxTree.ParseText(callerCode), "Consumer.cs", _settings));
+
+        var groups = _detector.GroupPredicates(occurrences, _settings);
+
+        Assert.Single(groups);
+        var group = groups[0];
+        Assert.True(group.HasExistingHelper);
+        Assert.Equal("IsInvalidTask", group.SuggestedHelperName);
+        Assert.Single(group.InlineOccurrences);
+
+        // !(A && B) is equivalent to IsInvalidTask (!A || !B), so double negation cancels out
+        Assert.False(group.InlineOccurrences[0].IsNegatedAtCallSite);
+        var usage = group.GenerateTypicalUsage(group.InlineOccurrences[0]);
+        Assert.Equal("IsInvalidTask(taskId, stageId)", usage);
+    }
+
+    [Fact]
+    public void GroupPredicates_StaticMathMethodInInstanceHelper_MatchesCallSiteCleanly()
+    {
+        var helperCode = """
+            namespace MyNamespace;
+
+            public class RangeValidator
+            {
+                public int Threshold { get; set; }
+
+                public bool IsAboveThreshold(int value, int offset) =>
+                    Math.Max(value, 0) + offset >= Threshold;
+
+                public void Check(RangeValidator validator, int input, int extra)
+                {
+                    if (Math.Max(input, 0) + extra >= validator.Threshold)
+                    {
+                        Process();
+                    }
+                }
+            }
+            """;
+
+        var occurrences = _detector.ExtractPredicates(CSharpSyntaxTree.ParseText(helperCode), "RangeValidator.cs", _settings);
+        var groups = _detector.GroupPredicates(occurrences, _settings);
+
+        Assert.Single(groups);
+        var group = groups[0];
+        Assert.True(group.HasExistingHelper);
+        Assert.Equal("IsAboveThreshold", group.SuggestedHelperName);
+        Assert.Single(group.InlineOccurrences);
+    }
 }

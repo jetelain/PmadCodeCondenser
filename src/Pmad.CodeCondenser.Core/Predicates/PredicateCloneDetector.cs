@@ -151,7 +151,8 @@ public sealed class PredicateCloneDetector : IPredicateCloneDetector
                 instanceHelperMap.TryGetValue(inline.NegatedInstanceNormalizedSignature, out var negInstCandidates) &&
                 FindAccessibleHelper(negInstCandidates, inline) is { } negInstHelper)
             {
-                bool neg = negInstHelper.HelperInfo?.IsBodyNegated != true;
+                bool isHelperNegated = negInstHelper.HelperInfo?.IsBodyNegated == true;
+                bool neg = isHelperNegated == inline.IsNegatedAtCallSite;
                 AddMatch(negInstHelper, inline with { IsNegatedAtCallSite = neg }, inline);
                 continue;
             }
@@ -170,7 +171,8 @@ public sealed class PredicateCloneDetector : IPredicateCloneDetector
                 staticHelperMap.TryGetValue(inline.NegatedNormalizedSignature, out var negStaticCandidates) &&
                 FindAccessibleHelper(negStaticCandidates, inline) is { } negStaticHelper)
             {
-                bool neg = negStaticHelper.HelperInfo?.IsBodyNegated != true;
+                bool isHelperNegated = negStaticHelper.HelperInfo?.IsBodyNegated == true;
+                bool neg = isHelperNegated == inline.IsNegatedAtCallSite;
                 AddMatch(negStaticHelper, inline with { IsNegatedAtCallSite = neg }, inline);
                 continue;
             }

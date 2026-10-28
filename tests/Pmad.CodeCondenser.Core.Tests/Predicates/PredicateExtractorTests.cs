@@ -240,4 +240,95 @@ public class PredicateExtractorTests
 
         Assert.Empty(occurrences);
     }
+
+    [Fact]
+    public void ExtractPredicates_ImplicitPrivateHelper_SetsIsPrivateTrueAndAccessibilityPrivate()
+    {
+        var code = """
+            namespace MyNamespace;
+
+            public class Service
+            {
+                // Implicit private method in class
+                static bool IsAutonomous(int? taskId, string? stageId) =>
+                    taskId.HasValue && taskId.Value > 0 && !string.Equals(stageId, StandardStageIds.Ideation, StringComparison.OrdinalIgnoreCase);
+
+                // Implicit private property in class
+                bool IsReady =>
+                    taskId.HasValue && taskId.Value > 0 && !string.Equals(stageId, StandardStageIds.Ideation, StringComparison.OrdinalIgnoreCase);
+            }
+            """;
+
+        var tree = CSharpSyntaxTree.ParseText(code);
+        var occurrences = _extractor.ExtractPredicates(tree, "Service.cs", _settings);
+
+        Assert.Equal(2, occurrences.Count);
+        Assert.All(occurrences, o =>
+        {
+            Assert.True(o.IsHelperDeclaration);
+            Assert.NotNull(o.HelperInfo);
+            Assert.True(o.HelperInfo.IsPrivate);
+            Assert.Equal("private", o.HelperInfo.Accessibility);
+        });
+    }
+
+    [Fact]
+    public void ExtractPredicates_InterfaceHelper_DefaultsToPublicAccessibility()
+    {
+        var code = """
+            namespace MyNamespace;
+
+            public interface IService
+            {
+                // Interface member with default implementation has public default accessibility
+                bool IsValid(int? taskId, string? stageId) =>
+                    taskId.HasValue && taskId.Value > 0 && !string.Equals(stageId, StandardStageIds.Ideation, StringComparison.OrdinalIgnoreCase);
+            }
+            """;
+
+        var tree = CSharpSyntaxTree.ParseText(code);
+        var occurrences = _extractor.ExtractPredicates(tree, "IService.cs", _settings);
+
+        Assert.Single(occurrences);
+        var occ = occurrences[0];
+        Assert.True(occ.IsHelperDeclaration);
+        Assert.NotNull(occ.HelperInfo);
+        Assert.False(occ.HelperInfo.IsPrivate);
+        Assert.Equal("public", occ.HelperInfo.Accessibility);
+    }
+
+    [Fact]
+    public void ExtractPredicates_DirectlyNegatedCondition_SetsDeMorganDualNegatedSignature()
+    {
+        var code = """
+            namespace MyNamespace;
+
+            public class Service
+            {
+                public void Run(int? taskId, string? stageId)
+                {
+                    if (!(taskId.HasValue && taskId.Value > 0 && !string.Equals(stageId, "Ideation", StringComparison.OrdinalIgnoreCase)))
+                    {
+                        Process();
+                    }
+                }
+            }
+            """;
+
+        var tree = CSharpSyntaxTree.ParseText(code);
+        var occurrences = _extractor.ExtractPredicates(tree, "Service.cs", _settings);
+
+        Assert.Single(occurrences);
+        var occ = occurrences[0];
+        Assert.True(occ.IsNegatedAtCallSite);
+
+        // NormalizedSignature has inner positive form
+        Assert.Contains("&&", occ.NormalizedSignature);
+        Assert.DoesNotContain("||", occ.NormalizedSignature);
+
+        // NegatedNormalizedSignature has De Morgan dual form
+        Assert.NotNull(occ.NegatedNormalizedSignature);
+        Assert.Contains("||", occ.NegatedNormalizedSignature);
+        Assert.DoesNotContain("&&", occ.NegatedNormalizedSignature);
+    }
 }

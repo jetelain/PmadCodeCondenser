@@ -200,7 +200,7 @@ public static class SarifRules
             Help = new SarifMultiformatMessageString
             {
                 Text = "Replace inline condition with the existing helper call. To suppress, add '// codecondenser:ignore-predicate' above the condition or statement.",
-                Markdown = "Replace inline condition with the existing helper call.\n\nTo suppress, add `// codecondenser:ignore-predicate` on the preceding line or `[SuppressMessage(\"CodeCondenser\", \"PredicateExistingHelper\")]`."
+                Markdown = "Replace inline condition with the existing helper call.\n\nTo suppress, add `// codecondenser:ignore-predicate` on the preceding line or `[SuppressMessage(\"CodeCondenser\", \"PredicateMatchesExistingHelper\")]`."
             },
             DefaultConfiguration = new SarifReportingConfiguration
             {

@@ -249,9 +249,14 @@ public sealed class PredicateExtractor : IPredicateExtractor
 
             var receiver = explicitReceiver ?? PredicateNormalizer.DetectCandidateReceiver(condition);
 
+            var unwrapped = PredicateNormalizer.UnwrapParentheses(condition);
+            var targetInner = unwrapped is PrefixUnaryExpressionSyntax { RawKind: (int)SyntaxKind.LogicalNotExpression } notExpr
+                ? PredicateNormalizer.UnwrapParentheses(notExpr.Operand)
+                : condition;
+
             // Compute standard positive and negated normalizations
             var normResult = PredicateNormalizer.Normalize(condition);
-            var negResult = PredicateNormalizer.NormalizeNegated(condition);
+            var negResult = PredicateNormalizer.NormalizeNegated(targetInner);
 
             // Compute instance-bound positive and negated normalizations if a receiver exists
             PredicateNormalizer.NormalizationResult? instResult = null;
@@ -259,7 +264,7 @@ public sealed class PredicateExtractor : IPredicateExtractor
             if (receiver != null)
             {
                 instResult = PredicateNormalizer.Normalize(condition, explicitReceiver: receiver);
-                instNegResult = PredicateNormalizer.NormalizeNegated(condition, explicitReceiver: receiver);
+                instNegResult = PredicateNormalizer.NormalizeNegated(targetInner, explicitReceiver: receiver);
             }
 
             _occurrences.Add(new PredicateOccurrence
@@ -310,7 +315,12 @@ public sealed class PredicateExtractor : IPredicateExtractor
             var enclosingType = method.FirstAncestorOrSelf<TypeDeclarationSyntax>();
             var declaringTypeName = enclosingType?.Identifier.ValueText ?? "Helper";
             var isStatic = method.Modifiers.Any(SyntaxKind.StaticKeyword);
-            var isPrivate = method.Modifiers.Any(SyntaxKind.PrivateKeyword);
+            var isInsideInterface = enclosingType is InterfaceDeclarationSyntax;
+            var isPrivate = isInsideInterface
+                ? method.Modifiers.Any(SyntaxKind.PrivateKeyword)
+                : !method.Modifiers.Any(SyntaxKind.PublicKeyword) &&
+                  !method.Modifiers.Any(SyntaxKind.InternalKeyword) &&
+                  !method.Modifiers.Any(SyntaxKind.ProtectedKeyword);
 
             var parameters = method.ParameterList.Parameters.Select(p => p.Identifier.ValueText).ToList();
             var parameterTypes = method.ParameterList.Parameters.Select(p => p.Type?.ToString() ?? "var").ToList();
@@ -329,7 +339,7 @@ public sealed class PredicateExtractor : IPredicateExtractor
                 IsPrivate = isPrivate,
                 Parameters = parameters,
                 ParameterTypes = parameterTypes,
-                Accessibility = GetAccessibility(method.Modifiers),
+                Accessibility = GetAccessibility(method.Modifiers, enclosingType),
                 ReturnType = method.ReturnType.ToString(),
                 Namespace = FindEnclosingNamespace(method),
                 IsBodyNegated = normResult.IsNegated
@@ -375,7 +385,12 @@ public sealed class PredicateExtractor : IPredicateExtractor
             var enclosingType = property.FirstAncestorOrSelf<TypeDeclarationSyntax>();
             var declaringTypeName = enclosingType?.Identifier.ValueText ?? "Helper";
             var isStatic = property.Modifiers.Any(SyntaxKind.StaticKeyword);
-            var isPrivate = property.Modifiers.Any(SyntaxKind.PrivateKeyword);
+            var isInsideInterface = enclosingType is InterfaceDeclarationSyntax;
+            var isPrivate = isInsideInterface
+                ? property.Modifiers.Any(SyntaxKind.PrivateKeyword)
+                : !property.Modifiers.Any(SyntaxKind.PublicKeyword) &&
+                  !property.Modifiers.Any(SyntaxKind.InternalKeyword) &&
+                  !property.Modifiers.Any(SyntaxKind.ProtectedKeyword);
 
             var normResult = PredicateNormalizer.Normalize(
                 bodyExpr,
@@ -391,7 +406,7 @@ public sealed class PredicateExtractor : IPredicateExtractor
                 IsPrivate = isPrivate,
                 Parameters = [],
                 ParameterTypes = [],
-                Accessibility = GetAccessibility(property.Modifiers),
+                Accessibility = GetAccessibility(property.Modifiers, enclosingType),
                 ReturnType = property.Type.ToString(),
                 Namespace = FindEnclosingNamespace(property),
                 IsBodyNegated = normResult.IsNegated
@@ -473,13 +488,13 @@ public sealed class PredicateExtractor : IPredicateExtractor
             return false;
         }
 
-        private static string GetAccessibility(SyntaxTokenList modifiers)
+        private static string GetAccessibility(SyntaxTokenList modifiers, TypeDeclarationSyntax? enclosingType)
         {
             if (modifiers.Any(SyntaxKind.PublicKeyword)) return "public";
             if (modifiers.Any(SyntaxKind.InternalKeyword)) return "internal";
             if (modifiers.Any(SyntaxKind.ProtectedKeyword)) return "protected";
             if (modifiers.Any(SyntaxKind.PrivateKeyword)) return "private";
-            return "private";
+            return enclosingType is InterfaceDeclarationSyntax ? "public" : "private";
         }
 
         private static string? FindEnclosingMember(SyntaxNode node)

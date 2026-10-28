@@ -15,7 +15,8 @@ public sealed class PredicateNormalizer
 {
     private static readonly HashSet<string> RuntimeStaticTypes = new(StringComparer.Ordinal)
     {
-        "DateTime", "DateTimeOffset", "TimeSpan", "Environment", "Guid", "Random"
+        "DateTime", "DateTimeOffset", "TimeSpan", "Environment", "Guid", "Random",
+        "Math", "Convert", "Regex", "String"
     };
 
     /// <summary>
@@ -377,6 +378,17 @@ public sealed class PredicateNormalizer
 
         private static bool IsRuntimeStaticPropertyAccess(MemberAccessExpressionSyntax node)
         {
+            var parent = node.Parent;
+            while (parent is ParenthesizedExpressionSyntax p)
+            {
+                parent = p.Parent;
+            }
+
+            if (parent is InvocationExpressionSyntax inv && inv.Expression == node)
+            {
+                return false;
+            }
+
             if (node.Expression is IdentifierNameSyntax id && RuntimeStaticTypes.Contains(id.Identifier.ValueText))
             {
                 return true;

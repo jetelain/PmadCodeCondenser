@@ -189,4 +189,24 @@ public class PredicateNormalizerTests
         Assert.Equal(directResult.Signature, negatedInvertedResult.Signature);
         Assert.True(negatedInvertedResult.IsNegated);
     }
+
+    [Fact]
+    public void Normalize_StaticBCLMathMethod_PreservesStaticClassWithoutThisBinding()
+    {
+        // Inside an instance member, Math.Max should NOT become $this.Math.Max
+        var instanceHelperExpr = ParseExpression("Math.Max(value, 0) >= Threshold");
+        var helperResult = PredicateNormalizer.Normalize(
+            instanceHelperExpr,
+            knownParameters: ["value"],
+            isInstanceMemberContext: true);
+
+        // At call site:
+        var callSiteExpr = ParseExpression("Math.Max(x, 0) >= validator.Threshold");
+        var callSiteResult = PredicateNormalizer.Normalize(callSiteExpr, explicitReceiver: "validator");
+
+        Assert.Equal(helperResult.Signature, callSiteResult.Signature);
+        Assert.Contains("Math.Max($0, 0)", helperResult.Signature);
+        Assert.DoesNotContain("$this.Math", helperResult.Signature);
+        Assert.Contains("$this.Threshold", helperResult.Signature);
+    }
 }
