@@ -213,6 +213,7 @@ public sealed class SnapshotDiffer : ISnapshotDiffer
         IReadOnlyDictionary<string, string> commentCache,
         IEnumerable<string>? typeViolationFiles = null,
         IEnumerable<string>? linesOfCodeViolationKeys = null,
+        IEnumerable<string>? predicateCloneKeys = null,
         bool isIncremental = false)
     {
         ArgumentNullException.ThrowIfNull(currentFileHashes);
@@ -296,6 +297,45 @@ public sealed class SnapshotDiffer : ISnapshotDiffer
                     }
                 }
             }
+
+            if (predicateCloneKeys != null)
+            {
+                foreach (var k in predicateCloneKeys)
+                {
+                    snapshot.PredicateCloneKeys.Add(k);
+                }
+
+                // In incremental update with a baseline, preserve keys for unchanged files that were not re-analyzed
+                if (baseline != null)
+                {
+                    foreach (var k in baseline.PredicateCloneKeys)
+                    {
+                        var sepIdx = k.IndexOf("::", StringComparison.Ordinal);
+                        var filePath = sepIdx >= 0 ? k.Substring(0, sepIdx) : null;
+                        if (filePath != null)
+                        {
+                            if (baseline.Files.TryGetValue(filePath, out var oldFileInfo) &&
+                                currentFileHashes.TryGetValue(filePath, out var currentHash) &&
+                                string.Equals(oldFileInfo.FileHash, currentHash, StringComparison.OrdinalIgnoreCase))
+                            {
+                                snapshot.PredicateCloneKeys.Add(k);
+                            }
+                        }
+                    }
+                }
+            }
+            else if (baseline != null)
+            {
+                foreach (var k in baseline.PredicateCloneKeys)
+                {
+                    var sepIdx = k.IndexOf("::", StringComparison.Ordinal);
+                    var filePath = sepIdx >= 0 ? k.Substring(0, sepIdx) : null;
+                    if (filePath == null || currentFileHashes.ContainsKey(filePath))
+                    {
+                        snapshot.PredicateCloneKeys.Add(k);
+                    }
+                }
+            }
         }
         else
         {
@@ -316,6 +356,14 @@ public sealed class SnapshotDiffer : ISnapshotDiffer
                 foreach (var k in linesOfCodeViolationKeys)
                 {
                     snapshot.LinesOfCodeViolationKeys.Add(k);
+                }
+            }
+
+            if (predicateCloneKeys != null)
+            {
+                foreach (var k in predicateCloneKeys)
+                {
+                    snapshot.PredicateCloneKeys.Add(k);
                 }
             }
         }

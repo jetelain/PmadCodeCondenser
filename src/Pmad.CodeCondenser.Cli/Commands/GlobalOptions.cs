@@ -236,6 +236,43 @@ public sealed class GlobalOptions
         Recursive = true
     };
 
+    // Predicate / Boolean Condition clones thresholds
+    public Option<bool> NoPredicatesOption { get; } = new("--no-predicates", "--disable-predicates", "--no-predicate-clones")
+    {
+        Description = "Disable boolean condition / predicate clone detection",
+        Recursive = true
+    };
+
+    public Option<bool> EnablePredicatesOption { get; } = new("--enable-predicates", "--enable-predicate-clones")
+    {
+        Description = "Explicitly enable boolean condition / predicate clone detection",
+        Recursive = true
+    };
+
+    public Option<int?> ThresholdPredicateLengthOption { get; } = new("--threshold-predicates", "-tpred", "--predicate-length-threshold", "--threshold-predicate-length")
+    {
+        Description = "Minimum character length for boolean predicate clone detection (default: 100)",
+        Recursive = true
+    };
+
+    public Option<int?> ThresholdExistingHelperPredicateLengthOption { get; } = new("--threshold-existing-helpers", "-thelp", "--threshold-existing-predicate-helpers")
+    {
+        Description = "Minimum character length to flag inline conditions when an existing helper already exists (default: 20)",
+        Recursive = true
+    };
+
+    public Option<int?> PredicateToleranceOption { get; } = new("--predicate-tolerance", "-pt", "--predicate-clones-tolerance")
+    {
+        Description = "Maximum new predicate clone clusters tolerated in incremental mode",
+        Recursive = true
+    };
+
+    public Option<int?> PredicateOccurrencesOption { get; } = new("--predicate-occurrences", "-po", "--predicate-min-occurrences")
+    {
+        Description = "Minimum occurrences for predicate clone detection (default: 2)",
+        Recursive = true
+    };
+
     // Comments & XML doc thresholds
     public Option<string?> SummaryOption { get; } = new("--summary", "--summary-mode")
     {
@@ -368,6 +405,13 @@ public sealed class GlobalOptions
         root.Add(ThresholdClassLinesOption);
         root.Add(LocToleranceOption);
 
+        root.Add(NoPredicatesOption);
+        root.Add(EnablePredicatesOption);
+        root.Add(ThresholdPredicateLengthOption);
+        root.Add(ThresholdExistingHelperPredicateLengthOption);
+        root.Add(PredicateToleranceOption);
+        root.Add(PredicateOccurrencesOption);
+
         root.Add(SummaryOption);
         root.Add(ReportOnlyOption);
         root.Add(NoCommentsOption);
@@ -424,6 +468,11 @@ public sealed class GlobalOptions
             MethodLinesOfCodeThreshold = pr.GetValue(ThresholdMethodLinesOption),
             ClassLinesOfCodeThreshold = pr.GetValue(ThresholdClassLinesOption),
             LinesOfCodeTolerance = pr.GetValue(LocToleranceOption),
+
+            PredicateTolerance = pr.GetValue(PredicateToleranceOption),
+            PredicateLengthThreshold = pr.GetValue(ThresholdPredicateLengthOption),
+            ExistingHelperPredicateLengthThreshold = pr.GetValue(ThresholdExistingHelperPredicateLengthOption),
+            PredicateMinOccurrences = pr.GetValue(PredicateOccurrencesOption),
 
             ThresholdComments = pr.GetValue(ThresholdCommentsOption),
             ThresholdXmlSummary = pr.GetValue(ThresholdXmlSummaryOption),
@@ -496,6 +545,15 @@ public sealed class GlobalOptions
         else if (pr.GetResult(EnableLocOption) is { Implicit: false } && pr.GetValue(EnableLocOption))
         {
             options.EnableLinesOfCodeDetection = true;
+        }
+
+        if (pr.GetResult(NoPredicatesOption) is { Implicit: false } && pr.GetValue(NoPredicatesOption))
+        {
+            options.EnablePredicateCloneDetection = false;
+        }
+        else if (pr.GetResult(EnablePredicatesOption) is { Implicit: false } && pr.GetValue(EnablePredicatesOption))
+        {
+            options.EnablePredicateCloneDetection = true;
         }
 
         var summary = pr.GetValue(SummaryOption);

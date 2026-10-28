@@ -71,6 +71,7 @@ public sealed class JsonReportFormatter : IReportFormatter
             RepeatedStringsCount = result.RepeatedStringGroups.Count,
             TypeFileIssuesCount = result.TypeFileIssues.Count(i => i.HasViolation),
             LinesOfCodeViolationsCount = result.LinesOfCodeViolations.Count,
+            PredicateClustersCount = result.PredicateCloneGroups.Count,
             VerboseCommentsCount = result.VerboseComments.Count,
             SummaryMode = settings.GetEffectiveSummaryMode().ToString(),
             TotalCommentGainCharacters = commentGainResult.SummarizedCount > 0 ? commentGainResult.GainCharacters : null,
@@ -78,7 +79,9 @@ public sealed class JsonReportFormatter : IReportFormatter
             TotalCommentGainTokens = commentGainResult.SummarizedCount > 0 ? commentGainResult.GainTokens : null,
             TotalCloneGainTokens = CloneGainEstimator.EstimateTotalGainTokens(result.CloneGroups, result.SubMethodCloneGroups, estimator, baseDirectory) is > 0 and var cloneGain ? cloneGain : null,
             TotalRepeatedStringGainCharacters = result.RepeatedStringGroups.Count > 0 ? result.TotalRepeatedStringGainCharacters : null,
-            TotalRepeatedStringGainTokens = result.RepeatedStringGroups.Count > 0 ? result.TotalRepeatedStringGainTokens : null
+            TotalRepeatedStringGainTokens = result.RepeatedStringGroups.Count > 0 ? result.TotalRepeatedStringGainTokens : null,
+            TotalPredicateGainCharacters = result.PredicateCloneGroups.Count > 0 ? result.TotalPredicateGainCharacters : null,
+            TotalPredicateGainTokens = result.PredicateCloneGroups.Count > 0 ? result.TotalPredicateGainTokens : null
         };
 
         var cloneClusters = new List<JsonCloneCluster>();
@@ -247,6 +250,48 @@ public sealed class JsonReportFormatter : IReportFormatter
             Category = v.Category.ToString()
         }).ToList();
 
+        var predicateClusters = new List<JsonPredicateCluster>();
+        for (int i = 0; i < result.PredicateCloneGroups.Count; i++)
+        {
+            var pGroup = result.PredicateCloneGroups[i];
+            var occurrences = pGroup.Occurrences.Select(occ => new JsonPredicateOccurrence
+            {
+                FilePath = ReportPathHelper.NormalizeRelativePath(occ.FilePath, baseDirectory),
+                StartLine = occ.StartLine,
+                EndLine = occ.EndLine,
+                StartColumn = occ.StartColumn,
+                EndColumn = occ.EndColumn,
+                ExpressionText = occ.ExpressionText,
+                EnclosingMember = occ.EnclosingMember,
+                IsHelperDeclaration = occ.IsHelperDeclaration,
+                ReceiverExpression = occ.ReceiverExpression,
+                ArgumentExpressions = occ.ArgumentExpressions.ToList(),
+                IsNegatedAtCallSite = occ.IsNegatedAtCallSite,
+                TypicalReplacement = pGroup.GenerateTypicalUsage(occ)
+            }).ToList();
+
+            var gainChars = pGroup.EstimateGainCharacters();
+            var gainTokens = pGroup.EstimateGainTokens(estimator);
+
+            predicateClusters.Add(new JsonPredicateCluster
+            {
+                ClusterId = i + 1,
+                Category = pGroup.Category.ToString(),
+                NormalizedSignature = pGroup.NormalizedSignature,
+                NormalizedHash = pGroup.NormalizedHash,
+                HasExistingHelper = pGroup.HasExistingHelper,
+                SuggestedHelperName = pGroup.SuggestedHelperName,
+                SuggestedClassName = pGroup.SuggestedClassName,
+                ExistingHelperName = pGroup.ExistingHelper?.HelperName,
+                ExistingHelperDeclaringType = pGroup.ExistingHelper?.DeclaringTypeName,
+                ExistingHelperIsStatic = pGroup.ExistingHelper?.IsStatic,
+                TypicalUsage = pGroup.GenerateTypicalUsage(),
+                Occurrences = occurrences,
+                PotentialGainCharacters = gainChars > 0 ? gainChars : null,
+                PotentialGainTokens = gainTokens > 0 ? gainTokens : null
+            });
+        }
+
         return new CodeCondenserJsonReport
         {
             Summary = summary,
@@ -255,7 +300,8 @@ public sealed class JsonReportFormatter : IReportFormatter
             RepeatedStrings = repeatedStrings,
             VerboseComments = verboseComments,
             TypeFileIssues = typeFileIssues,
-            LinesOfCodeViolations = locViolations
+            LinesOfCodeViolations = locViolations,
+            PredicateClusters = predicateClusters
         };
     }
 }

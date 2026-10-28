@@ -14,6 +14,8 @@ public static class SarifRules
     public const string SingleTypePerFileRuleId = "CC007";
     public const string MethodLinesOfCodeRuleId = "CC008";
     public const string ClassLinesOfCodeRuleId = "CC009";
+    public const string PredicateDuplicationRuleId = "CC010";
+    public const string PredicateExistingHelperRuleId = "CC011";
 
     public static IReadOnlyList<SarifReportingDescriptor> AllRules { get; } =
     [
@@ -163,6 +165,42 @@ public static class SarifRules
             {
                 Text = "Refactor class into smaller, single-responsibility types or partial class files.",
                 Markdown = "Refactor class into smaller, single-responsibility types or partial class files.\n\nTo suppress, add `// codecondenser:ignore-loc` or `[SuppressMessage(\"CodeCondenser\", \"ClassLength\")]`."
+            },
+            DefaultConfiguration = new SarifReportingConfiguration
+            {
+                Level = "warning"
+            }
+        },
+        new SarifReportingDescriptor
+        {
+            Id = PredicateDuplicationRuleId,
+            Name = "PredicateDuplication",
+            ShortDescription = new SarifMultiformatMessageString
+            {
+                Text = "Duplicate boolean condition or predicate detected across multiple call sites."
+            },
+            Help = new SarifMultiformatMessageString
+            {
+                Text = "Extract duplicate condition into a shared helper method or property. To suppress, add '// codecondenser:ignore-predicate' above the condition or statement.",
+                Markdown = "Extract duplicate condition into a shared helper method or property.\n\nTo suppress, add `// codecondenser:ignore-predicate` on the preceding line or `[SuppressMessage(\"CodeCondenser\", \"PredicateDuplication\")]`."
+            },
+            DefaultConfiguration = new SarifReportingConfiguration
+            {
+                Level = "warning"
+            }
+        },
+        new SarifReportingDescriptor
+        {
+            Id = PredicateExistingHelperRuleId,
+            Name = "PredicateMatchesExistingHelper",
+            ShortDescription = new SarifMultiformatMessageString
+            {
+                Text = "Boolean condition or predicate matches an existing helper method or property."
+            },
+            Help = new SarifMultiformatMessageString
+            {
+                Text = "Replace inline condition with the existing helper call. To suppress, add '// codecondenser:ignore-predicate' above the condition or statement.",
+                Markdown = "Replace inline condition with the existing helper call.\n\nTo suppress, add `// codecondenser:ignore-predicate` on the preceding line or `[SuppressMessage(\"CodeCondenser\", \"PredicateMatchesExistingHelper\")]`."
             },
             DefaultConfiguration = new SarifReportingConfiguration
             {

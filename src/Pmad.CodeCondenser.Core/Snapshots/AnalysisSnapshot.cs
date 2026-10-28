@@ -45,4 +45,9 @@ public sealed class AnalysisSnapshot
     /// Set of unique violation keys ("FilePath::Kind::Identifier") that have existing lines of code violations.
     /// </summary>
     public HashSet<string> LinesOfCodeViolationKeys { get; set; } = new(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// Set of unique predicate clone keys or hashes that have existing predicate duplication.
+    /// </summary>
+    public HashSet<string> PredicateCloneKeys { get; set; } = new(StringComparer.Ordinal);
 }

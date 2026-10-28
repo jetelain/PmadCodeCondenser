@@ -333,5 +333,49 @@ The following files and declarations are automatically exempted from lines of co
 2. **Generated code attributes**: Types or members decorated with `[GeneratedCode]` or `[CompilerGenerated]`.
 3. **Excluded files & directories**: Files matching `--exclude` or `.codecondenser.json` exclude patterns.
 
+---
 
+## 6. Predicate / Boolean Condition Suppressions
 
+Predicate clone analysis flags duplicate complex conditions across `if`, ternary (`? :`), `while`, `do`, boolean `return <expr>;`, and LINQ calls (e.g. `.Where(...)`, `.Any(...)`, `.All(...)`, `.First(...)`, `.Count(...)`), or conditions matching existing helper methods/properties.
+
+### A. Comment Marker
+Place `// codecondenser:ignore-predicate` (or `// nopredicate`, `// codecondenser:ignore`) on the line directly preceding the statement, or inline:
+
+```csharp
+// codecondenser:ignore-predicate
+if (taskId.HasValue && taskId.Value > 0 && !string.Equals(stageId, StandardStageIds.Ideation, StringComparison.OrdinalIgnoreCase))
+{
+    // ...
+}
+```
+
+*Supported comment markers*:
+- `codecondenser:ignore-predicate`
+- `codecondenser:ignore-condition`
+- `codecondenser:ignore-bool`
+- `codecondenser:ignore`
+- `nocondense`
+- `nopredicate`
+
+### B. Suppression Attribute
+Apply `[SuppressMessage]` to the enclosing method or class declaration:
+
+```csharp
+[SuppressMessage("CodeCondenser", "PredicateDuplication", Justification = "Performance-critical inline branch")]
+public void ProcessTask(int? taskId, string? stageId)
+{
+    if (taskId.HasValue && taskId.Value > 0 && !string.Equals(stageId, StandardStageIds.Ideation, StringComparison.OrdinalIgnoreCase))
+    {
+        // ...
+    }
+}
+```
+
+*Supported attributes*:
+- `[SuppressMessage("CodeCondenser", "PredicateDuplication")]` (or rule `CC010`)
+- `[SuppressMessage("CodeCondenser", "PredicateMatchesExistingHelper")]` (or rule `CC011`)
+- `[SuppressMessage("CodeCondenser", "PredicateExistingHelper")]`
+- `[SuppressMessage("CodeCondenser", "PredicateClone")]`
+- `[PredicateIgnore]`
+- `[CodeCondenserIgnore]`

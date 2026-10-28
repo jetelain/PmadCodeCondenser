@@ -463,6 +463,61 @@ public sealed class SarifReportFormatter : IReportFormatter
             });
         }
 
+        // 7. Predicate Clones (CC010, CC011)
+        foreach (var group in result.PredicateCloneGroups)
+        {
+            var ruleId = group.HasExistingHelper
+                ? SarifRules.PredicateExistingHelperRuleId
+                : SarifRules.PredicateDuplicationRuleId;
+
+            var level = group.Category == CloneCategory.Test ? "note" : "warning";
+            var correlationGuid = DeterministicGuid.GenerateCorrelationGuid(group.NormalizedHash.ToString("X16")).ToString("D");
+
+            foreach (var occ in group.InlineOccurrences)
+            {
+                var relPath = ReportPathHelper.NormalizeRelativePath(occ.FilePath, baseDirectory);
+                var messageText = group.HasExistingHelper
+                    ? $"Condition '{occ.ExpressionText}' matches existing helper '{group.SuggestedHelperName}'. Replace with '{group.GenerateTypicalUsage(occ)}'."
+                    : $"Duplicate condition '{occ.ExpressionText}' detected ({group.InlineOccurrences.Count} call sites). Extract to helper '{group.GenerateTypicalUsage(occ)}'.";
+
+                run.Results.Add(new SarifResult
+                {
+                    RuleId = ruleId,
+                    Level = level,
+                    CorrelationGuid = correlationGuid,
+                    PartialFingerprints = new Dictionary<string, string>
+                    {
+                        ["astHash/v1"] = group.NormalizedHash.ToString("X16"),
+                        ["locationKey/v1"] = $"{relPath}:{occ.StartLine}:{occ.StartColumn}"
+                    },
+                    Message = new SarifMessage
+                    {
+                        Text = messageText
+                    },
+                    Locations =
+                    [
+                        new SarifLocation
+                        {
+                            PhysicalLocation = new SarifPhysicalLocation
+                            {
+                                ArtifactLocation = new SarifArtifactLocation
+                                {
+                                    Uri = relPath
+                                },
+                                Region = new SarifRegion
+                                {
+                                    StartLine = occ.StartLine,
+                                    EndLine = occ.EndLine,
+                                    StartColumn = occ.StartColumn,
+                                    EndColumn = occ.EndColumn
+                                }
+                            }
+                        }
+                    ]
+                });
+            }
+        }
+
         return new SarifLog
         {
             Runs = [run]

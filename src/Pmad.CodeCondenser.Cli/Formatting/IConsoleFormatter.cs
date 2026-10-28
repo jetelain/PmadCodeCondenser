@@ -38,6 +38,12 @@ public interface IConsoleFormatter
         IReadOnlyList<LinesOfCodeViolation> violations,
         string baseDirectory);
 
+    void PrintPredicateCloneGroups(
+        TextWriter writer,
+        IReadOnlyList<PredicateCloneGroup> predicateGroups,
+        string baseDirectory,
+        HeuristicTokenEstimator? estimator = null);
+
     void PrintSummary(
         TextWriter writer,
         int filesAnalyzed,
@@ -59,7 +65,10 @@ public interface IConsoleFormatter
         int? repeatedStringGainChars = null,
         int? repeatedStringGainTokens = null,
         int? typeIssuesCount = null,
-        int? linesOfCodeViolationsCount = null);
+        int? linesOfCodeViolationsCount = null,
+        int? predicateGroupsCount = null,
+        int? predicateGainChars = null,
+        int? predicateGainTokens = null);
 
     void PrintFileApplied(TextWriter writer, string filePath, string baseDirectory);
 
@@ -92,7 +101,10 @@ public interface IConsoleFormatter
         bool hasTypeViolation = false,
         IReadOnlyList<LinesOfCodeViolation>? linesOfCodeViolations = null,
         int? linesOfCodeTolerance = null,
-        bool hasLinesOfCodeViolation = false);
+        bool hasLinesOfCodeViolation = false,
+        IReadOnlyList<PredicateCloneGroup>? predicateGroups = null,
+        int? predicateTolerance = null,
+        bool hasPredicateViolation = false);
 
 
     void PrintSkillFile(TextWriter writer, Skills.SkillFileResult fileResult, string baseDirectory);

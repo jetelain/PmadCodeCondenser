@@ -209,10 +209,32 @@ public sealed class CliOptions
     /// </summary>
     public int? ClassLinesOfCodeThreshold { get; set; }
 
-    /// <summary>
-    /// Maximum number of new lines of code violations tolerated in incremental mode before returning an error exit code.
-    /// </summary>
     public int? LinesOfCodeTolerance { get; set; }
+
+    /// <summary>
+    /// Explicitly enable or disable boolean predicate clone detection.
+    /// </summary>
+    public bool? EnablePredicateCloneDetection { get; set; }
+
+    /// <summary>
+    /// Override minimum character length for boolean predicate clone detection (default: 25).
+    /// </summary>
+    public int? PredicateLengthThreshold { get; set; }
+
+    /// <summary>
+    /// Override minimum character length for matching against existing helper predicates (default: 20).
+    /// </summary>
+    public int? ExistingHelperPredicateLengthThreshold { get; set; }
+
+    /// <summary>
+    /// Override minimum occurrences for predicate clone detection (default: 2).
+    /// </summary>
+    public int? PredicateMinOccurrences { get; set; }
+
+    /// <summary>
+    /// Maximum number of new predicate clone clusters tolerated in incremental mode before returning an error exit code.
+    /// </summary>
+    public int? PredicateTolerance { get; set; }
 
     /// <summary>
     /// Path to JSON file stored in git recording summarized comments.

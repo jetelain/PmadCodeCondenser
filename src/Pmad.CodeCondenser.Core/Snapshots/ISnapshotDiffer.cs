@@ -68,5 +68,6 @@ public interface ISnapshotDiffer
         IReadOnlyDictionary<string, string> commentCache,
         IEnumerable<string>? typeViolationFiles = null,
         IEnumerable<string>? linesOfCodeViolationKeys = null,
+        IEnumerable<string>? predicateCloneKeys = null,
         bool isIncremental = false);
 }

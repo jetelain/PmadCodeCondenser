@@ -323,6 +323,104 @@ public sealed class ConsoleFormatter : IConsoleFormatter
         }
     }
 
+    public void PrintPredicateCloneGroups(
+        TextWriter writer,
+        IReadOnlyList<PredicateCloneGroup> predicateGroups,
+        string baseDirectory,
+        HeuristicTokenEstimator? estimator = null)
+    {
+        ArgumentNullException.ThrowIfNull(writer);
+        ArgumentNullException.ThrowIfNull(predicateGroups);
+
+        if (predicateGroups.Count == 0)
+        {
+            return;
+        }
+
+        var prodAndCrossGroups = predicateGroups.Where(g => g.Category != CloneCategory.Test).ToList();
+        var testGroups = predicateGroups.Where(g => g.Category == CloneCategory.Test).ToList();
+
+        if (prodAndCrossGroups.Count > 0)
+        {
+            writer.WriteLine(Yellow(Bold($"Found {prodAndCrossGroups.Count} Predicate / Boolean Condition Clone Cluster(s):")));
+            writer.WriteLine();
+
+            for (int i = 0; i < prodAndCrossGroups.Count; i++)
+            {
+                var group = prodAndCrossGroups[i];
+                var prefix = group.Category == CloneCategory.CrossBoundary ? "CROSS-BOUNDARY" : "PRODUCTION";
+                var gainChars = group.EstimateGainCharacters();
+                var gainTokens = group.EstimateGainTokens(estimator);
+                var gainParts = new List<string>();
+                if (gainChars > 0) gainParts.Add($"~{gainChars} chars");
+                if (gainTokens > 0) gainParts.Add($"~{gainTokens} tokens");
+                var gainText = gainParts.Count > 0 ? $", Potential Gain: {string.Join(", ", gainParts)}" : string.Empty;
+
+                if (group.HasExistingHelper)
+                {
+                    writer.WriteLine(Yellow($"[{prefix} EXISTING HELPER #{i + 1}] (Matches '{group.SuggestedHelperName}', {group.InlineOccurrences.Count} call site(s){gainText}):"));
+                    if (group.ExistingHelper != null)
+                    {
+                        var staticStr = group.ExistingHelper.IsStatic ? "static " : string.Empty;
+                        writer.WriteLine(Dim($"  Helper Declaration: {group.ExistingHelper.DeclaringTypeName}.{staticStr}{group.ExistingHelper.HelperName}"));
+                    }
+                    writer.WriteLine($"  Call Sites ({group.InlineOccurrences.Count}):");
+
+                    foreach (var occ in group.InlineOccurrences)
+                    {
+                        var relPath = FormatPath(occ.FilePath, baseDirectory);
+                        var memberInfo = !string.IsNullOrEmpty(occ.EnclosingMember) ? $" in {Bold(occ.EnclosingMember)}" : string.Empty;
+                        writer.WriteLine($"    • {Cyan(relPath)}:{occ.StartLine}:{occ.StartColumn}{memberInfo}");
+                        writer.WriteLine($"      Condition:   {Dim(TruncatePreview(occ.ExpressionText.Replace("\r\n", " ").Replace("\n", " "), 90))}");
+                        writer.WriteLine($"      Replacement: {Green(group.GenerateTypicalUsage(occ))}");
+                    }
+
+                    writer.WriteLine(Dim($"  Recommendation: Replace inline condition with '{group.GenerateTypicalUsage()}'."));
+                    writer.WriteLine(Dim("  To suppress: Add '// codecondenser:ignore-predicate' or '[SuppressMessage(\"CodeCondenser\", \"PredicateMatchesExistingHelper\")]'."));
+                    writer.WriteLine();
+                }
+                else
+                {
+                    writer.WriteLine(Yellow($"[{prefix} PREDICATE CLONE #{i + 1}] ({group.InlineOccurrences.Count} duplicate call site(s){gainText}):"));
+                    writer.WriteLine($"  Suggested Helper: {group.SuggestedClassName}.{group.GenerateTypicalUsage()}");
+                    writer.WriteLine($"  Occurrences ({group.InlineOccurrences.Count}):");
+
+                    foreach (var occ in group.InlineOccurrences)
+                    {
+                        var relPath = FormatPath(occ.FilePath, baseDirectory);
+                        var memberInfo = !string.IsNullOrEmpty(occ.EnclosingMember) ? $" in {Bold(occ.EnclosingMember)}" : string.Empty;
+                        writer.WriteLine($"    • {Cyan(relPath)}:{occ.StartLine}:{occ.StartColumn}{memberInfo}");
+                        writer.WriteLine($"      Condition: {Dim(TruncatePreview(occ.ExpressionText.Replace("\r\n", " ").Replace("\n", " "), 90))}");
+                    }
+
+                    writer.WriteLine(Dim($"  Recommendation: Extract condition into shared helper '{group.SuggestedClassName}.{group.SuggestedHelperName}'."));
+                    writer.WriteLine(Dim("  To suppress: Add '// codecondenser:ignore-predicate' or '[SuppressMessage(\"CodeCondenser\", \"PredicateDuplication\")]'."));
+                    writer.WriteLine();
+                }
+            }
+        }
+
+        if (testGroups.Count > 0)
+        {
+            writer.WriteLine(Yellow(Bold($"Found {testGroups.Count} Test Predicate Clone Cluster(s):")));
+            writer.WriteLine();
+
+            for (int i = 0; i < testGroups.Count; i++)
+            {
+                var group = testGroups[i];
+                writer.WriteLine(Yellow($"[TEST PREDICATE #{i + 1}] ({group.InlineOccurrences.Count} occurrences):"));
+                foreach (var occ in group.InlineOccurrences)
+                {
+                    var relPath = FormatPath(occ.FilePath, baseDirectory);
+                    var memberInfo = !string.IsNullOrEmpty(occ.EnclosingMember) ? $" in {Bold(occ.EnclosingMember)}" : string.Empty;
+                    writer.WriteLine($"    • {Cyan(relPath)}:{occ.StartLine}:{occ.StartColumn}{memberInfo}");
+                    writer.WriteLine($"      Condition: {Dim(TruncatePreview(occ.ExpressionText.Replace("\r\n", " ").Replace("\n", " "), 90))}");
+                }
+                writer.WriteLine();
+            }
+        }
+    }
+
     public void PrintTypeFileIssues(
         TextWriter writer,
         IReadOnlyList<TypeFileAnalysis> typeIssues,
@@ -581,7 +679,10 @@ public sealed class ConsoleFormatter : IConsoleFormatter
         int? repeatedStringGainChars = null,
         int? repeatedStringGainTokens = null,
         int? typeIssuesCount = null,
-        int? linesOfCodeViolationsCount = null)
+        int? linesOfCodeViolationsCount = null,
+        int? predicateGroupsCount = null,
+        int? predicateGainChars = null,
+        int? predicateGainTokens = null)
     {
         ArgumentNullException.ThrowIfNull(writer);
 
@@ -644,6 +745,17 @@ public sealed class ConsoleFormatter : IConsoleFormatter
         if (linesOfCodeViolationsCount.HasValue)
         {
             writer.WriteLine($"  LOC Violations:    {(linesOfCodeViolationsCount.Value > 0 ? Yellow(linesOfCodeViolationsCount.Value.ToString()) : Green("0"))}");
+        }
+
+        if (predicateGroupsCount.HasValue)
+        {
+            writer.WriteLine($"  Predicate Clones:  {(predicateGroupsCount.Value > 0 ? Yellow(predicateGroupsCount.Value.ToString()) : Green("0"))}");
+        }
+
+        if (predicateGainChars.HasValue && predicateGainChars.Value > 0)
+        {
+            var tokensSuffix = predicateGainTokens.HasValue ? $", ~{predicateGainTokens.Value} tokens" : string.Empty;
+            writer.WriteLine($"  Predicate Gain:    {Green($"+{predicateGainChars.Value} chars{tokensSuffix} (potential)")}");
         }
 
         writer.WriteLine($"  Verbose Comments:  {(verboseCommentsCount > 0 ? Cyan(verboseCommentsCount.ToString()) : Green("0"))}");
@@ -845,7 +957,10 @@ public sealed class ConsoleFormatter : IConsoleFormatter
         bool hasTypeViolation = false,
         IReadOnlyList<LinesOfCodeViolation>? linesOfCodeViolations = null,
         int? linesOfCodeTolerance = null,
-        bool hasLinesOfCodeViolation = false)
+        bool hasLinesOfCodeViolation = false,
+        IReadOnlyList<PredicateCloneGroup>? predicateGroups = null,
+        int? predicateTolerance = null,
+        bool hasPredicateViolation = false)
     {
         ArgumentNullException.ThrowIfNull(writer);
         cloneGroups ??= [];
@@ -854,6 +969,7 @@ public sealed class ConsoleFormatter : IConsoleFormatter
         repeatedStrings ??= [];
         typeIssues ??= [];
         linesOfCodeViolations ??= [];
+        predicateGroups ??= [];
 
         var violatingTypes = typeIssues.Where(i => i.HasViolation).ToList();
         var locViolations = linesOfCodeViolations.ToList();
@@ -861,9 +977,50 @@ public sealed class ConsoleFormatter : IConsoleFormatter
         bool hasStrings = repeatedStrings.Count > 0;
         bool hasTypeIssues = violatingTypes.Count > 0;
         bool hasLocViolations = locViolations.Count > 0;
+        bool hasPredicates = predicateGroups.Count > 0;
         int totalCloneCount = cloneGroups.Count + subMethodGroups.Count;
 
-        if (hasLinesOfCodeViolation && !hasDuplicationViolation && !hasComments && !hasStrings && !hasTypeViolation)
+        if (hasPredicateViolation && !hasDuplicationViolation && !hasComments && !hasStrings && !hasTypeViolation && !hasLinesOfCodeViolation)
+        {
+            writer.WriteLine();
+            writer.WriteLine(Red(Bold("========================================================================")));
+            writer.WriteLine(Red(Bold("[AI AGENT ACTION REQUIRED] Predicate Clone Policy Violation (Exit Code: 2)")));
+            writer.WriteLine(Red(Bold("========================================================================")));
+            writer.WriteLine($"Incremental analysis detected {Bold(predicateGroups.Count.ToString())} new predicate clone cluster(s) exceeding tolerance margin (allowed: {predicateTolerance ?? 0}).");
+            writer.WriteLine();
+
+            for (int i = 0; i < predicateGroups.Count; i++)
+            {
+                var group = predicateGroups[i];
+                var occList = group.InlineOccurrences;
+                var countDesc = $"{occList.Count} call site(s)";
+                var desc = group.HasExistingHelper
+                    ? $"Matches '{group.SuggestedHelperName}', {countDesc}"
+                    : $"Duplicate Condition, {countDesc}";
+
+                writer.WriteLine(Yellow($"Cluster #{i + 1} [{desc}]:"));
+                foreach (var occ in occList)
+                {
+                    var relPath = FormatPath(occ.FilePath, baseDirectory);
+                    var memberInfo = !string.IsNullOrEmpty(occ.EnclosingMember) ? $" in {Bold(occ.EnclosingMember)}" : string.Empty;
+                    writer.WriteLine($"  • {Cyan(relPath)}:{occ.StartLine}:{occ.StartColumn}{memberInfo}");
+                    writer.WriteLine($"    Condition:   {Dim(TruncatePreview(occ.ExpressionText.Replace("\r\n", " ").Replace("\n", " "), 80))}");
+                    writer.WriteLine($"    Replacement: {Green(group.GenerateTypicalUsage(occ))}");
+                }
+                writer.WriteLine();
+            }
+
+            writer.WriteLine(Bold("Actionable Instructions for AI Agent:"));
+            writer.WriteLine("  1. Inspect the duplicate conditions or existing helper matches listed above.");
+            writer.WriteLine("  2. Replace inline conditions with existing helper calls, or extract duplicate conditions into a shared helper method.");
+            writer.WriteLine("  3. To suppress: Add '// codecondenser:ignore-predicate' or '[SuppressMessage(\"CodeCondenser\", \"PredicateDuplication\")]'.");
+            writer.WriteLine("  4. Re-run 'codecondenser --incremental' to confirm the violation is resolved.");
+            writer.WriteLine(Red(Bold("========================================================================")));
+            writer.WriteLine();
+            return;
+        }
+
+        if (hasLinesOfCodeViolation && !hasDuplicationViolation && !hasComments && !hasStrings && !hasTypeViolation && !hasPredicateViolation)
         {
             writer.WriteLine();
             writer.WriteLine(Red(Bold("========================================================================")));
@@ -892,7 +1049,7 @@ public sealed class ConsoleFormatter : IConsoleFormatter
             return;
         }
 
-        if (hasTypeViolation && !hasDuplicationViolation && !hasComments && !hasStrings && !hasLocViolations)
+        if (hasTypeViolation && !hasDuplicationViolation && !hasComments && !hasStrings && !hasLinesOfCodeViolation && !hasPredicateViolation)
         {
             writer.WriteLine();
             writer.WriteLine(Red(Bold("========================================================================")));
@@ -946,7 +1103,7 @@ public sealed class ConsoleFormatter : IConsoleFormatter
             return;
         }
 
-        if (hasRepeatedStringViolation && !hasDuplicationViolation && !hasComments && !hasTypeIssues && !hasLocViolations)
+        if (hasRepeatedStringViolation && !hasDuplicationViolation && !hasComments && !hasTypeIssues && !hasLinesOfCodeViolation && !hasPredicateViolation)
         {
             writer.WriteLine();
             writer.WriteLine(Red(Bold("========================================================================")));
@@ -998,13 +1155,13 @@ public sealed class ConsoleFormatter : IConsoleFormatter
             return;
         }
 
-        if (hasDuplicationViolation && !hasComments && !hasStrings && !hasTypeViolation && !hasLocViolations)
+        if (hasDuplicationViolation && !hasComments && !hasStrings && !hasTypeViolation && !hasLinesOfCodeViolation && !hasPredicateViolation)
         {
             PrintAiActionableDuplicationFeedback(writer, cloneGroups, subMethodGroups, baseDirectory, duplicationTolerance);
             return;
         }
 
-        if (!hasDuplicationViolation && hasComments && !hasStrings && !hasTypeViolation && !hasLocViolations)
+        if (!hasDuplicationViolation && hasComments && !hasStrings && !hasTypeViolation && !hasLinesOfCodeViolation && !hasPredicateViolation)
         {
             writer.WriteLine();
             writer.WriteLine(Red(Bold("========================================================================")));
@@ -1040,7 +1197,7 @@ public sealed class ConsoleFormatter : IConsoleFormatter
 
         writer.WriteLine();
         writer.WriteLine(Red(Bold("========================================================================")));
-        var multiTitle = (hasDuplicationViolation || hasCommentViolation || hasRepeatedStringViolation || hasTypeViolation || hasLinesOfCodeViolation)
+        var multiTitle = (hasDuplicationViolation || hasCommentViolation || hasRepeatedStringViolation || hasTypeViolation || hasLinesOfCodeViolation || hasPredicateViolation)
             ? "[AI AGENT ACTION REQUIRED] Incremental Policy Violations (Exit Code: 2)"
             : "[AI AGENT ACTION REQUIRED] Incremental Policy Violations";
         writer.WriteLine(Red(Bold(multiTitle)));
@@ -1051,6 +1208,7 @@ public sealed class ConsoleFormatter : IConsoleFormatter
         if (repeatedStrings.Count > 0) counts.Add($"{Bold(repeatedStrings.Count.ToString())} new repeated string cluster(s)");
         if (violatingTypes.Count > 0) counts.Add($"{Bold(violatingTypes.Count.ToString())} file(s) with multiple types or mismatched names");
         if (locViolations.Count > 0) counts.Add($"{Bold(locViolations.Count.ToString())} declaration(s) exceeding lines of code thresholds");
+        if (predicateGroups.Count > 0) counts.Add($"{Bold(predicateGroups.Count.ToString())} new predicate clone cluster(s)");
 
         string summaryText = counts.Count switch
         {
@@ -1182,6 +1340,31 @@ public sealed class ConsoleFormatter : IConsoleFormatter
             writer.WriteLine();
         }
 
+        if (predicateGroups.Count > 0)
+        {
+            writer.WriteLine(Bold("Predicate / Boolean Condition Clones:"));
+            for (int i = 0; i < predicateGroups.Count; i++)
+            {
+                var group = predicateGroups[i];
+                var occList = group.InlineOccurrences;
+                var countDesc = $"{occList.Count} call site(s)";
+                var title = group.HasExistingHelper
+                    ? $"Predicate Helper #{i + 1} [Matches '{group.SuggestedHelperName}', {countDesc}]:"
+                    : $"Predicate Clone #{i + 1} [Duplicate Condition, {countDesc}]:";
+
+                writer.WriteLine(Yellow($"  {title}"));
+                foreach (var occ in occList)
+                {
+                    var relPath = FormatPath(occ.FilePath, baseDirectory);
+                    var memberInfo = !string.IsNullOrEmpty(occ.EnclosingMember) ? $" in {Bold(occ.EnclosingMember)}" : string.Empty;
+                    writer.WriteLine($"    • {Cyan(relPath)}:{occ.StartLine}:{occ.StartColumn}{memberInfo}");
+                    writer.WriteLine($"      Condition:   {Dim(TruncatePreview(occ.ExpressionText.Replace("\r\n", " ").Replace("\n", " "), 80))}");
+                    writer.WriteLine($"      Replacement: {Green(group.GenerateTypicalUsage(occ))}");
+                }
+            }
+            writer.WriteLine();
+        }
+
         writer.WriteLine(Bold("Actionable Instructions for AI Agent:"));
         if (totalCloneCount > 0)
         {
@@ -1219,6 +1402,13 @@ public sealed class ConsoleFormatter : IConsoleFormatter
             writer.WriteLine("    1. Methods: Refactor large methods into smaller helpers using Extract Method pattern.");
             writer.WriteLine("    2. Classes: Refactor large classes into smaller, single-responsibility components or partial classes.");
             writer.WriteLine("    3. To suppress: Add '[SuppressMessage(\"CodeCondenser\", \"MethodLength\")]' / '[SuppressMessage(\"CodeCondenser\", \"ClassLength\")]' or '// codecondenser:ignore-loc'.");
+        }
+        if (predicateGroups.Count > 0)
+        {
+            writer.WriteLine("  Predicate / Boolean Condition Clones:");
+            writer.WriteLine("    1. Inspect the duplicate conditions or existing helper matches above.");
+            writer.WriteLine("    2. Replace inline conditions with existing helper calls, or extract duplicate conditions into a shared helper method.");
+            writer.WriteLine("    3. To suppress: Add '// codecondenser:ignore-predicate' or '[SuppressMessage(\"CodeCondenser\", \"PredicateDuplication\")]'.");
         }
         writer.WriteLine("  Verification:");
         writer.WriteLine("    • Re-run 'codecondenser --incremental' to confirm all violations are resolved.");

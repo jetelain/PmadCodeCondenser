@@ -8,6 +8,7 @@ using Pmad.CodeCondenser.Core.Measuring;
 using Pmad.CodeCondenser.Core.Models;
 using Pmad.CodeCondenser.Core.Snapshots;
 using Pmad.CodeCondenser.Core.Lines;
+using Pmad.CodeCondenser.Core.Predicates;
 using Pmad.CodeCondenser.Core.Strings;
 using Pmad.CodeCondenser.Core.Types;
 
@@ -31,6 +32,7 @@ public sealed class CodeCondenserEngine : ICodeCondenserEngine
     private readonly ISubMethodCacheStore? _subMethodCacheStore;
     private readonly ICodeMeasurer _codeMeasurer;
     private readonly IRepeatedStringDetector _repeatedStringDetector;
+    private readonly IPredicateCloneDetector _predicateCloneDetector;
     private readonly ITypeFileSplitter _typeFileSplitter;
     private readonly ILinesOfCodeDetector _linesOfCodeDetector;
     private string? _lastBaseDirectory;
@@ -64,6 +66,7 @@ public sealed class CodeCondenserEngine : ICodeCondenserEngine
         ISubMethodCacheStore? subMethodCacheStore = null,
         ICodeMeasurer? codeMeasurer = null,
         IRepeatedStringDetector? repeatedStringDetector = null,
+        IPredicateCloneDetector? predicateCloneDetector = null,
         ITypeFileSplitter? typeFileSplitter = null,
         ILinesOfCodeDetector? linesOfCodeDetector = null)
     {
@@ -79,6 +82,7 @@ public sealed class CodeCondenserEngine : ICodeCondenserEngine
         _subMethodCacheStore = subMethodCacheStore;
         _codeMeasurer = codeMeasurer ?? new CodeMeasurer();
         _repeatedStringDetector = repeatedStringDetector ?? new RepeatedStringDetector();
+        _predicateCloneDetector = predicateCloneDetector ?? new PredicateCloneDetector();
         _typeFileSplitter = typeFileSplitter ?? new TypeFileSplitter();
         _linesOfCodeDetector = linesOfCodeDetector ?? new LinesOfCodeDetector();
     }
@@ -223,10 +227,10 @@ public sealed class CodeCondenserEngine : ICodeCondenserEngine
             filesToScan = discoveredFiles;
         }
 
-        // 5. Parse syntax trees and extract comments, methods, strings, types, and lines of code in parallel (if features are enabled)
-        var fileResults = new (List<VerboseComment> Comments, List<MethodCloneInfo> Methods, List<SubMethodBlock> SubMethodBlocks, List<RepeatedStringOccurrence> StringOccurrences, TypeFileAnalysis? TypeIssue, IReadOnlyList<LinesOfCodeViolation> LocViolations)[filesToScan.Count];
+        // 5. Parse syntax trees and extract comments, methods, strings, predicates, types, and lines of code in parallel (if features are enabled)
+        var fileResults = new (List<VerboseComment> Comments, List<MethodCloneInfo> Methods, List<SubMethodBlock> SubMethodBlocks, List<RepeatedStringOccurrence> StringOccurrences, List<PredicateOccurrence> PredicateOccurrences, TypeFileAnalysis? TypeIssue, IReadOnlyList<LinesOfCodeViolation> LocViolations)[filesToScan.Count];
 
-        if (effectiveSummaryMode != SummaryMode.Disabled || effectiveSettings.EnableDuplicationDetection || effectiveSettings.EnableSubMethodCloneDetection || effectiveSettings.EnableRepeatedStringDetection || effectiveSettings.EnableTypeSplitting || effectiveSettings.EnableLinesOfCodeDetection)
+        if (effectiveSummaryMode != SummaryMode.Disabled || effectiveSettings.EnableDuplicationDetection || effectiveSettings.EnableSubMethodCloneDetection || effectiveSettings.EnableRepeatedStringDetection || effectiveSettings.EnablePredicateCloneDetection || effectiveSettings.EnableTypeSplitting || effectiveSettings.EnableLinesOfCodeDetection)
         {
             await Parallel.ForEachAsync(
                 filesToScan.Select((f, idx) => (f, idx)),
@@ -256,6 +260,10 @@ public sealed class CodeCondenserEngine : ICodeCondenserEngine
                         ? _repeatedStringDetector.ExtractStringLiterals(syntaxTree, normalizedRelPath, effectiveSettings, projectId, fileCat).ToList()
                         : [];
 
+                    var predicateOccurrences = effectiveSettings.EnablePredicateCloneDetection
+                        ? _predicateCloneDetector.ExtractPredicates(syntaxTree, normalizedRelPath, effectiveSettings, projectId, fileCat).ToList()
+                        : [];
+
                     var typeIssue = effectiveSettings.EnableTypeSplitting
                         ? _typeFileSplitter.AnalyzeFile(syntaxTree, normalizedRelPath, effectiveSettings, fileCat)
                         : null;
@@ -264,23 +272,54 @@ public sealed class CodeCondenserEngine : ICodeCondenserEngine
                         ? _linesOfCodeDetector.DetectViolations(syntaxTree, normalizedRelPath, effectiveSettings, fileCat)
                         : [];
 
-                    fileResults[item.idx] = (comments, methods, subMethodBlocks, stringOccurrences, typeIssue, locViolations);
+                    fileResults[item.idx] = (comments, methods, subMethodBlocks, stringOccurrences, predicateOccurrences, typeIssue, locViolations);
                 }).ConfigureAwait(false);
         }
 
         var allExtractedComments = new List<VerboseComment>();
         var allAnalyzedMethods = new List<MethodCloneInfo>();
         var allStringOccurrences = new List<RepeatedStringOccurrence>();
+        var allPredicateOccurrences = new List<PredicateOccurrence>();
         var allTypeIssues = new List<TypeFileAnalysis>();
         var allLocViolations = new List<LinesOfCodeViolation>();
 
-        foreach (var (comments, methods, _, stringOccurrences, typeIssue, locViolations) in fileResults)
+        foreach (var (comments, methods, _, stringOccurrences, predicateOccurrences, typeIssue, locViolations) in fileResults)
         {
             if (comments != null) allExtractedComments.AddRange(comments);
             if (methods != null) allAnalyzedMethods.AddRange(methods);
             if (stringOccurrences != null) allStringOccurrences.AddRange(stringOccurrences);
+            if (predicateOccurrences != null) allPredicateOccurrences.AddRange(predicateOccurrences);
             if (typeIssue != null && typeIssue.HasViolation) allTypeIssues.Add(typeIssue);
             if (locViolations != null) allLocViolations.AddRange(locViolations);
+        }
+
+        if (incremental && baseline != null && effectiveSettings.EnablePredicateCloneDetection && fileDiff != null)
+        {
+            var changedSet = new HashSet<string>(fileDiff.AddedFiles.Concat(fileDiff.ModifiedFiles), StringComparer.OrdinalIgnoreCase);
+            var unchangedFiles = discoveredFiles.Where(f => !changedSet.Contains(fileToNormalizedPath[f])).ToList();
+            if (unchangedFiles.Count > 0)
+            {
+                var unchangedPredicates = new List<PredicateOccurrence>[unchangedFiles.Count];
+                await Parallel.ForEachAsync(
+                    unchangedFiles.Select((f, idx) => (f, idx)),
+                    parallelOptions,
+                    async (item, ct) =>
+                    {
+                        var file = item.f;
+                        var normalizedRelPath = fileToNormalizedPath[file];
+                        var sourceText = await File.ReadAllTextAsync(file, ct).ConfigureAwait(false);
+                        var syntaxTree = CSharpSyntaxTree.ParseText(sourceText, path: file, cancellationToken: ct);
+                        var projectId = _projectLocator.LocateProjectId(file, baseDirectory);
+                        var fileCat = fileCategories.TryGetValue(normalizedRelPath, out var fc) ? fc : FileCategory.Production;
+                        var preds = _predicateCloneDetector.ExtractPredicates(syntaxTree, normalizedRelPath, effectiveSettings, projectId, fileCat);
+                        unchangedPredicates[item.idx] = preds.ToList();
+                    }).ConfigureAwait(false);
+
+                foreach (var preds in unchangedPredicates)
+                {
+                    if (preds != null) allPredicateOccurrences.AddRange(preds);
+                }
+            }
         }
 
         // 6. Detect Clones
@@ -460,7 +499,7 @@ public sealed class CodeCondenserEngine : ICodeCondenserEngine
             {
                 var file = filesToScan[i];
                 var relPath = fileToNormalizedPath[file];
-                var (_, _, blocks, _, _, _) = fileResults[i];
+                var (_, _, blocks, _, _, _, _) = fileResults[i];
 
                 if (currentFileHashes.TryGetValue(relPath, out var hash))
                 {
@@ -540,40 +579,6 @@ public sealed class CodeCondenserEngine : ICodeCondenserEngine
             }
         }
 
-        // 8. Persist/update snapshot WYSIWYG cache and file baseline
-        if (_snapshotStore != null)
-        {
-            // When duplication detection is disabled, preserve baseline methods instead of clearing them
-            var methodsForSnapshot = effectiveSettings.EnableDuplicationDetection
-                ? allAnalyzedMethods
-                : (baseline != null ? [] : allAnalyzedMethods);
-
-            // When comment summarization is not performed, preserve baseline comment cache
-            var cacheForSnapshot = effectiveSummaryMode == SummaryMode.Summarize
-                ? cache.ToDictionary()
-                : (baseline?.CommentCache ?? cache.ToDictionary());
-
-            var newSnapshot = _snapshotDiffer.CreateOrUpdateSnapshot(
-                baseline,
-                currentFileHashes,
-                methodsForSnapshot,
-                cacheForSnapshot,
-                typeViolationFiles: effectiveSettings.EnableTypeSplitting ? allTypeIssues.Select(i => i.FilePath) : null,
-                linesOfCodeViolationKeys: effectiveSettings.EnableLinesOfCodeDetection ? allLocViolations.Select(v => v.Key) : null,
-                isIncremental: incremental && baseline != null);
-
-            // If duplication detection was disabled, restore baseline method hashes
-            if (!effectiveSettings.EnableDuplicationDetection && baseline?.MethodHashes != null)
-            {
-                foreach (var (k, v) in baseline.MethodHashes)
-                {
-                    newSnapshot.MethodHashes[k] = v;
-                }
-            }
-
-            await _snapshotStore.SaveAsync(snapshotPath, newSnapshot, cancellationToken).ConfigureAwait(false);
-        }
-
         IReadOnlyList<RepeatedStringGroup> repeatedStringGroups;
         if (effectiveSettings.EnableRepeatedStringDetection)
         {
@@ -594,6 +599,82 @@ public sealed class CodeCondenserEngine : ICodeCondenserEngine
         else
         {
             repeatedStringGroups = [];
+        }
+
+        IReadOnlyList<PredicateCloneGroup> allPredicateGroups = [];
+        IReadOnlyList<PredicateCloneGroup> predicateCloneGroups;
+        if (effectiveSettings.EnablePredicateCloneDetection)
+        {
+            allPredicateGroups = _predicateCloneDetector.GroupPredicates(allPredicateOccurrences, effectiveSettings, fileClassifier);
+            if (incremental && baseline != null && fileDiff != null)
+            {
+                var changedSet = new HashSet<string>(fileDiff.AddedFiles.Concat(fileDiff.ModifiedFiles), StringComparer.OrdinalIgnoreCase);
+                predicateCloneGroups = allPredicateGroups
+                    .Where(g => (g.HasExistingHelper ? g.InlineOccurrences : g.Occurrences)
+                        .Any(o =>
+                        {
+                            var rel = o.FilePath.Replace('\\', '/');
+                            if (!changedSet.Contains(rel)) return false;
+                            var fileKey = $"{rel}::{g.NormalizedSignature}";
+                            return !baseline.PredicateCloneKeys.Contains(fileKey);
+                        }))
+                    .ToList();
+            }
+            else
+            {
+                predicateCloneGroups = allPredicateGroups;
+            }
+        }
+        else
+        {
+            predicateCloneGroups = [];
+        }
+
+        // 8. Persist/update snapshot WYSIWYG cache and file baseline
+        if (_snapshotStore != null)
+        {
+            // When duplication detection is disabled, preserve baseline methods instead of clearing them
+            var methodsForSnapshot = effectiveSettings.EnableDuplicationDetection
+                ? allAnalyzedMethods
+                : (baseline != null ? [] : allAnalyzedMethods);
+
+            // When comment summarization is not performed, preserve baseline comment cache
+            var cacheForSnapshot = effectiveSummaryMode == SummaryMode.Summarize
+                ? cache.ToDictionary()
+                : (baseline?.CommentCache ?? cache.ToDictionary());
+
+            var newSnapshot = _snapshotDiffer.CreateOrUpdateSnapshot(
+                baseline,
+                currentFileHashes,
+                methodsForSnapshot,
+                cacheForSnapshot,
+                typeViolationFiles: effectiveSettings.EnableTypeSplitting ? allTypeIssues.Select(i => i.FilePath) : null,
+                linesOfCodeViolationKeys: effectiveSettings.EnableLinesOfCodeDetection ? allLocViolations.Select(v => v.Key) : null,
+                predicateCloneKeys: effectiveSettings.EnablePredicateCloneDetection
+                    ? allPredicateGroups.SelectMany(g => (g.HasExistingHelper ? g.InlineOccurrences : g.Occurrences)
+                        .Select(o => $"{o.FilePath.Replace('\\', '/')}::{g.NormalizedSignature}")).Distinct()
+                    : null,
+                isIncremental: incremental && baseline != null);
+
+            // If duplication detection was disabled, restore baseline method hashes
+            if (!effectiveSettings.EnableDuplicationDetection && baseline?.MethodHashes != null)
+            {
+                foreach (var (k, v) in baseline.MethodHashes)
+                {
+                    newSnapshot.MethodHashes[k] = v;
+                }
+            }
+
+            // If predicate clone detection was disabled, restore baseline predicate clone keys
+            if (!effectiveSettings.EnablePredicateCloneDetection && baseline?.PredicateCloneKeys != null)
+            {
+                foreach (var k in baseline.PredicateCloneKeys)
+                {
+                    newSnapshot.PredicateCloneKeys.Add(k);
+                }
+            }
+
+            await _snapshotStore.SaveAsync(snapshotPath, newSnapshot, cancellationToken).ConfigureAwait(false);
         }
 
         var resultComments = (incremental && baseline != null)
@@ -636,6 +717,7 @@ public sealed class CodeCondenserEngine : ICodeCondenserEngine
             CloneGroups = cloneGroups,
             SubMethodCloneGroups = subMethodGroups,
             RepeatedStringGroups = repeatedStringGroups,
+            PredicateCloneGroups = predicateCloneGroups,
             TypeFileIssues = resultTypeIssues,
             LinesOfCodeViolations = resultLocViolations,
             SummarizedComments = cache.ToDictionary(),
@@ -977,7 +1059,7 @@ public sealed class CodeCondenserEngine : ICodeCondenserEngine
             CancellationToken = cancellationToken
         };
 
-        var baselineResults = new (string RelPath, string Hash, List<MethodCloneInfo> Methods, List<SubMethodBlock> SubMethodBlocks, bool HasTypeViolation, List<LinesOfCodeViolation> LocViolations)[discoveredFiles.Count];
+        var baselineResults = new (string RelPath, string Hash, List<MethodCloneInfo> Methods, List<SubMethodBlock> SubMethodBlocks, bool HasTypeViolation, List<LinesOfCodeViolation> LocViolations, List<PredicateOccurrence> Predicates)[discoveredFiles.Count];
 
         await Parallel.ForEachAsync(
             discoveredFiles.Select((f, idx) => (f, idx)),
@@ -992,8 +1074,9 @@ public sealed class CodeCondenserEngine : ICodeCondenserEngine
                 List<SubMethodBlock> subMethodBlocks = [];
                 bool hasTypeViolation = false;
                 List<LinesOfCodeViolation> locViolations = [];
+                List<PredicateOccurrence> predicates = [];
 
-                if (settings.EnableDuplicationDetection || settings.EnableSubMethodCloneDetection || settings.EnableTypeSplitting || settings.EnableLinesOfCodeDetection)
+                if (settings.EnableDuplicationDetection || settings.EnableSubMethodCloneDetection || settings.EnableTypeSplitting || settings.EnableLinesOfCodeDetection || settings.EnablePredicateCloneDetection)
                 {
                     var sourceText = await File.ReadAllTextAsync(file, ct).ConfigureAwait(false);
                     var tree = CSharpSyntaxTree.ParseText(sourceText, path: file, cancellationToken: ct);
@@ -1020,20 +1103,28 @@ public sealed class CodeCondenserEngine : ICodeCondenserEngine
                         var fileCat = fileCategories.TryGetValue(relPath, out var fc) ? fc : FileCategory.Production;
                         locViolations = _linesOfCodeDetector.DetectViolations(tree, relPath, settings, fileCat).ToList();
                     }
+
+                    if (settings.EnablePredicateCloneDetection)
+                    {
+                        var fileCat = fileCategories.TryGetValue(relPath, out var fc) ? fc : FileCategory.Production;
+                        predicates = _predicateCloneDetector.ExtractPredicates(tree, relPath, settings, projectId, fileCat).ToList();
+                    }
                 }
 
-                baselineResults[item.idx] = (relPath, hash, methods, subMethodBlocks, hasTypeViolation, locViolations);
+                baselineResults[item.idx] = (relPath, hash, methods, subMethodBlocks, hasTypeViolation, locViolations, predicates);
             }).ConfigureAwait(false);
 
         var currentFileHashes = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
         var allMethods = new List<MethodCloneInfo>();
+        var allPredicates = new List<PredicateOccurrence>();
         var typeViolationFiles = new List<string>();
         var locViolationKeys = new List<string>();
 
-        foreach (var (relPath, hash, methods, _, hasTypeViolation, locViolations) in baselineResults)
+        foreach (var (relPath, hash, methods, _, hasTypeViolation, locViolations, predicates) in baselineResults)
         {
             currentFileHashes[relPath] = hash;
             if (methods != null) allMethods.AddRange(methods);
+            if (predicates != null) allPredicates.AddRange(predicates);
             if (hasTypeViolation) typeViolationFiles.Add(relPath);
             if (locViolations != null)
             {
@@ -1052,6 +1143,25 @@ public sealed class CodeCondenserEngine : ICodeCondenserEngine
             ? allMethods
             : (baseline != null ? [] : allMethods);
 
+        List<string>? predicateCloneKeys = null;
+        if (settings.EnablePredicateCloneDetection)
+        {
+            Func<string, FileCategory> fileClassifier = path =>
+            {
+                if (fileCategories.TryGetValue(path, out var cat)) return cat;
+                var rel = path.Replace('\\', '/');
+                if (fileCategories.TryGetValue(rel, out cat)) return cat;
+                return FileCategory.Production;
+            };
+
+            var baselineGroups = _predicateCloneDetector.GroupPredicates(allPredicates, settings, fileClassifier);
+            predicateCloneKeys = baselineGroups
+                .SelectMany(g => (g.HasExistingHelper ? g.InlineOccurrences : g.Occurrences)
+                    .Select(o => $"{o.FilePath.Replace('\\', '/')}::{g.NormalizedSignature}"))
+                .Distinct()
+                .ToList();
+        }
+
         var newSnapshot = _snapshotDiffer.CreateOrUpdateSnapshot(
             baseline,
             currentFileHashes,
@@ -1059,6 +1169,7 @@ public sealed class CodeCondenserEngine : ICodeCondenserEngine
             commentCache,
             typeViolationFiles: settings.EnableTypeSplitting ? typeViolationFiles : null,
             linesOfCodeViolationKeys: settings.EnableLinesOfCodeDetection ? locViolationKeys : null,
+            predicateCloneKeys: predicateCloneKeys,
             isIncremental: false);
 
         if (settings.EnableDuplicationDetection)
@@ -1074,6 +1185,14 @@ public sealed class CodeCondenserEngine : ICodeCondenserEngine
             }
         }
 
+        if (!settings.EnablePredicateCloneDetection && baseline?.PredicateCloneKeys != null)
+        {
+            foreach (var k in baseline.PredicateCloneKeys)
+            {
+                newSnapshot.PredicateCloneKeys.Add(k);
+            }
+        }
+
         await _snapshotStore.SaveAsync(snapshotPath, newSnapshot, cancellationToken).ConfigureAwait(false);
 
         if (settings.EnableSubMethodCloneDetection && _subMethodCacheStore != null)
@@ -1085,7 +1204,7 @@ public sealed class CodeCondenserEngine : ICodeCondenserEngine
                 NormalizerVersion = AnalysisSnapshot.CurrentNormalizerVersion
             };
 
-            foreach (var (relPath, hash, _, blocks, _, _) in baselineResults)
+            foreach (var (relPath, hash, _, blocks, _, _, _) in baselineResults)
             {
                 subMethodCache.Files[relPath] = new FileSubMethodCacheEntry
                 {

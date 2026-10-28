@@ -17,8 +17,21 @@ public sealed class AnalysisResult
     public int SkippedGeneratedFilesCount { get; init; }
     public IReadOnlyList<SubMethodCloneGroup> SubMethodCloneGroups { get; init; } = [];
     public IReadOnlyList<RepeatedStringGroup> RepeatedStringGroups { get; init; } = [];
+    public IReadOnlyList<PredicateCloneGroup> PredicateCloneGroups { get; init; } = [];
     public IReadOnlyList<TypeFileAnalysis> TypeFileIssues { get; init; } = [];
     public IReadOnlyList<LinesOfCodeViolation> LinesOfCodeViolations { get; init; } = [];
+
+    /// <summary>
+    /// Gets the total character gain achieved by refactoring duplicate conditions into helper methods.
+    /// </summary>
+    public int TotalPredicateGainCharacters =>
+        Pmad.CodeCondenser.Core.Predicates.PredicateGainEstimator.EstimateTotalGainCharacters(PredicateCloneGroups);
+
+    /// <summary>
+    /// Gets the total estimated token gain achieved by refactoring duplicate conditions into helper methods.
+    /// </summary>
+    public int TotalPredicateGainTokens =>
+        Pmad.CodeCondenser.Core.Predicates.PredicateGainEstimator.EstimateTotalGainTokens(PredicateCloneGroups);
 
     /// <summary>
     /// Gets the total character gain achieved by compacting repeated inline strings into constants.
