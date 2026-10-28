@@ -97,9 +97,9 @@ public interface IConsoleFormatter
         int? predicateGroupsCount = null,
         int? predicateGainChars = null,
         int? predicateGainTokens = null,
-        int? condensationCandidatesCount = null,
-        int? condensationGainChars = null,
-        int? condensationGainTokens = null);
+        int? modernizationsCount = null,
+        int? modernizationGainChars = null,
+        int? modernizationGainTokens = null);
 
     void PrintFileApplied(TextWriter writer, string filePath, string baseDirectory);
 

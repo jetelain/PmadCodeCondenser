@@ -189,9 +189,9 @@ public sealed class ConsoleReportFormatter : IReportFormatter
             predicateGroupsCount: predicateGroupsCount,
             predicateGainChars: predicateGainChars,
             predicateGainTokens: predicateGainTokens,
-            condensationCandidatesCount: patternsCount,
-            condensationGainChars: patternGainChars,
-            condensationGainTokens: patternGainTokens);
+            modernizationsCount: patternsCount,
+            modernizationGainChars: patternGainChars,
+            modernizationGainTokens: patternGainTokens);
 
         return Task.CompletedTask;
     }

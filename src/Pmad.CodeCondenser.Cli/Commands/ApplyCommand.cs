@@ -293,9 +293,9 @@ public sealed class ApplyCommand : ICommand
             predicateGroupsCount: predicateGroupsCount,
             predicateGainChars: predicateGainChars,
             predicateGainTokens: predicateGainTokens,
-            condensationCandidatesCount: patternsCount,
-            condensationGainChars: patternGainChars,
-            condensationGainTokens: patternGainTokens);
+            modernizationsCount: patternsCount,
+            modernizationGainChars: patternGainChars,
+            modernizationGainTokens: patternGainTokens);
 
         if (options.Incremental)
         {

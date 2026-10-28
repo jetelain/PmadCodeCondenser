@@ -814,9 +814,9 @@ public sealed class ConsoleFormatter : IConsoleFormatter
         int? predicateGroupsCount = null,
         int? predicateGainChars = null,
         int? predicateGainTokens = null,
-        int? condensationCandidatesCount = null,
-        int? condensationGainChars = null,
-        int? condensationGainTokens = null)
+        int? modernizationsCount = null,
+        int? modernizationGainChars = null,
+        int? modernizationGainTokens = null)
     {
         ArgumentNullException.ThrowIfNull(writer);
 
@@ -911,15 +911,15 @@ public sealed class ConsoleFormatter : IConsoleFormatter
             writer.WriteLine($"  Comment Gain:      {gainDisplay}");
         }
 
-        if (condensationCandidatesCount.HasValue)
+        if (modernizationsCount.HasValue)
         {
-            writer.WriteLine($"  Condensations:     {(condensationCandidatesCount.Value > 0 ? Cyan(condensationCandidatesCount.Value.ToString()) : Green("0"))}");
+            writer.WriteLine($"  Modernizations:    {(modernizationsCount.Value > 0 ? Cyan(modernizationsCount.Value.ToString()) : Green("0"))}");
         }
 
-        if (condensationGainChars.HasValue && condensationGainChars.Value > 0)
+        if (modernizationGainChars.HasValue && modernizationGainChars.Value > 0)
         {
-            var tokensSuffix = condensationGainTokens.HasValue ? $", ~{condensationGainTokens.Value} tokens" : string.Empty;
-            writer.WriteLine($"  Condensation Gain: {Green($"+{condensationGainChars.Value} chars{tokensSuffix}")}");
+            var tokensSuffix = modernizationGainTokens.HasValue ? $", ~{modernizationGainTokens.Value} tokens" : string.Empty;
+            writer.WriteLine($"  Modernization Gain: {Green($"+{modernizationGainChars.Value} chars{tokensSuffix}")}");
         }
 
         writer.WriteLine(Dim("------------------------------------------------------------------------"));
