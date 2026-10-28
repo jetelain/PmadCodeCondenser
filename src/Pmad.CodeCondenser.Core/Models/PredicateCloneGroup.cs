@@ -1,4 +1,5 @@
 using Pmad.AI.Tokens;
+using Pmad.CodeCondenser.Core.Predicates;
 
 namespace Pmad.CodeCondenser.Core.Models;
 
@@ -15,7 +16,9 @@ public sealed record PredicateCloneGroup
     /// <summary>
     /// 64-bit hash of the normalized signature.
     /// </summary>
-    public ulong NormalizedHash => Occurrences.Count > 0 ? Occurrences[0].NormalizedHash : 0;
+    public ulong NormalizedHash => NormalizedSignature.Length > 0
+        ? PredicateNormalizer.ComputeHash(NormalizedSignature)
+        : (Occurrences.Count > 0 ? Occurrences[0].NormalizedHash : 0);
 
     /// <summary>
     /// Approximate length of the canonical condition in characters.
@@ -74,9 +77,8 @@ public sealed record PredicateCloneGroup
     /// </summary>
     public string GenerateTypicalUsage(PredicateOccurrence? occurrence = null)
     {
-        occurrence ??= InlineOccurrences.Count > 0
-            ? InlineOccurrences[0]
-            : (Occurrences.Count > 0 ? Occurrences[0] : null);
+        occurrence ??= InlineOccurrences.FirstOrDefault(o => !o.IsNegatedAtCallSite)
+            ?? (InlineOccurrences.Count > 0 ? InlineOccurrences[0] : (Occurrences.Count > 0 ? Occurrences[0] : null));
 
         bool isProperty = HasExistingHelper && ExistingHelper != null && ExistingHelper.IsProperty;
 

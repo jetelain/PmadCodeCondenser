@@ -543,4 +543,140 @@ public class PredicateCloneDetectorTests
         Assert.Equal(2, group.InlineOccurrences.Count);
         Assert.All(group.InlineOccurrences, o => Assert.True(o.IsNegatedAtCallSite));
     }
+
+    [Fact]
+    public void GroupPredicates_UnextractedDualConditions_GroupsIntoSingleClusterWithCanonicalPolarity()
+    {
+        var fileA = """
+            namespace MyNamespace;
+
+            public class HandlerA
+            {
+                public void Handle(int? taskId, string? stageId)
+                {
+                    if (taskId.HasValue && taskId.Value > 0 && !string.Equals(stageId, StandardStageIds.Ideation, StringComparison.OrdinalIgnoreCase))
+                    {
+                        Process();
+                    }
+                }
+            }
+            """;
+
+        var fileB = """
+            namespace MyNamespace;
+
+            public class HandlerB
+            {
+                public void Execute(int? currentId, string? currentStage)
+                {
+                    // De Morgan dual: !taskId.HasValue || taskId.Value <= 0 || string.Equals(stageId, ...)
+                    if (!currentId.HasValue || currentId.Value <= 0 || string.Equals(currentStage, StandardStageIds.Ideation, StringComparison.OrdinalIgnoreCase))
+                    {
+                        return;
+                    }
+                }
+            }
+            """;
+
+        var occurrences = new List<PredicateOccurrence>();
+        occurrences.AddRange(_detector.ExtractPredicates(CSharpSyntaxTree.ParseText(fileA), "HandlerA.cs", _settings));
+        occurrences.AddRange(_detector.ExtractPredicates(CSharpSyntaxTree.ParseText(fileB), "HandlerB.cs", _settings));
+
+        var groups = _detector.GroupPredicates(occurrences, _settings);
+
+        Assert.Single(groups);
+        var group = groups[0];
+
+        Assert.False(group.HasExistingHelper);
+        Assert.Equal(2, group.Occurrences.Count);
+        Assert.Equal(2, group.InlineOccurrences.Count);
+
+        // Canonical polarity should pick the positive (fewer negations/disjunctions) signature
+        Assert.Contains(".HasValue &&", group.NormalizedSignature);
+        Assert.DoesNotContain("||", group.NormalizedSignature);
+
+        var positiveOcc = group.InlineOccurrences.Single(o => !o.IsNegatedAtCallSite);
+        var negatedOcc = group.InlineOccurrences.Single(o => o.IsNegatedAtCallSite);
+
+        Assert.Equal("HandlerA.cs", positiveOcc.FilePath);
+        Assert.Equal("HandlerB.cs", negatedOcc.FilePath);
+
+        var posUsage = group.GenerateTypicalUsage(positiveOcc);
+        var negUsage = group.GenerateTypicalUsage(negatedOcc);
+        var defaultUsage = group.GenerateTypicalUsage();
+
+        Assert.False(posUsage.StartsWith('!'));
+        Assert.True(negUsage.StartsWith('!'));
+        Assert.False(defaultUsage.StartsWith('!'));
+    }
+
+    [Fact]
+    public void GroupPredicates_UnextractedDualConditions_WhenMultiplePositiveAndNegativeOccurrences_MergesAllIntoOneCluster()
+    {
+        var code = """
+            namespace MyNamespace;
+
+            public class Service
+            {
+                public void Method1(int firstValue, int secondValue, int thirdValue)
+                {
+                    if (firstValue > 0 && secondValue > 0 && thirdValue > 0) Process();
+                }
+
+                public void Method2(int alpha, int beta, int gamma)
+                {
+                    if (alpha > 0 && beta > 0 && gamma > 0) Process();
+                }
+
+                public void Method3(int delta, int epsilon, int zeta)
+                {
+                    if (delta <= 0 || epsilon <= 0 || zeta <= 0) return;
+                }
+            }
+            """;
+
+        var occurrences = _detector.ExtractPredicates(CSharpSyntaxTree.ParseText(code), "Service.cs", _settings);
+        var groups = _detector.GroupPredicates(occurrences, _settings);
+
+        Assert.Single(groups);
+        var group = groups[0];
+
+        Assert.Equal(3, group.Occurrences.Count);
+        Assert.Equal(2, group.InlineOccurrences.Count(o => !o.IsNegatedAtCallSite));
+        Assert.Equal(1, group.InlineOccurrences.Count(o => o.IsNegatedAtCallSite));
+        Assert.Contains("&&", group.NormalizedSignature);
+        Assert.DoesNotContain("||", group.NormalizedSignature);
+    }
+
+    [Fact]
+    public void GroupPredicates_UnextractedIdenticalNegatedConditions_WithoutPositiveOccurrences_PreservesWrittenForm()
+    {
+        var code = """
+            namespace MyNamespace;
+
+            public class Service
+            {
+                public void Method1(int firstValue, int secondValue, int thirdValue)
+                {
+                    if (firstValue <= 0 || secondValue <= 0 || thirdValue <= 0) return;
+                }
+
+                public void Method2(int alpha, int beta, int gamma)
+                {
+                    if (alpha <= 0 || beta <= 0 || gamma <= 0) return;
+                }
+            }
+            """;
+
+        var occurrences = _detector.ExtractPredicates(CSharpSyntaxTree.ParseText(code), "Service.cs", _settings);
+        var groups = _detector.GroupPredicates(occurrences, _settings);
+
+        Assert.Single(groups);
+        var group = groups[0];
+
+        Assert.Equal(2, group.Occurrences.Count);
+        // Because no positive occurrence existed, the written form is preserved without artificial inversion
+        Assert.All(group.InlineOccurrences, o => Assert.False(o.IsNegatedAtCallSite));
+        Assert.Contains("||", group.NormalizedSignature);
+    }
 }

@@ -205,22 +205,63 @@ public sealed class PredicateCloneDetector : IPredicateCloneDetector
         var remainingInlines = inlines.Where(o => !matchedInlines.Contains(o));
 
         var unextractedGroups = remainingInlines
-            .GroupBy(o => o.NormalizedSignature, StringComparer.Ordinal);
+            .GroupBy(o => GetDualPairKey(o), StringComparer.Ordinal);
 
         foreach (var group in unextractedGroups)
         {
-            var occList = group.ToList();
-            if (occList.Count < minOccurrences)
+            var rawList = group.ToList();
+            if (rawList.Count < minOccurrences)
             {
                 continue;
             }
 
+            var distinctSignatures = rawList
+                .Select(o => o.NormalizedSignature)
+                .Distinct(StringComparer.Ordinal)
+                .ToList();
+
+            string canonicalSignature;
+            bool isDualCluster = distinctSignatures.Count > 1;
+
+            if (isDualCluster)
+            {
+                canonicalSignature = ChooseCanonicalSignature(distinctSignatures);
+            }
+            else
+            {
+                canonicalSignature = distinctSignatures[0];
+            }
+
+            var canonicalHash = PredicateNormalizer.ComputeHash(canonicalSignature);
+
+            var occList = new List<PredicateOccurrence>(rawList.Count);
+            foreach (var occ in rawList)
+            {
+                if (isDualCluster && !string.Equals(occ.NormalizedSignature, canonicalSignature, StringComparison.Ordinal))
+                {
+                    occList.Add(occ with
+                    {
+                        NormalizedSignature = canonicalSignature,
+                        NormalizedHash = canonicalHash,
+                        IsNegatedAtCallSite = !occ.IsNegatedAtCallSite
+                    });
+                }
+                else
+                {
+                    occList.Add(occ);
+                }
+            }
+
+            // Order so non-negated occurrences appear first
+            occList = occList.OrderBy(o => o.IsNegatedAtCallSite ? 1 : 0).ToList();
+
             var category = DetermineCategory(occList, fileClassifier);
-            var suggestedName = DeriveSuggestedHelperName(occList[0]);
+            var sample = occList.FirstOrDefault(o => !o.IsNegatedAtCallSite) ?? occList[0];
+            var suggestedName = DeriveSuggestedHelperName(sample);
 
             result.Add(new PredicateCloneGroup
             {
-                NormalizedSignature = group.Key,
+                NormalizedSignature = canonicalSignature,
                 Occurrences = occList,
                 Category = category,
                 ExistingHelper = null,
@@ -234,6 +275,65 @@ public sealed class PredicateCloneDetector : IPredicateCloneDetector
             .OrderByDescending(g => g.HasExistingHelper)
             .ThenByDescending(g => g.InlineOccurrences.Count * g.Length)
             .ToList();
+    }
+
+    private static string GetDualPairKey(PredicateOccurrence o)
+    {
+        var norm = o.NormalizedSignature;
+        var neg = o.NegatedNormalizedSignature;
+
+        if (string.IsNullOrEmpty(neg) || string.Equals(norm, neg, StringComparison.Ordinal))
+        {
+            return norm;
+        }
+
+        return string.CompareOrdinal(norm, neg) <= 0
+            ? $"{norm}<=>{neg}"
+            : $"{neg}<=>{norm}";
+    }
+
+    private static string ChooseCanonicalSignature(List<string> signatures)
+    {
+        if (signatures.Count == 1)
+        {
+            return signatures[0];
+        }
+
+        string best = signatures[0];
+        int bestPenalty = ComputePolarityPenalty(best);
+
+        for (int i = 1; i < signatures.Count; i++)
+        {
+            var candidate = signatures[i];
+            int penalty = ComputePolarityPenalty(candidate);
+
+            if (penalty < bestPenalty || (penalty == bestPenalty && string.CompareOrdinal(candidate, best) < 0))
+            {
+                best = candidate;
+                bestPenalty = penalty;
+            }
+        }
+
+        return best;
+    }
+
+    private static int ComputePolarityPenalty(string signature)
+    {
+        int penalty = 0;
+        for (int i = 0; i < signature.Length; i++)
+        {
+            char c = signature[i];
+            if (c == '!')
+            {
+                penalty += 2;
+            }
+            else if (c == '|' && i + 1 < signature.Length && signature[i + 1] == '|')
+            {
+                penalty += 1;
+                i++;
+            }
+        }
+        return penalty;
     }
 
     private static CloneCategory DetermineCategory(

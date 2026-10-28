@@ -379,7 +379,3 @@ public void ProcessTask(int? taskId, string? stageId)
 - `[SuppressMessage("CodeCondenser", "PredicateClone")]`
 - `[PredicateIgnore]`
 - `[CodeCondenserIgnore]`
-
-
-
-
