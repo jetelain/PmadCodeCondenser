@@ -17,10 +17,17 @@ public class CondensationPatternRegistryTests
         var registry = CondensationPatternRegistry.CreateDefault();
         var rules = registry.GetAllRules();
 
+        Assert.Equal(10, rules.Count);
         Assert.Contains(rules, r => r.RuleId == "PCC401");
         Assert.Contains(rules, r => r.RuleId == "PCC402");
         Assert.Contains(rules, r => r.RuleId == "PCC403");
         Assert.Contains(rules, r => r.RuleId == "PCC404");
+        Assert.Contains(rules, r => r.RuleId == "PCC405");
+        Assert.Contains(rules, r => r.RuleId == "PCC406");
+        Assert.Contains(rules, r => r.RuleId == "PCC407");
+        Assert.Contains(rules, r => r.RuleId == "PCC408");
+        Assert.Contains(rules, r => r.RuleId == "PCC409");
+        Assert.Contains(rules, r => r.RuleId == "PCC410");
     }
 
     [Fact]
@@ -72,8 +79,14 @@ public class CondensationPatternRegistryTests
 
         Assert.DoesNotContain(enabled, r => r.RuleId == "PCC401"); // PCC401 requires net6.0
         Assert.DoesNotContain(enabled, r => r.RuleId == "PCC404"); // PCC404 requires net6.0
+        Assert.DoesNotContain(enabled, r => r.RuleId == "PCC405"); // PCC405 requires net8.0
+        Assert.DoesNotContain(enabled, r => r.RuleId == "PCC407"); // PCC407 requires net6.0
         Assert.Contains(enabled, r => r.RuleId == "PCC402");        // net4.0+
         Assert.Contains(enabled, r => r.RuleId == "PCC403");        // any
+        Assert.Contains(enabled, r => r.RuleId == "PCC406");        // any (fallback to 1-arg)
+        Assert.Contains(enabled, r => r.RuleId == "PCC408");        // any
+        Assert.Contains(enabled, r => r.RuleId == "PCC409");        // any
+        Assert.Contains(enabled, r => r.RuleId == "PCC410");        // any
     }
 
     private sealed class DummyCustomRule : CondensationPatternRuleBase<InvocationExpressionSyntax>

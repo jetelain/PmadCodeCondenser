@@ -22,7 +22,13 @@ public sealed class CondensationPatternRegistry : ICondensationPatternRegistry
             new ReplaceLineEndingsRule(),
             new IsNullOrWhiteSpaceRule(),
             new LinqWhereSimplificationRule(),
-            new ThrowIfNullRule()
+            new ThrowIfNullRule(),
+            new ThrowIfNullOrWhiteSpaceRule(),
+            new StringContainsComparisonRule(),
+            new MinByMaxByRule(),
+            new RedundantNullCheckWithIsRule(),
+            new TernaryNullCoalescingRule(),
+            new NullOrEmptyCheckRule()
         ]);
         return registry;
     }

@@ -107,4 +107,52 @@ public class PatternDetectorAndRewriterTests
         Assert.Single(candidates);
         Assert.Equal("PCC401", candidates[0].RuleId);
     }
+
+    [Fact]
+    public void DetectCandidates_And_Rewrite_WithNewRules_WorksEndToEnd()
+    {
+        var code = """
+            namespace Demo;
+
+            public class ExtendedService
+            {
+                public void Check(string arg, List<int> numbers, object obj, string fallback)
+                {
+                    if (string.IsNullOrWhiteSpace(arg))
+                        throw new ArgumentException("Required", nameof(arg));
+
+                    var found = arg.IndexOf("abc", StringComparison.OrdinalIgnoreCase) >= 0;
+
+                    var min = numbers.OrderBy(x => x).FirstOrDefault();
+
+                    var isWidget = obj != null && obj is string;
+
+                    var resolved = arg != null ? arg : fallback;
+
+                    var isEmpty = arg == null || arg.Length == 0;
+                }
+            }
+            """;
+
+        var tree = CSharpSyntaxTree.ParseText(code);
+        var candidates = _detector.DetectCandidates(tree, "ExtendedService.cs", _settings, targetDotNetVersion: new Version(10, 0));
+
+        Assert.Equal(6, candidates.Count);
+        Assert.Contains(candidates, c => c.RuleId == "PCC405");
+        Assert.Contains(candidates, c => c.RuleId == "PCC406");
+        Assert.Contains(candidates, c => c.RuleId == "PCC407");
+        Assert.Contains(candidates, c => c.RuleId == "PCC408");
+        Assert.Contains(candidates, c => c.RuleId == "PCC409");
+        Assert.Contains(candidates, c => c.RuleId == "PCC410");
+
+        var rewritten = _rewriter.Rewrite(tree, "ExtendedService.cs", _settings, targetDotNetVersion: new Version(10, 0));
+        var newCode = rewritten.GetRoot().ToFullString();
+
+        Assert.Contains("ArgumentException.ThrowIfNullOrWhiteSpace(arg);", newCode);
+        Assert.Contains("arg.Contains(\"abc\", StringComparison.OrdinalIgnoreCase)", newCode);
+        Assert.Contains("numbers.MinBy(x => x)", newCode);
+        Assert.Contains("obj is string", newCode);
+        Assert.Contains("arg ?? fallback", newCode);
+        Assert.Contains("string.IsNullOrEmpty(arg)", newCode);
+    }
 }

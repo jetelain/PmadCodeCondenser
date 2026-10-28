@@ -49,21 +49,24 @@ public sealed class ThrowIfNullRule : CondensationPatternRuleBase<IfStatementSyn
             return false;
         }
 
-        // Condition must be arg == null or null == arg
-        if (ifStatement.Condition is not BinaryExpressionSyntax binary ||
-            !binary.IsKind(SyntaxKind.EqualsExpression))
-        {
-            return false;
-        }
-
+        // Condition must be arg == null, null == arg, or arg is null
         ExpressionSyntax? argExpression = null;
-        if (binary.Right.IsKind(SyntaxKind.NullLiteralExpression))
+        if (ifStatement.Condition is BinaryExpressionSyntax binary && binary.IsKind(SyntaxKind.EqualsExpression))
         {
-            argExpression = binary.Left;
+            if (binary.Right.IsKind(SyntaxKind.NullLiteralExpression))
+            {
+                argExpression = binary.Left;
+            }
+            else if (binary.Left.IsKind(SyntaxKind.NullLiteralExpression))
+            {
+                argExpression = binary.Right;
+            }
         }
-        else if (binary.Left.IsKind(SyntaxKind.NullLiteralExpression))
+        else if (ifStatement.Condition is IsPatternExpressionSyntax isPattern &&
+                 isPattern.Pattern is ConstantPatternSyntax constPattern &&
+                 constPattern.Expression.IsKind(SyntaxKind.NullLiteralExpression))
         {
-            argExpression = binary.Right;
+            argExpression = isPattern.Expression;
         }
 
         if (argExpression is not IdentifierNameSyntax argIdentifier)

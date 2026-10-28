@@ -15,7 +15,8 @@ description: >-
 4. **Enforce Single Type Per File**: Automatically ensures each class, interface, struct, enum, record, or delegate has its own `.cs` file matching its type name (with line tolerance for small inline types like 1-line delegates) to optimize AI agent context window loading.
 5. **Detect Lines of Code Limits**: Flags methods (> 150 LOC) and classes/records (> 1500 LOC) exceeding maintainability thresholds, excluding comments and blank lines (report-only, no auto-fix).
 6. **Detect Predicate / Boolean Condition Clones**: Identifies duplicate complex boolean conditions across `if`, ternary, `while`, `do`, `return`, and LINQ calls (e.g. `.Where(...)`, `.Any(...)`) with >= 100 characters. Automatically matches conditions against existing static or instance helper methods/properties (>= 20 characters), handling receiver binding (`slot.IsOnline(...)`), parameter reordering, constant/enum folding, and De Morgan logical negations (`!slot.IsOnline(...)`).
-7. **Enforce Guardrails in CI**: Compares changes incrementally against a baseline snapshot and exits with code `2` when new duplication, repeated strings, type violations, lines of code violations, or predicate clones are introduced.
+7. **Modernize High-Impact Condensation Patterns**: Identifies verbose legacy framework calls and C# idioms (e.g. `s.Replace("\r\n", "\n").Replace("\r", "\n")`, `string.IsNullOrEmpty(s.Trim())`, `x != null ? x : fallback`, `arg == null throw new ArgumentNullException`, `s.IndexOf(...) >= 0`, `OrderBy(...).First()`, `s == null || s.Length == 0`) and automatically rewrites them with `codecondenser apply`.
+8. **Enforce Guardrails in CI**: Compares changes incrementally against a baseline snapshot and exits with code `2` when new duplication, repeated strings, type violations, lines of code violations, or predicate clones are introduced.
 
 ---
 
@@ -25,19 +26,18 @@ The CLI can be invoked via the global tool `codecondenser`, local tool `dotnet c
 
 | Task | Command | AI Backend Needed? |
 | :--- | :--- | :---: |
-| **Status report of types, clones, predicates, LOC & comments (deterministic)** | `codecondenser report ./src` | No |
-| **Check clones only (disable comments, strings, types, LOC & predicates)** | `codecondenser analyze ./src --no-comments --no-strings --no-type-split --no-loc --no-predicates` | No |
+| **Status report of types, clones, patterns, predicates, LOC & comments** | `codecondenser report ./src` | No |
+| **Check clones only (disable comments, strings, types, LOC, predicates & patterns)** | `codecondenser analyze ./src --no-comments --no-strings --no-type-split --no-loc --no-predicates --no-patterns` | No |
 | **Limit displayed results to top N with largest benefit** | `codecondenser report ./src --limit 10` | No |
 | **Check production code only (skip tests)** | `codecondenser analyze ./ --exclude-tests --no-comments` | No |
+| **Target specific .NET TFM for pattern rules** | `codecondenser report ./src --patterns-tfm 8.0` | No |
+| **Filter specific pattern rules (e.g. PCC401, PCC405)** | `codecondenser report ./src --pattern-rules PCC401,PCC405` | No |
 | **Incremental CI check (strict guardrails: clones + comments + strings + types + LOC + predicates)** | `codecondenser analyze ./ --incremental --duplication-tolerance 0 -ct 0 -st 0 -tt 0 -lt 0 -pt 0` | No |
-| **Incremental CI check (strict duplication & predicates only)** | `codecondenser analyze ./ --incremental --duplication-tolerance 0 -pt 0` | No |
-| **Check custom predicate length thresholds (predicates > 30, helpers > 15)** | `codecondenser analyze ./src -tpred 30 -thelp 15` | No |
-| **Check custom lines of code limits (methods > 100, classes > 1000)** | `codecondenser analyze ./src -tml 100 -tcl 1000` | No |
 | **Export SARIF report for GitHub Actions** | `codecondenser analyze ./src --format sarif --output results.sarif` | No |
 | **Export structured JSON report** | `codecondenser analyze ./src --format json --output results.json` | No |
 | **Summarize comments using LLM** | `codecondenser analyze ./src -m gemma4:e4b` | Yes (Ollama) |
-| **Apply single-type splits & summarized comments to disk** | `codecondenser apply ./src` | No (uses cache) |
-| **Apply type splits only (without comments)** | `codecondenser apply ./src --no-comments` | No |
+| **Apply type splits, condensation patterns & comments to disk** | `codecondenser apply ./src` | No (deterministic/cache) |
+| **Apply condensation patterns only** | `codecondenser apply ./src --no-comments --no-type-split` | No |
 | **Refresh baseline snapshot** | `codecondenser snapshot ./src` | No |
 | **Install/update workspace agent skills** | `codecondenser skills [path]` | No |
 | **Install agent skills globally** | `codecondenser skills --global` | No |
