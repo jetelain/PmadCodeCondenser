@@ -615,6 +615,52 @@ public sealed class ConsoleFormatter : IConsoleFormatter
         }
     }
 
+    public void PrintCondensationCandidates(
+        TextWriter writer,
+        IReadOnlyList<CondensationCandidate> candidates,
+        string baseDirectory,
+        HeuristicTokenEstimator? estimator = null,
+        int? totalCount = null)
+    {
+        ArgumentNullException.ThrowIfNull(writer);
+        ArgumentNullException.ThrowIfNull(candidates);
+
+        int total = totalCount ?? candidates.Count;
+        if (total == 0 || candidates.Count == 0)
+        {
+            return;
+        }
+
+        var headerSuffix = total > candidates.Count
+            ? $" (Showing top {candidates.Count} with largest benefit):"
+            : ":";
+        writer.WriteLine(Cyan(Bold($"Found {total} Modern Framework Condensation Candidate(s){headerSuffix}")));
+        writer.WriteLine();
+
+        for (int i = 0; i < candidates.Count; i++)
+        {
+            var candidate = candidates[i];
+            var relPath = FormatPath(candidate.FilePath, baseDirectory);
+            var gainChars = candidate.CharacterGain;
+            var gainTokens = candidate.EstimateGainTokens(estimator);
+            var gainParts = new List<string>();
+            if (gainChars > 0) gainParts.Add($"~{gainChars} chars");
+            if (gainTokens > 0) gainParts.Add($"~{gainTokens} tokens");
+            var gainText = gainParts.Count > 0 ? $" (~{string.Join(", ", gainParts)} saved)" : string.Empty;
+
+            writer.WriteLine(Cyan($"[CANDIDATE #{i + 1}] [{candidate.RuleId}] {candidate.RuleName}{gainText}:"));
+            writer.WriteLine($"  Location:    {Cyan(relPath)}:{candidate.StartLine}:{candidate.StartColumn}");
+            writer.WriteLine($"  Legacy:      {Dim(TruncatePreview(candidate.OriginalCode.Replace("\r\n", " ").Replace("\n", " "), 90))}");
+            writer.WriteLine($"  Replacement: {Green(TruncatePreview(candidate.SuggestedCode.Replace("\r\n", " ").Replace("\n", " "), 90))}");
+            if (candidate.CanAutoFix)
+            {
+                writer.WriteLine(Dim("  Auto-fix:    Supported (run 'codecondenser apply')"));
+            }
+            writer.WriteLine(Dim($"  To suppress: Add '// codecondenser:ignore' or '// codecondenser:ignore-pattern:{candidate.RuleId}'."));
+            writer.WriteLine();
+        }
+    }
+
     public void PrintVerboseComments(
         TextWriter writer,
         IReadOnlyList<VerboseComment> comments,
@@ -767,7 +813,10 @@ public sealed class ConsoleFormatter : IConsoleFormatter
         int? linesOfCodeViolationsCount = null,
         int? predicateGroupsCount = null,
         int? predicateGainChars = null,
-        int? predicateGainTokens = null)
+        int? predicateGainTokens = null,
+        int? condensationCandidatesCount = null,
+        int? condensationGainChars = null,
+        int? condensationGainTokens = null)
     {
         ArgumentNullException.ThrowIfNull(writer);
 
@@ -860,6 +909,17 @@ public sealed class ConsoleFormatter : IConsoleFormatter
                 ? Green($"+{commentGainChars.Value} chars{tokensSuffix} ({commentReductionPercent ?? 0}% reduction)")
                 : Dim("0 chars (0% reduction)");
             writer.WriteLine($"  Comment Gain:      {gainDisplay}");
+        }
+
+        if (condensationCandidatesCount.HasValue)
+        {
+            writer.WriteLine($"  Condensations:     {(condensationCandidatesCount.Value > 0 ? Cyan(condensationCandidatesCount.Value.ToString()) : Green("0"))}");
+        }
+
+        if (condensationGainChars.HasValue && condensationGainChars.Value > 0)
+        {
+            var tokensSuffix = condensationGainTokens.HasValue ? $", ~{condensationGainTokens.Value} tokens" : string.Empty;
+            writer.WriteLine($"  Condensation Gain: {Green($"+{condensationGainChars.Value} chars{tokensSuffix}")}");
         }
 
         writer.WriteLine(Dim("------------------------------------------------------------------------"));

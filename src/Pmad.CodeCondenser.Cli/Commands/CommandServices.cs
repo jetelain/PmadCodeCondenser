@@ -252,6 +252,21 @@ public sealed class CommandServices
             settings.EnablePredicateCloneDetection = options.EnablePredicateCloneDetection.Value;
         }
 
+        if (options.EnablePatternCondensation.HasValue)
+        {
+            settings.EnablePatternCondensation = options.EnablePatternCondensation.Value;
+        }
+
+        if (!string.IsNullOrWhiteSpace(options.TargetDotNetVersion))
+        {
+            settings.TargetDotNetVersion = options.TargetDotNetVersion;
+        }
+
+        if (options.CondensationRules != null)
+        {
+            settings.CondensationRules = options.CondensationRules;
+        }
+
         if (options.PredicateLengthThreshold.HasValue)
         {
             settings.PredicateLengthThreshold = options.PredicateLengthThreshold.Value;

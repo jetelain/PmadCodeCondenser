@@ -97,6 +97,7 @@ public sealed class ApplyCommand : ICommand
         bool isTypeAnalyzed = settings.EnableTypeSplitting;
         bool isLocAnalyzed = settings.EnableLinesOfCodeDetection;
         bool isPredicatesAnalyzed = settings.EnablePredicateCloneDetection;
+        bool isPatternsAnalyzed = settings.EnablePatternCondensation;
         bool isCommentsAnalyzed = settings.GetEffectiveSummaryMode() != SummaryMode.Disabled && settings.EnableCommentSummarization;
 
         if (isDuplicationAnalyzed)
@@ -170,6 +171,16 @@ public sealed class ApplyCommand : ICommand
                 totalTestCount: totalTest);
         }
 
+        if (isPatternsAnalyzed && displayed.CondensationCandidates.Count > 0)
+        {
+            formatter.PrintCondensationCandidates(
+                output,
+                displayed.CondensationCandidates,
+                baseDirectory,
+                estimator,
+                totalCount: result.CondensationCandidates.Count);
+        }
+
         var modifiedFiles = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         if (engine is CodeCondenserEngine cce)
         {
@@ -192,6 +203,10 @@ public sealed class ApplyCommand : ICommand
                 {
                     await cce.ApplyTypeSplitsWithModifiedFilesAsync(result, settings, cancellationToken).ConfigureAwait(false);
                 }
+                if (settings.EnablePatternCondensation)
+                {
+                    await cce.ApplyPatternsAsync(result, settings, cancellationToken).ConfigureAwait(false);
+                }
             }
             finally
             {
@@ -209,6 +224,10 @@ public sealed class ApplyCommand : ICommand
             if (settings.EnableTypeSplitting)
             {
                 await engine.ApplyTypeSplitsAsync(result, settings, cancellationToken).ConfigureAwait(false);
+            }
+            if (settings.EnablePatternCondensation)
+            {
+                await engine.ApplyPatternsAsync(result, settings, cancellationToken).ConfigureAwait(false);
             }
         }
 
@@ -243,6 +262,10 @@ public sealed class ApplyCommand : ICommand
         int? predicateGroupsCount = isPredicatesAnalyzed ? result.PredicateCloneGroups.Count : null;
         int? predicateGainChars = (isPredicatesAnalyzed && result.PredicateCloneGroups.Count > 0) ? result.TotalPredicateGainCharacters : null;
         int? predicateGainTokens = (isPredicatesAnalyzed && result.PredicateCloneGroups.Count > 0) ? result.TotalPredicateGainTokens : null;
+
+        int? patternsCount = isPatternsAnalyzed ? result.CondensationCandidates.Count : null;
+        int? patternGainChars = (isPatternsAnalyzed && result.CondensationCandidates.Count > 0) ? result.TotalPatternGainCharacters : null;
+        int? patternGainTokens = (isPatternsAnalyzed && result.CondensationCandidates.Count > 0) ? result.TotalPatternGainTokens : null;
         int? verboseCommentsCount = isCommentsAnalyzed ? result.VerboseComments.Count : null;
 
         formatter.PrintSummary(
@@ -269,7 +292,10 @@ public sealed class ApplyCommand : ICommand
             linesOfCodeViolationsCount: linesOfCodeViolationsCount,
             predicateGroupsCount: predicateGroupsCount,
             predicateGainChars: predicateGainChars,
-            predicateGainTokens: predicateGainTokens);
+            predicateGainTokens: predicateGainTokens,
+            condensationCandidatesCount: patternsCount,
+            condensationGainChars: patternGainChars,
+            condensationGainTokens: patternGainTokens);
 
         if (options.Incremental)
         {
