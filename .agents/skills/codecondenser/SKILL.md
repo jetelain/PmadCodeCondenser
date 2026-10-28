@@ -14,7 +14,8 @@ description: >-
 3. **Condense Verbose Comments**: Shortens oversized single-line, multi-line, and XML documentation comments into clean, concise summaries formatted to 120 columns using an LLM.
 4. **Enforce Single Type Per File**: Automatically ensures each class, interface, struct, enum, record, or delegate has its own `.cs` file matching its type name (with line tolerance for small inline types like 1-line delegates) to optimize AI agent context window loading.
 5. **Detect Lines of Code Limits**: Flags methods (> 150 LOC) and classes/records (> 1500 LOC) exceeding maintainability thresholds, excluding comments and blank lines (report-only, no auto-fix).
-6. **Enforce Guardrails in CI**: Compares changes incrementally against a baseline snapshot and exits with code `2` when new duplication, repeated strings, type violations, or lines of code violations are introduced.
+6. **Detect Predicate / Boolean Condition Clones**: Identifies duplicate complex boolean conditions across `if`, ternary, `while`, `do`, `return`, and LINQ calls (e.g. `.Where(...)`, `.Any(...)`) with >= 25 characters. Automatically matches conditions against existing static or instance helper methods/properties (>= 20 characters), handling receiver binding (`slot.IsOnline(...)`), parameter reordering, constant/enum folding, and De Morgan logical negations (`!slot.IsOnline(...)`).
+7. **Enforce Guardrails in CI**: Compares changes incrementally against a baseline snapshot and exits with code `2` when new duplication, repeated strings, type violations, lines of code violations, or predicate clones are introduced.
 
 ---
 
@@ -24,11 +25,12 @@ The CLI can be invoked via the global tool `codecondenser`, local tool `dotnet c
 
 | Task | Command | AI Backend Needed? |
 | :--- | :--- | :---: |
-| **Status report of types, clones, LOC & comments (deterministic)** | `codecondenser report ./src` | No |
-| **Check clones only (disable comments, strings, types & LOC)** | `codecondenser analyze ./src --no-comments --no-strings --no-type-split --no-loc` | No |
+| **Status report of types, clones, predicates, LOC & comments (deterministic)** | `codecondenser report ./src` | No |
+| **Check clones only (disable comments, strings, types, LOC & predicates)** | `codecondenser analyze ./src --no-comments --no-strings --no-type-split --no-loc --no-predicates` | No |
 | **Check production code only (skip tests)** | `codecondenser analyze ./ --exclude-tests --no-comments` | No |
-| **Incremental CI check (strict guardrails: clones + comments + strings + types + LOC)** | `codecondenser analyze ./ --incremental --duplication-tolerance 0 -ct 0 -st 0 -tt 0 -lt 0` | No |
-| **Incremental CI check (strict duplication only)** | `codecondenser analyze ./ --incremental --duplication-tolerance 0` | No |
+| **Incremental CI check (strict guardrails: clones + comments + strings + types + LOC + predicates)** | `codecondenser analyze ./ --incremental --duplication-tolerance 0 -ct 0 -st 0 -tt 0 -lt 0 -pt 0` | No |
+| **Incremental CI check (strict duplication & predicates only)** | `codecondenser analyze ./ --incremental --duplication-tolerance 0 -pt 0` | No |
+| **Check custom predicate length thresholds (predicates > 30, helpers > 15)** | `codecondenser analyze ./src -tpred 30 -thelp 15` | No |
 | **Check custom lines of code limits (methods > 100, classes > 1000)** | `codecondenser analyze ./src -tml 100 -tcl 1000` | No |
 | **Export SARIF report for GitHub Actions** | `codecondenser analyze ./src --format sarif --output results.sarif` | No |
 | **Export structured JSON report** | `codecondenser analyze ./src --format json --output results.json` | No |
@@ -260,6 +262,24 @@ When an auxiliary type must intentionally remain in the same file as another typ
 When a large method or class must intentionally remain above configured limits (e.g. state machines, large parser switches, complex algorithms):
 - **Comment Marker**: Place `// codecondenser:ignore-loc` (or `// noloc`) on the line directly preceding the method or class declaration.
 - **Attribute**: Apply `[SuppressMessage("CodeCondenser", "MethodLength")]` or `[SuppressMessage("CodeCondenser", "ClassLength")]` (or rule-wide `[SuppressMessage("CodeCondenser", "LinesOfCode")]` / `[LinesOfCodeIgnore]`) to the declaration.
+
+---
+
+### 6. Predicate / Boolean Condition Suppressions
+
+When a complex boolean condition must intentionally remain inline:
+- **Comment Marker**: Place `// codecondenser:ignore-predicate` (or `// nopredicate`, `// codecondenser:ignore`) on the line preceding or inline with the condition.
+- **Attribute**: Apply `[SuppressMessage("CodeCondenser", "PredicateDuplication")]` (CC010) or `[SuppressMessage("CodeCondenser", "PredicateMatchesExistingHelper")]` (CC011) to the enclosing method or class.
+
+#### Existing Helper Recommendation (CC011)
+When an inline condition matches an existing helper method or property (e.g., `slot.State == Online && now - slot.CachedAt <= ttl` matching `slot.IsOnlineWithinTtl(now, ttl)`):
+- CodeCondenser detects it using a threshold of >= 20 characters (configurable via `--threshold-existing-helpers` / `-thelp`).
+- Output recommendation: `Replace inline condition with 'slot.IsOnlineWithinTtl(...)'.`
+- Supports instance receiver binding (`$this`), static parameters, and De Morgan negations (`!slot.IsOnlineWithinTtl(...)`).
+
+#### Duplicate Condition Extraction Pattern (CC010)
+When duplicate conditions exist without an existing helper (>= 25 characters, configurable via `--threshold-predicates` / `-tpred`):
+- CodeCondenser recommends extracting the condition into a shared helper method (e.g., in a shared static helper class `PredicateHelpers`).
 
 ---
 

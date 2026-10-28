@@ -42,8 +42,8 @@ public class SarifReportFormatterTests
         run.Tool.Driver.Name.Should().Be("Pmad.CodeCondenser");
         run.Tool.Driver.Version.Should().NotBeNullOrWhiteSpace();
         run.Tool.Driver.InformationUri.Should().Be("https://github.com/jetelain/PmadCodeCondenser");
-        run.Tool.Driver.Rules.Should().HaveCount(9);
-        run.Tool.Driver.Rules.Select(r => r.Id).Should().Contain(["CC001", "CC002", "CC003", "CC004", "CC005", "CC006", "CC007", "CC008", "CC009"]);
+        run.Tool.Driver.Rules.Should().HaveCount(11);
+        run.Tool.Driver.Rules.Select(r => r.Id).Should().Contain(["CC001", "CC002", "CC003", "CC004", "CC005", "CC006", "CC007", "CC008", "CC009", "CC010", "CC011"]);
         run.Results.Should().BeEmpty();
     }
 
@@ -543,5 +543,139 @@ public class SarifReportFormatterTests
         res.Message.Text.Should().Contain("Class 'LargeClass' has 1600 lines of code");
         res.Locations[0].PhysicalLocation.Region.StartLine.Should().Be(5);
         res.Locations[0].PhysicalLocation.Region.EndLine.Should().Be(1700);
+    }
+
+    [Fact]
+    public async Task FormatAsync_PredicateCloneGroup_DuplicateConditions_EmitsCC010()
+    {
+        var occurrences = new List<PredicateOccurrence>
+        {
+            new()
+            {
+                FilePath = "c:/repo/src/A.cs",
+                StartLine = 12,
+                EndLine = 12,
+                StartColumn = 17,
+                EndColumn = 80,
+                ExpressionText = "a > 0 && b < 100",
+                NormalizedSignature = "$0 > CONST && $1 < CONST",
+                NormalizedHash = 12345,
+                ArgumentExpressions = ["a", "b"]
+            },
+            new()
+            {
+                FilePath = "c:/repo/src/B.cs",
+                StartLine = 45,
+                EndLine = 45,
+                StartColumn = 17,
+                EndColumn = 80,
+                ExpressionText = "x > 0 && y < 100",
+                NormalizedSignature = "$0 > CONST && $1 < CONST",
+                NormalizedHash = 12345,
+                ArgumentExpressions = ["x", "y"]
+            }
+        };
+
+        var group = new PredicateCloneGroup
+        {
+            NormalizedSignature = "$0 > CONST && $1 < CONST",
+            Occurrences = occurrences,
+            Category = CloneCategory.Production,
+            SuggestedHelperName = "IsValidRange",
+            SuggestedClassName = "PredicateHelpers"
+        };
+
+        var result = new AnalysisResult
+        {
+            AnalyzedFilesCount = 2,
+            TotalMethodsScanned = 5,
+            CloneGroups = [],
+            VerboseComments = [],
+            SummarizedComments = new Dictionary<string, string>(),
+            PredicateCloneGroups = [group]
+        };
+
+        using var writer = new StringWriter();
+        await _formatter.FormatAsync(result, _settings, writer, "c:/repo");
+
+        var sarif = JsonSerializer.Deserialize<SarifLog>(writer.ToString(), new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase });
+        sarif!.Runs[0].Results.Should().HaveCount(2);
+
+        var r1 = sarif.Runs[0].Results[0];
+        r1.RuleId.Should().Be("CC010");
+        r1.Level.Should().Be("warning");
+        r1.Message.Text.Should().Contain("Duplicate condition 'a > 0 && b < 100' detected");
+
+        var r2 = sarif.Runs[0].Results[1];
+        r2.RuleId.Should().Be("CC010");
+        r2.Level.Should().Be("warning");
+        r2.Message.Text.Should().Contain("Duplicate condition 'x > 0 && y < 100' detected");
+    }
+
+    [Fact]
+    public async Task FormatAsync_PredicateCloneGroup_ExistingHelper_EmitsCC011()
+    {
+        var helperDecl = new PredicateOccurrence
+        {
+            FilePath = "c:/repo/src/Helper.cs",
+            StartLine = 10,
+            EndLine = 10,
+            StartColumn = 5,
+            EndColumn = 80,
+            ExpressionText = "taskId.HasValue && taskId.Value > 0",
+            NormalizedSignature = "$0.HasValue && $0.Value > CONST",
+            NormalizedHash = 99999,
+            IsHelperDeclaration = true,
+            HelperInfo = new PredicateHelperInfo
+            {
+                HelperName = "IsAutonomousTask",
+                DeclaringTypeName = "TaskHelper",
+                IsStatic = true
+            }
+        };
+
+        var callSite = new PredicateOccurrence
+        {
+            FilePath = "c:/repo/src/Consumer.cs",
+            StartLine = 25,
+            EndLine = 25,
+            StartColumn = 17,
+            EndColumn = 55,
+            ExpressionText = "taskId.HasValue && taskId.Value > 0",
+            NormalizedSignature = "$0.HasValue && $0.Value > CONST",
+            NormalizedHash = 99999,
+            ReceiverExpression = "taskId",
+            ArgumentExpressions = ["taskId"]
+        };
+
+        var group = new PredicateCloneGroup
+        {
+            NormalizedSignature = "$0.HasValue && $0.Value > CONST",
+            Occurrences = [helperDecl, callSite],
+            Category = CloneCategory.Production,
+            ExistingHelper = helperDecl.HelperInfo,
+            SuggestedHelperName = "IsAutonomousTask"
+        };
+
+        var result = new AnalysisResult
+        {
+            AnalyzedFilesCount = 2,
+            TotalMethodsScanned = 5,
+            CloneGroups = [],
+            VerboseComments = [],
+            SummarizedComments = new Dictionary<string, string>(),
+            PredicateCloneGroups = [group]
+        };
+
+        using var writer = new StringWriter();
+        await _formatter.FormatAsync(result, _settings, writer, "c:/repo");
+
+        var sarif = JsonSerializer.Deserialize<SarifLog>(writer.ToString(), new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase });
+        sarif!.Runs[0].Results.Should().HaveCount(1);
+
+        var r = sarif.Runs[0].Results[0];
+        r.RuleId.Should().Be("CC011");
+        r.Level.Should().Be("warning");
+        r.Message.Text.Should().Contain("matches existing helper 'IsAutonomousTask'");
     }
 }

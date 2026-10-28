@@ -27,6 +27,8 @@ public sealed record CodeCondenserJsonReport
     public List<JsonTypeFileIssue> TypeFileIssues { get; init; } = [];
 
     public List<JsonLinesOfCodeViolation> LinesOfCodeViolations { get; init; } = [];
+
+    public List<JsonPredicateCluster> PredicateClusters { get; init; } = [];
 }
 
 /// <summary>
@@ -60,6 +62,8 @@ public sealed record JsonReportSummary
 
     public int LinesOfCodeViolationsCount { get; init; }
 
+    public int PredicateClustersCount { get; init; }
+
     public int VerboseCommentsCount { get; init; }
 
     public string SummaryMode { get; init; } = string.Empty;
@@ -75,6 +79,10 @@ public sealed record JsonReportSummary
     public int? TotalRepeatedStringGainCharacters { get; init; }
 
     public int? TotalRepeatedStringGainTokens { get; init; }
+
+    public int? TotalPredicateGainCharacters { get; init; }
+
+    public int? TotalPredicateGainTokens { get; init; }
 }
 
 /// <summary>
@@ -285,5 +293,69 @@ public sealed record JsonLinesOfCodeViolation
     public int EndLine { get; init; }
 
     public string Category { get; init; } = string.Empty;
+}
+
+/// <summary>
+/// Predicate / boolean condition clone cluster details.
+/// </summary>
+public sealed record JsonPredicateCluster
+{
+    public int ClusterId { get; init; }
+
+    public string Category { get; init; } = string.Empty;
+
+    public string NormalizedSignature { get; init; } = string.Empty;
+
+    public ulong NormalizedHash { get; init; }
+
+    public bool HasExistingHelper { get; init; }
+
+    public string SuggestedHelperName { get; init; } = string.Empty;
+
+    public string SuggestedClassName { get; init; } = string.Empty;
+
+    public string? ExistingHelperName { get; init; }
+
+    public string? ExistingHelperDeclaringType { get; init; }
+
+    public bool? ExistingHelperIsStatic { get; init; }
+
+    public string TypicalUsage { get; init; } = string.Empty;
+
+    public List<JsonPredicateOccurrence> Occurrences { get; init; } = [];
+
+    public int? PotentialGainCharacters { get; init; }
+
+    public int? PotentialGainTokens { get; init; }
+}
+
+/// <summary>
+/// Individual predicate clone occurrence details.
+/// </summary>
+public sealed record JsonPredicateOccurrence
+{
+    public string FilePath { get; init; } = string.Empty;
+
+    public int StartLine { get; init; }
+
+    public int EndLine { get; init; }
+
+    public int StartColumn { get; init; }
+
+    public int EndColumn { get; init; }
+
+    public string ExpressionText { get; init; } = string.Empty;
+
+    public string? EnclosingMember { get; init; }
+
+    public bool IsHelperDeclaration { get; init; }
+
+    public string? ReceiverExpression { get; init; }
+
+    public List<string> ArgumentExpressions { get; init; } = [];
+
+    public bool IsNegatedAtCallSite { get; init; }
+
+    public string TypicalReplacement { get; init; } = string.Empty;
 }
 

@@ -51,6 +51,12 @@ codecondenser [command] [path] [options]
 | `--enable-duplication` | | `switch` | `true` | Explicitly enable structural code clone detection |
 | `--no-strings` | | `switch` | `false` | Disable repeated inline string detection |
 | `--enable-strings` | | `switch` | `true` | Explicitly enable repeated inline string detection |
+| `--no-predicates` | | `switch` | `false` | Disable boolean condition / predicate clone detection |
+| `--enable-predicates` | | `switch` | `true` | Explicitly enable boolean condition / predicate clone detection |
+| `--threshold-predicates <n>` | `-tpred` | `int` | `25` | Minimum character length for predicate clone detection |
+| `--threshold-existing-helpers <n>` | `-thelp` | `int` | `20` | Minimum character length when matching against existing predicate helpers |
+| `--predicate-occurrences <n>` | `-po` | `int` | `2` | Minimum occurrences for predicate clone detection |
+| `--predicate-tolerance <n>` | `-pt` | `int` | `null` | Maximum new predicate clone clusters tolerated in incremental mode |
 | `--threshold-statements <n>` | `-ts` | `int` | `8` | Minimum statement count for a method to be analyzed for clones |
 | `--threshold-strings <n>` | `-tstr` | `int` | `100` | Minimum character length for repeated string detection |
 | `--threshold-existing-constants <n>` | `-tec` | `int` | `20` | Minimum character length when matching against existing constants |
@@ -87,7 +93,7 @@ codecondenser [command] [path] [options]
 | :---: | :--- | :--- |
 | `0` | `Success` | Analysis completed clean; no policy violations. |
 | `1` | `Error` | Fatal error, bad arguments, missing path, or unhandled exception. |
-| `2` | `DuplicationDetected` | In incremental mode, newly introduced code clones exceed `--duplication-tolerance`. |
+| `2` | `DuplicationDetected` | In incremental mode, newly introduced code clones, repeated strings, type violations, lines of code violations, or predicate clones exceed their configured tolerance. |
 | `130` | `Canceled` | Execution canceled by user (`Ctrl+C` / `SIGINT`). |
 
 ---

@@ -231,6 +231,96 @@ public sealed class CodeCondenserSettings
     public ISet<string> IgnoredStrings { get; set; } = new HashSet<string>(StringComparer.Ordinal);
 
     /// <summary>
+    /// When true, enables detection of duplicate conditions and matching against existing boolean helpers.
+    /// Default is true.
+    /// </summary>
+    public bool EnablePredicateCloneDetection { get; set; } = true;
+
+    /// <summary>
+    /// Alias for <see cref="EnablePredicateCloneDetection"/>.
+    /// </summary>
+    public bool? EnablePredicates
+    {
+        get => EnablePredicateCloneDetection;
+        set { if (value.HasValue) EnablePredicateCloneDetection = value.Value; }
+    }
+
+    /// <summary>
+    /// Alias for <see cref="EnablePredicateCloneDetection"/>.
+    /// </summary>
+    public bool? PredicateClones
+    {
+        get => EnablePredicateCloneDetection;
+        set { if (value.HasValue) EnablePredicateCloneDetection = value.Value; }
+    }
+
+    /// <summary>
+    /// Minimum character length of a condition expression to be considered for predicate clone analysis.
+    /// Default is 25 characters.
+    /// </summary>
+    public int PredicateLengthThreshold { get; set; } = 25;
+
+    /// <summary>
+    /// Alias for <see cref="PredicateLengthThreshold"/>.
+    /// </summary>
+    public int? ThresholdPredicateLength
+    {
+        get => PredicateLengthThreshold;
+        set { if (value.HasValue) PredicateLengthThreshold = value.Value; }
+    }
+
+    /// <summary>
+    /// Minimum character length of a condition expression to be flagged when an existing helper method/property matches.
+    /// Default is 20 characters.
+    /// </summary>
+    public int ExistingHelperPredicateLengthThreshold { get; set; } = 20;
+
+    /// <summary>
+    /// Alias for <see cref="ExistingHelperPredicateLengthThreshold"/>.
+    /// </summary>
+    public int? ThresholdExistingHelperPredicateLength
+    {
+        get => ExistingHelperPredicateLengthThreshold;
+        set { if (value.HasValue) ExistingHelperPredicateLengthThreshold = value.Value; }
+    }
+
+    /// <summary>
+    /// Minimum number of occurrences across the codebase for a condition to be flagged as a duplicate predicate clone.
+    /// Default is 2.
+    /// </summary>
+    public int PredicateMinOccurrences { get; set; } = 2;
+
+    /// <summary>
+    /// Alias for <see cref="PredicateMinOccurrences"/>.
+    /// </summary>
+    public int? ThresholdPredicateOccurrences
+    {
+        get => PredicateMinOccurrences;
+        set { if (value.HasValue) PredicateMinOccurrences = value.Value; }
+    }
+
+    /// <summary>
+    /// Maximum number of new predicate clone clusters tolerated in incremental mode before failing CI.
+    /// Default is null (does not fail CI on predicate clones unless configured).
+    /// </summary>
+    public int? PredicateTolerance { get; set; }
+
+    /// <summary>
+    /// Alias for <see cref="PredicateTolerance"/>.
+    /// </summary>
+    public int? ConditionTolerance
+    {
+        get => PredicateTolerance;
+        set => PredicateTolerance = value;
+    }
+
+    /// <summary>
+    /// Exit code returned when additional predicate clones exceed <see cref="PredicateTolerance"/> in incremental mode.
+    /// Default is 2.
+    /// </summary>
+    public int PredicateExitCode { get; set; } = 2;
+
+    /// <summary>
     /// When true, enables enforcement of having a single top-level type per C# file.
     /// Default is true.
     /// </summary>
@@ -823,6 +913,12 @@ public sealed class CodeCondenserSettings
             RepeatedStringTolerance = RepeatedStringTolerance,
             RepeatedStringExitCode = RepeatedStringExitCode,
             IgnoredStrings = new HashSet<string>(IgnoredStrings, StringComparer.Ordinal),
+            EnablePredicateCloneDetection = EnablePredicateCloneDetection,
+            PredicateLengthThreshold = PredicateLengthThreshold,
+            ExistingHelperPredicateLengthThreshold = ExistingHelperPredicateLengthThreshold,
+            PredicateMinOccurrences = PredicateMinOccurrences,
+            PredicateTolerance = PredicateTolerance,
+            PredicateExitCode = PredicateExitCode,
             EnableTypeSplitting = EnableTypeSplitting,
             EnableTypeRenaming = EnableTypeRenaming,
             TypeLineTolerance = TypeLineTolerance,

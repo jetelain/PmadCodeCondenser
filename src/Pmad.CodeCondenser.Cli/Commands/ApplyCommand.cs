@@ -183,7 +183,10 @@ public sealed class ApplyCommand : ICommand
             null,
             null,
             result.TypeFileIssues.Count(i => i.HasViolation),
-            result.LinesOfCodeViolations.Count);
+            result.LinesOfCodeViolations.Count,
+            result.PredicateCloneGroups.Count,
+            result.PredicateCloneGroups.Count > 0 ? result.TotalPredicateGainCharacters : null,
+            result.PredicateCloneGroups.Count > 0 ? result.TotalPredicateGainTokens : null);
 
         if (options.Incremental)
         {
@@ -239,7 +242,16 @@ public sealed class ApplyCommand : ICommand
             bool locViolation = settings.LinesOfCodeTolerance.HasValue && gatedLocViolations.Count > settings.LinesOfCodeTolerance.Value;
             bool hasLocIssue = settings.LinesOfCodeTolerance.HasValue ? locViolation : gatedLocViolations.Count > 0;
 
-            if (duplicationViolation || hasCommentIssue || hasRepeatedStringIssue || hasTypeIssue || hasLocIssue)
+            var gatedPredicates = settings.EnablePredicateCloneDetection
+                ? result.PredicateCloneGroups
+                    .Where(g => g.Category != CloneCategory.Test || settings.EnforceTestDuplication)
+                    .ToList()
+                : [];
+
+            bool predicateViolation = settings.PredicateTolerance.HasValue && gatedPredicates.Count > settings.PredicateTolerance.Value;
+            bool hasPredicateIssue = settings.PredicateTolerance.HasValue ? predicateViolation : gatedPredicates.Count > 0;
+
+            if (duplicationViolation || hasCommentIssue || hasRepeatedStringIssue || hasTypeIssue || hasLocIssue || hasPredicateIssue)
             {
                 formatter.PrintAiActionableIncrementalFeedback(
                     output,
@@ -258,7 +270,10 @@ public sealed class ApplyCommand : ICommand
                     hasTypeViolation: typeViolation,
                     linesOfCodeViolations: gatedLocViolations,
                     linesOfCodeTolerance: settings.LinesOfCodeTolerance,
-                    hasLinesOfCodeViolation: locViolation);
+                    hasLinesOfCodeViolation: locViolation,
+                    predicateGroups: gatedPredicates,
+                    predicateTolerance: settings.PredicateTolerance,
+                    hasPredicateViolation: predicateViolation);
 
                 if (duplicationViolation)
                 {
@@ -283,6 +298,11 @@ public sealed class ApplyCommand : ICommand
                 if (locViolation)
                 {
                     return settings.LinesOfCodeExitCode;
+                }
+
+                if (predicateViolation)
+                {
+                    return settings.PredicateExitCode;
                 }
             }
         }

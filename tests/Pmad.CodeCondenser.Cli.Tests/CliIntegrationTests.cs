@@ -1094,6 +1094,331 @@ public class CliIntegrationTests : IDisposable
         output.ToString().Should().NotContain("Declaration(s) Exceeding Lines of Code Thresholds");
     }
 
+    [Fact]
+    public async Task Analyze_PredicateCloneViolation_Incremental_FailsWhenOverTolerance()
+    {
+        var srcDir = Path.Combine(_testDirectory, "src");
+        Directory.CreateDirectory(srcDir);
+
+        var file1 = Path.Combine(srcDir, "ServiceA.cs");
+        var code1 = """
+            namespace MyCompany;
+            public class ServiceA
+            {
+                public void Check(int? taskId, string? stageId)
+                {
+                    if (taskId.HasValue && taskId.Value > 0 && !string.Equals(stageId, "Ideation", StringComparison.OrdinalIgnoreCase))
+                    {
+                        System.Console.WriteLine("Autonomous");
+                    }
+                }
+            }
+            """;
+        await File.WriteAllTextAsync(file1, code1);
+
+        var engine = new CodeCondenserEngine(snapshotStore: new JsonSnapshotStore());
+
+        // Step 1: establish baseline snapshot
+        var exitSnapshot = await Program.RunAsync(
+            ["snapshot", _testDirectory, "--no-color"],
+            new StringWriter(),
+            new StringWriter(),
+            customEngine: engine);
+        exitSnapshot.Should().Be(0);
+
+        // Step 2: introduce duplicate predicate in ServiceB
+        var file2 = Path.Combine(srcDir, "ServiceB.cs");
+        var code2 = """
+            namespace MyCompany;
+            public class ServiceB
+            {
+                public void Validate(int? id, string? stage)
+                {
+                    if (id.HasValue && id.Value > 0 && !string.Equals(stage, "Ideation", StringComparison.OrdinalIgnoreCase))
+                    {
+                        System.Console.WriteLine("Autonomous in B");
+                    }
+                }
+            }
+            """;
+        await File.WriteAllTextAsync(file2, code2);
+
+        using var output = new StringWriter();
+        using var error = new StringWriter();
+
+        // Step 3: Run incremental analysis with -pt 0
+        var exitCode = await Program.RunAsync(
+            ["analyze", _testDirectory, "--incremental", "-pt", "0", "--no-color", "--no-comments", "--no-duplication", "--no-loc"],
+            output,
+            error,
+            customEngine: engine);
+
+        exitCode.Should().Be(2);
+        var outputText = output.ToString();
+        outputText.Should().Contain("[AI AGENT ACTION REQUIRED] Predicate Clone Policy Violation (Exit Code: 2)");
+        outputText.Should().Contain("Incremental analysis detected 1 new predicate clone cluster(s) exceeding tolerance margin");
+        outputText.Should().Contain("ServiceA.cs");
+        outputText.Should().Contain("ServiceB.cs");
+        outputText.Should().Contain("codecondenser:ignore-predicate");
+    }
+
+    [Fact]
+    public async Task Analyze_PredicateCloneViolation_Incremental_PassesWhenWithinTolerance()
+    {
+        var srcDir = Path.Combine(_testDirectory, "src");
+        Directory.CreateDirectory(srcDir);
+
+        var file1 = Path.Combine(srcDir, "ServiceA.cs");
+        var code1 = """
+            namespace MyCompany;
+            public class ServiceA
+            {
+                public void Check(int? taskId, string? stageId)
+                {
+                    if (taskId.HasValue && taskId.Value > 0 && !string.Equals(stageId, "Ideation", StringComparison.OrdinalIgnoreCase))
+                    {
+                        System.Console.WriteLine("Autonomous");
+                    }
+                }
+            }
+            """;
+        await File.WriteAllTextAsync(file1, code1);
+
+        var engine = new CodeCondenserEngine(snapshotStore: new JsonSnapshotStore());
+
+        // Step 1: establish baseline snapshot
+        await Program.RunAsync(
+            ["snapshot", _testDirectory, "--no-color"],
+            new StringWriter(),
+            new StringWriter(),
+            customEngine: engine);
+
+        // Step 2: introduce duplicate predicate in ServiceB
+        var file2 = Path.Combine(srcDir, "ServiceB.cs");
+        var code2 = """
+            namespace MyCompany;
+            public class ServiceB
+            {
+                public void Validate(int? id, string? stage)
+                {
+                    if (id.HasValue && id.Value > 0 && !string.Equals(stage, "Ideation", StringComparison.OrdinalIgnoreCase))
+                    {
+                        System.Console.WriteLine("Autonomous in B");
+                    }
+                }
+            }
+            """;
+        await File.WriteAllTextAsync(file2, code2);
+
+        using var output = new StringWriter();
+        using var error = new StringWriter();
+
+        // Step 3: Run incremental analysis with -pt 1 (tolerance = 1 allows 1 new clone)
+        var exitCode = await Program.RunAsync(
+            ["analyze", _testDirectory, "--incremental", "-pt", "1", "--no-color", "--no-comments", "--no-duplication", "--no-loc"],
+            output,
+            error,
+            customEngine: engine);
+
+        exitCode.Should().Be(0);
+        output.ToString().Should().NotContain("[AI AGENT ACTION REQUIRED]");
+    }
+
+    [Fact]
+    public async Task Analyze_PredicateCloneViolation_Incremental_DetectsNewUseOfExistingBaselineHelper()
+    {
+        var srcDir = Path.Combine(_testDirectory, "src");
+        Directory.CreateDirectory(srcDir);
+
+        var helperFile = Path.Combine(srcDir, "Helper.cs");
+        var helperCode = """
+            namespace MyCompany;
+            public static class Helper
+            {
+                public static bool IsAutonomous(int? id, string? stage) =>
+                    id.HasValue && id.Value > 0 && !string.Equals(stage, "Ideation", StringComparison.OrdinalIgnoreCase);
+            }
+            """;
+        await File.WriteAllTextAsync(helperFile, helperCode);
+
+        var engine = new CodeCondenserEngine(snapshotStore: new JsonSnapshotStore());
+
+        // Step 1: establish baseline snapshot (captures helper signature)
+        var exitSnapshot = await Program.RunAsync(
+            ["snapshot", _testDirectory, "--no-color"],
+            new StringWriter(),
+            new StringWriter(),
+            customEngine: engine);
+        exitSnapshot.Should().Be(0);
+
+        // Step 2: introduce a new file with inline condition matching existing helper
+        var consumerFile = Path.Combine(srcDir, "Consumer.cs");
+        var consumerCode = """
+            namespace MyCompany;
+            public class Consumer
+            {
+                public void Run(int? taskId, string? stageName)
+                {
+                    if (taskId.HasValue && taskId.Value > 0 && !string.Equals(stageName, "Ideation", StringComparison.OrdinalIgnoreCase))
+                    {
+                        System.Console.WriteLine("Autonomous match");
+                    }
+                }
+            }
+            """;
+        await File.WriteAllTextAsync(consumerFile, consumerCode);
+
+        using var output = new StringWriter();
+        using var error = new StringWriter();
+
+        // Step 3: Run incremental analysis with -pt 0
+        var exitCode = await Program.RunAsync(
+            ["analyze", _testDirectory, "--incremental", "-pt", "0", "--no-color", "--no-comments", "--no-duplication", "--no-loc"],
+            output,
+            error,
+            customEngine: engine);
+
+        exitCode.Should().Be(2);
+        var outputText = output.ToString();
+        outputText.Should().Contain("[AI AGENT ACTION REQUIRED] Predicate Clone Policy Violation (Exit Code: 2)");
+        outputText.Should().Contain("IsAutonomous");
+        outputText.Should().Contain("Consumer.cs");
+    }
+
+    [Fact]
+    public async Task Analyze_PredicateClone_NoPredicatesFlag_IgnoresViolations()
+    {
+        var srcDir = Path.Combine(_testDirectory, "src");
+        Directory.CreateDirectory(srcDir);
+
+        var code = """
+            namespace MyCompany;
+            public class ServiceA
+            {
+                public void Check(int? taskId, string? stageId)
+                {
+                    if (taskId.HasValue && taskId.Value > 0 && !string.Equals(stageId, "Ideation", StringComparison.OrdinalIgnoreCase))
+                    {
+                        System.Console.WriteLine("Autonomous");
+                    }
+                }
+                public void Validate(int? id, string? stage)
+                {
+                    if (id.HasValue && id.Value > 0 && !string.Equals(stage, "Ideation", StringComparison.OrdinalIgnoreCase))
+                    {
+                        System.Console.WriteLine("Autonomous in B");
+                    }
+                }
+            }
+            """;
+        await File.WriteAllTextAsync(Path.Combine(srcDir, "ServiceA.cs"), code);
+
+        using var output = new StringWriter();
+        using var error = new StringWriter();
+
+        var exitCode = await Program.RunAsync(
+            ["analyze", _testDirectory, "--no-predicates", "--no-color", "--no-comments", "--no-duplication", "--no-loc"],
+            output,
+            error);
+
+        exitCode.Should().Be(0);
+        output.ToString().Should().NotContain("predicate clone group(s)");
+        output.ToString().Should().NotContain("CC010");
+        output.ToString().Should().NotContain("CC011");
+    }
+
+    [Fact]
+    public async Task Analyze_PredicateCloneViolation_Incremental_ExistingHelperMatchInBaseline_DoesNotFailWhenTouchingUnrelatedLine()
+    {
+        var srcDir = Path.Combine(_testDirectory, "src");
+        Directory.CreateDirectory(srcDir);
+
+        var helperFile = Path.Combine(srcDir, "Helper.cs");
+        var helperCode = """
+            namespace MyCompany;
+            public static class Helper
+            {
+                public static bool IsAutonomous(int? id, string? stage) =>
+                    id.HasValue && id.Value > 0 && !string.Equals(stage, "Ideation", StringComparison.OrdinalIgnoreCase);
+            }
+            """;
+        await File.WriteAllTextAsync(helperFile, helperCode);
+
+        var consumerFile = Path.Combine(srcDir, "Consumer.cs");
+        var consumerCode = """
+            namespace MyCompany;
+            public class Consumer
+            {
+                public void Run(int? taskId, string? stageName)
+                {
+                    if (taskId.HasValue && taskId.Value > 0 && !string.Equals(stageName, "Ideation", StringComparison.OrdinalIgnoreCase))
+                    {
+                        System.Console.WriteLine("Autonomous match");
+                    }
+                }
+            }
+            """;
+        await File.WriteAllTextAsync(consumerFile, consumerCode);
+
+        var engine = new CodeCondenserEngine(snapshotStore: new JsonSnapshotStore());
+
+        // Step 1: establish baseline snapshot (records both Helper.cs and existing Consumer.cs call site)
+        var exitSnapshot = await Program.RunAsync(
+            ["snapshot", _testDirectory, "--no-color"],
+            new StringWriter(),
+            new StringWriter(),
+            customEngine: engine);
+        exitSnapshot.Should().Be(0);
+
+        // Step 2: modify Consumer.cs with an unrelated comment or method
+        var modifiedConsumerCode = consumerCode + "\n// Unrelated edit at bottom of file\n";
+        await File.WriteAllTextAsync(consumerFile, modifiedConsumerCode);
+
+        using var output1 = new StringWriter();
+        using var error1 = new StringWriter();
+
+        // Step 3: Run incremental analysis with -pt 0. Must NOT fail because Consumer.cs had this predicate in baseline!
+        var exitCode1 = await Program.RunAsync(
+            ["analyze", _testDirectory, "--incremental", "-pt", "0", "--no-color", "--no-comments", "--no-duplication", "--no-loc"],
+            output1,
+            error1,
+            customEngine: engine);
+
+        exitCode1.Should().Be(0);
+        output1.ToString().Should().NotContain("[AI AGENT ACTION REQUIRED]");
+
+        // Step 4: Now add a brand NEW file with the inline condition
+        var newConsumerFile = Path.Combine(srcDir, "NewConsumer.cs");
+        var newConsumerCode = """
+            namespace MyCompany;
+            public class NewConsumer
+            {
+                public void Execute(int? x, string? s)
+                {
+                    if (x.HasValue && x.Value > 0 && !string.Equals(s, "Ideation", StringComparison.OrdinalIgnoreCase))
+                    {
+                        System.Console.WriteLine("Brand new violation");
+                    }
+                }
+            }
+            """;
+        await File.WriteAllTextAsync(newConsumerFile, newConsumerCode);
+
+        using var output2 = new StringWriter();
+        using var error2 = new StringWriter();
+
+        // Step 5: Run incremental analysis with -pt 0. Must FAIL because NewConsumer.cs was not in baseline!
+        var exitCode2 = await Program.RunAsync(
+            ["analyze", _testDirectory, "--incremental", "-pt", "0", "--no-color", "--no-comments", "--no-duplication", "--no-loc"],
+            output2,
+            error2,
+            customEngine: engine);
+
+        exitCode2.Should().Be(2);
+        output2.ToString().Should().Contain("[AI AGENT ACTION REQUIRED]");
+        output2.ToString().Should().Contain("NewConsumer.cs");
+    }
+
     private sealed class SettingsCapturingSummarizer : ICommentSummarizer
     {
         private readonly Action<CodeCondenserSettings> _onSummarize;

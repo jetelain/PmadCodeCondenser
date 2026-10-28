@@ -588,6 +588,35 @@ public class SnapshotDifferTests : IDisposable
         snapshot.LinesOfCodeViolationKeys.Should().Contain("src/B.cs::Class::B");
     }
 
+    [Fact]
+    public void CreateOrUpdateSnapshot_StoresAndPreservesPredicateCloneKeys()
+    {
+        var baseline = new AnalysisSnapshot
+        {
+            Files =
+            {
+                ["src/A.cs"] = new FileSnapshotInfo { FileHash = "h1" }
+            },
+            PredicateCloneKeys =
+            {
+                "src/A.cs::$0.Value > 0 && global::System.String.Equals($1, \"test\")"
+            }
+        };
+
+        var snapshot = _differ.CreateOrUpdateSnapshot(
+            baseline: baseline,
+            currentFileHashes: new Dictionary<string, string> { ["src/A.cs"] = "h1", ["src/B.cs"] = "h2" },
+            analyzedMethods: [],
+            commentCache: new Dictionary<string, string>(),
+            typeViolationFiles: [],
+            linesOfCodeViolationKeys: [],
+            predicateCloneKeys: ["src/B.cs::$0.IsValid"],
+            isIncremental: true);
+
+        snapshot.PredicateCloneKeys.Should().Contain("src/A.cs::$0.Value > 0 && global::System.String.Equals($1, \"test\")");
+        snapshot.PredicateCloneKeys.Should().Contain("src/B.cs::$0.IsValid");
+    }
+
     public void Dispose()
     {
         if (Directory.Exists(_tempDir))

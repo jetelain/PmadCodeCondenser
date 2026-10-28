@@ -967,4 +967,96 @@ public class ConsoleFormatterTests
         output.Should().Contain("Methods: Refactor large methods into smaller helpers using Extract Method pattern.");
         output.Should().Contain("[SuppressMessage(\"CodeCondenser\", \"MethodLength\")]");
     }
+
+    [Fact]
+    public void PrintPredicateCloneGroups_WithExistingHelper_PrintsHelperCallSitesAndReplacement()
+    {
+        var formatter = new ConsoleFormatter(enableColor: false);
+        using var writer = new StringWriter();
+
+        var helper = new PredicateHelperInfo
+        {
+            HelperName = "IsAutonomousTask",
+            DeclaringTypeName = "TaskHelper",
+            IsStatic = true
+        };
+
+        var occ = new PredicateOccurrence
+        {
+            FilePath = "src/Consumer.cs",
+            StartLine = 15,
+            EndLine = 15,
+            StartColumn = 10,
+            EndColumn = 60,
+            ExpressionText = "taskId.HasValue && taskId.Value > 0",
+            NormalizedSignature = "$0.HasValue && $0.Value > CONST",
+            NormalizedHash = 12345,
+            ArgumentExpressions = ["taskId"]
+        };
+
+        var group = new PredicateCloneGroup
+        {
+            NormalizedSignature = "$0.HasValue && $0.Value > CONST",
+            Occurrences = [occ],
+            Category = CloneCategory.Production,
+            ExistingHelper = helper,
+            SuggestedHelperName = "IsAutonomousTask"
+        };
+
+        formatter.PrintPredicateCloneGroups(writer, [group], ".");
+        var output = writer.ToString();
+
+        output.Should().Contain("Found 1 Predicate / Boolean Condition Clone Cluster(s):");
+        output.Should().Contain("Matches 'IsAutonomousTask'");
+        output.Should().Contain("TaskHelper.static IsAutonomousTask");
+        output.Should().Contain("src/Consumer.cs:15:10");
+        output.Should().Contain("IsAutonomousTask(taskId)");
+    }
+
+    [Fact]
+    public void PrintAiActionableIncrementalFeedback_WithPredicateViolation_OutputsDistinctActionableInstructions()
+    {
+        var formatter = new ConsoleFormatter(enableColor: false);
+        using var writer = new StringWriter();
+
+        var occ1 = new PredicateOccurrence
+        {
+            FilePath = "src/A.cs",
+            StartLine = 10,
+            EndLine = 10,
+            StartColumn = 15,
+            EndColumn = 60,
+            ExpressionText = "a > 0 && b < 100",
+            NormalizedSignature = "$0 > CONST && $1 < CONST",
+            NormalizedHash = 55555,
+            ArgumentExpressions = ["a", "b"]
+        };
+
+        var group = new PredicateCloneGroup
+        {
+            NormalizedSignature = "$0 > CONST && $1 < CONST",
+            Occurrences = [occ1],
+            Category = CloneCategory.Production,
+            SuggestedHelperName = "IsValidRange",
+            SuggestedClassName = "PredicateHelpers"
+        };
+
+        formatter.PrintAiActionableIncrementalFeedback(
+            writer,
+            cloneGroups: [],
+            subMethodGroups: [],
+            verboseComments: [],
+            baseDirectory: ".",
+            duplicationTolerance: 0,
+            hasDuplicationViolation: false,
+            predicateGroups: [group],
+            predicateTolerance: 0,
+            hasPredicateViolation: true);
+
+        var output = writer.ToString();
+        output.Should().Contain("[AI AGENT ACTION REQUIRED] Predicate Clone Policy Violation (Exit Code: 2)");
+        output.Should().Contain("Incremental analysis detected 1 new predicate clone cluster(s)");
+        output.Should().Contain("src/A.cs:10:15");
+        output.Should().Contain("codecondenser:ignore-predicate");
+    }
 }

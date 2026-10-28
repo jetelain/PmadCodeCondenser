@@ -242,6 +242,31 @@ public sealed class CommandServices
             settings.LinesOfCodeTolerance = options.LinesOfCodeTolerance.Value;
         }
 
+        if (options.EnablePredicateCloneDetection.HasValue)
+        {
+            settings.EnablePredicateCloneDetection = options.EnablePredicateCloneDetection.Value;
+        }
+
+        if (options.PredicateLengthThreshold.HasValue)
+        {
+            settings.PredicateLengthThreshold = options.PredicateLengthThreshold.Value;
+        }
+
+        if (options.ExistingHelperPredicateLengthThreshold.HasValue)
+        {
+            settings.ExistingHelperPredicateLengthThreshold = options.ExistingHelperPredicateLengthThreshold.Value;
+        }
+
+        if (options.PredicateMinOccurrences.HasValue)
+        {
+            settings.PredicateMinOccurrences = options.PredicateMinOccurrences.Value;
+        }
+
+        if (options.PredicateTolerance.HasValue)
+        {
+            settings.PredicateTolerance = options.PredicateTolerance.Value;
+        }
+
         if (!string.IsNullOrWhiteSpace(options.SummarizedCommentsPath))
         {
             settings.SummarizedCommentsFilePath = options.SummarizedCommentsPath;

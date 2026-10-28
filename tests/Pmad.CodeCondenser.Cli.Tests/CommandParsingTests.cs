@@ -329,4 +329,36 @@ public class CommandParsingTests
         options.ClassLinesOfCodeThreshold.Should().Be(1200);
         options.LinesOfCodeTolerance.Should().Be(3);
     }
+
+    [Fact]
+    public void Parse_PredicateFlags_BindsCorrectly()
+    {
+        var (root, globals) = CreateRoot();
+        var parseResult = root.Parse(["analyze", "--no-predicates", "--threshold-predicates", "30", "--threshold-existing-helpers", "15", "--predicate-occurrences", "3", "--predicate-tolerance", "0"]);
+
+        parseResult.Errors.Should().BeEmpty();
+        var options = globals.BindCliOptions(parseResult, CliOptions.CommandAnalyze, ".");
+
+        options.EnablePredicateCloneDetection.Should().BeFalse();
+        options.PredicateLengthThreshold.Should().Be(30);
+        options.ExistingHelperPredicateLengthThreshold.Should().Be(15);
+        options.PredicateMinOccurrences.Should().Be(3);
+        options.PredicateTolerance.Should().Be(0);
+    }
+
+    [Fact]
+    public void Parse_PredicateAliases_BindsCorrectly()
+    {
+        var (root, globals) = CreateRoot();
+        var parseResult = root.Parse(["analyze", "--enable-predicates", "-tpred", "25", "-thelp", "20", "-po", "2", "-pt", "1"]);
+
+        parseResult.Errors.Should().BeEmpty();
+        var options = globals.BindCliOptions(parseResult, CliOptions.CommandAnalyze, ".");
+
+        options.EnablePredicateCloneDetection.Should().BeTrue();
+        options.PredicateLengthThreshold.Should().Be(25);
+        options.ExistingHelperPredicateLengthThreshold.Should().Be(20);
+        options.PredicateMinOccurrences.Should().Be(2);
+        options.PredicateTolerance.Should().Be(1);
+    }
 }

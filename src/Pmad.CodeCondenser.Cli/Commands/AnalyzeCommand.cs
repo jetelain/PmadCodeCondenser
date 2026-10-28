@@ -213,7 +213,16 @@ public sealed class AnalyzeCommand : ICommand
             bool locViolation = settings.LinesOfCodeTolerance.HasValue && gatedLocViolations.Count > settings.LinesOfCodeTolerance.Value;
             bool hasLocIssue = settings.LinesOfCodeTolerance.HasValue ? locViolation : gatedLocViolations.Count > 0;
 
-            if (duplicationViolation || hasCommentIssue || hasRepeatedStringIssue || hasTypeIssue || hasLocIssue)
+            var gatedPredicates = settings.EnablePredicateCloneDetection
+                ? result.PredicateCloneGroups
+                    .Where(g => g.Category != CloneCategory.Test || settings.EnforceTestDuplication)
+                    .ToList()
+                : [];
+
+            bool predicateViolation = settings.PredicateTolerance.HasValue && gatedPredicates.Count > settings.PredicateTolerance.Value;
+            bool hasPredicateIssue = settings.PredicateTolerance.HasValue ? predicateViolation : gatedPredicates.Count > 0;
+
+            if (duplicationViolation || hasCommentIssue || hasRepeatedStringIssue || hasTypeIssue || hasLocIssue || hasPredicateIssue)
             {
                 formatter.PrintAiActionableIncrementalFeedback(
                     statusWriter,
@@ -232,7 +241,10 @@ public sealed class AnalyzeCommand : ICommand
                     hasTypeViolation: typeViolation,
                     linesOfCodeViolations: gatedLocViolations,
                     linesOfCodeTolerance: settings.LinesOfCodeTolerance,
-                    hasLinesOfCodeViolation: locViolation);
+                    hasLinesOfCodeViolation: locViolation,
+                    predicateGroups: gatedPredicates,
+                    predicateTolerance: settings.PredicateTolerance,
+                    hasPredicateViolation: predicateViolation);
 
                 if (duplicationViolation)
                 {
@@ -257,6 +269,11 @@ public sealed class AnalyzeCommand : ICommand
                 if (locViolation)
                 {
                     return settings.LinesOfCodeExitCode;
+                }
+
+                if (predicateViolation)
+                {
+                    return settings.PredicateExitCode;
                 }
             }
         }

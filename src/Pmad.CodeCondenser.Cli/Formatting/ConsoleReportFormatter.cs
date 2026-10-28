@@ -49,6 +49,10 @@ public sealed class ConsoleReportFormatter : IReportFormatter
         {
             _consoleFormatter.PrintLinesOfCodeViolations(output, result.LinesOfCodeViolations, baseDirectory);
         }
+        if (result.PredicateCloneGroups.Count > 0)
+        {
+            _consoleFormatter.PrintPredicateCloneGroups(output, result.PredicateCloneGroups, baseDirectory, estimator);
+        }
         _consoleFormatter.PrintVerboseComments(output, result.VerboseComments, result.SummarizedComments, baseDirectory, estimator);
 
         var mode = _isIncremental ? "Dry-Run (Incremental)" : "Dry-Run";
@@ -62,6 +66,9 @@ public sealed class ConsoleReportFormatter : IReportFormatter
 
         int? repeatedStringGainChars = result.RepeatedStringGroups.Count > 0 ? result.TotalRepeatedStringGainCharacters : null;
         int? repeatedStringGainTokens = result.RepeatedStringGroups.Count > 0 ? result.TotalRepeatedStringGainTokens : null;
+
+        int? predicateGainChars = result.PredicateCloneGroups.Count > 0 ? result.TotalPredicateGainCharacters : null;
+        int? predicateGainTokens = result.PredicateCloneGroups.Count > 0 ? result.TotalPredicateGainTokens : null;
 
         _consoleFormatter.PrintSummary(
             output,
@@ -84,7 +91,10 @@ public sealed class ConsoleReportFormatter : IReportFormatter
             repeatedStringGainChars: repeatedStringGainChars,
             repeatedStringGainTokens: repeatedStringGainTokens,
             typeIssuesCount: result.TypeFileIssues.Count(i => i.HasViolation),
-            linesOfCodeViolationsCount: result.LinesOfCodeViolations.Count);
+            linesOfCodeViolationsCount: result.LinesOfCodeViolations.Count,
+            predicateGroupsCount: result.PredicateCloneGroups.Count,
+            predicateGainChars: predicateGainChars,
+            predicateGainTokens: predicateGainTokens);
 
         return Task.CompletedTask;
     }
