@@ -15,7 +15,7 @@ public sealed class MinByMaxByRule : CondensationPatternRuleBase<InvocationExpre
 
     private static readonly HashSet<string> TerminalMethods = new(StringComparer.Ordinal)
     {
-        "First", "FirstOrDefault", "Last", "LastOrDefault"
+        "First", "FirstOrDefault"
     };
 
     /// <inheritdoc />
@@ -79,9 +79,7 @@ public sealed class MinByMaxByRule : CondensationPatternRuleBase<InvocationExpre
             return false;
         }
 
-        bool isFirst = terminalName.StartsWith("First", StringComparison.Ordinal);
-        bool isMin = (isAscending && isFirst) || (isDescending && !isFirst);
-        var targetMethodName = isMin ? "MinBy" : "MaxBy";
+        var targetMethodName = isAscending ? "MinBy" : "MaxBy";
 
         var receiver = innerMemberAccess.Expression;
         var argsText = string.Join(", ", innerInvocation.ArgumentList.Arguments.Select(a => a.ToString()));

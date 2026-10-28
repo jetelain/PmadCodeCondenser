@@ -109,6 +109,37 @@ public class PatternDetectorAndRewriterTests
     }
 
     [Fact]
+    public void DetectCandidates_SettingsTfmOverride_PrecedesInferredProjectTfm()
+    {
+        var code = """
+            namespace Demo;
+
+            public class Service
+            {
+                public void Process(string input)
+                {
+                    if (input == null)
+                        throw new ArgumentNullException(nameof(input));
+
+                    var clean = input.Replace("\r\n", "\n").Replace("\r", "\n");
+                }
+            }
+            """;
+
+        var tree = CSharpSyntaxTree.ParseText(code);
+        var settingsWithNet5 = new CodeCondenserSettings
+        {
+            TargetDotNetVersion = "net5.0" // Override framework version
+        };
+
+        // Even if inferred project version is 10.0, user setting override 5.0 takes precedence!
+        var candidates = _detector.DetectCandidates(tree, "Service.cs", settingsWithNet5, targetDotNetVersion: new Version(10, 0));
+
+        // In .NET 5, neither ThrowIfNull (net6.0) nor ReplaceLineEndings (net6.0) is supported!
+        Assert.Empty(candidates);
+    }
+
+    [Fact]
     public void DetectCandidates_And_Rewrite_WithNewRules_WorksEndToEnd()
     {
         var code = """
@@ -128,8 +159,6 @@ public class PatternDetectorAndRewriterTests
                     var isWidget = obj != null && obj is string;
 
                     var resolved = arg != null ? arg : fallback;
-
-                    var isEmpty = arg == null || arg.Length == 0;
                 }
             }
             """;
@@ -137,13 +166,12 @@ public class PatternDetectorAndRewriterTests
         var tree = CSharpSyntaxTree.ParseText(code);
         var candidates = _detector.DetectCandidates(tree, "ExtendedService.cs", _settings, targetDotNetVersion: new Version(10, 0));
 
-        Assert.Equal(6, candidates.Count);
+        Assert.Equal(5, candidates.Count);
         Assert.Contains(candidates, c => c.RuleId == "PCC405");
         Assert.Contains(candidates, c => c.RuleId == "PCC406");
         Assert.Contains(candidates, c => c.RuleId == "PCC407");
         Assert.Contains(candidates, c => c.RuleId == "PCC408");
         Assert.Contains(candidates, c => c.RuleId == "PCC409");
-        Assert.Contains(candidates, c => c.RuleId == "PCC410");
 
         var rewritten = _rewriter.Rewrite(tree, "ExtendedService.cs", _settings, targetDotNetVersion: new Version(10, 0));
         var newCode = rewritten.GetRoot().ToFullString();
@@ -153,6 +181,5 @@ public class PatternDetectorAndRewriterTests
         Assert.Contains("numbers.MinBy(x => x)", newCode);
         Assert.Contains("obj is string", newCode);
         Assert.Contains("arg ?? fallback", newCode);
-        Assert.Contains("string.IsNullOrEmpty(arg)", newCode);
     }
 }

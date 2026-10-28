@@ -102,7 +102,13 @@ public sealed class ThrowIfNullRule : CondensationPatternRuleBase<IfStatementSyn
 
         // Validate argument to ArgumentNullException constructor
         var args = creation.ArgumentList?.Arguments ?? default;
-        if (args.Count > 0)
+        if (args.Count > 1)
+        {
+            // Custom message or inner exception is specified; ThrowIfNull does not support custom messages
+            return false;
+        }
+
+        if (args.Count == 1)
         {
             var firstArg = args[0].Expression;
             if (firstArg is InvocationExpressionSyntax nameofInvocation &&

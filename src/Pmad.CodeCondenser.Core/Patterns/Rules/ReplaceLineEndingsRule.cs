@@ -86,6 +86,16 @@ public sealed class ReplaceLineEndingsRule : CondensationPatternRuleBase<Invocat
             return false;
         }
 
+        var outerLiteral = GetLiteralString(outerArg1);
+        bool isEnvNewline = outerReplText.Equals("Environment.NewLine", StringComparison.Ordinal) ||
+                            outerReplText.Equals("System.Environment.NewLine", StringComparison.Ordinal);
+        bool isStandardNewlineLiteral = outerLiteral is "\n" or "\r\n";
+
+        if (!isEnvNewline && !isStandardNewlineLiteral)
+        {
+            return false;
+        }
+
         var receiver = innerMemberAccess.Expression;
         var receiverText = receiver.ToString();
 
@@ -93,8 +103,7 @@ public sealed class ReplaceLineEndingsRule : CondensationPatternRuleBase<Invocat
         ArgumentListSyntax newArgList;
         string suggestedCode;
 
-        if (outerReplText.Equals("Environment.NewLine", StringComparison.Ordinal) ||
-            outerReplText.Equals("System.Environment.NewLine", StringComparison.Ordinal))
+        if (isEnvNewline)
         {
             newArgList = SyntaxFactory.ArgumentList();
             suggestedCode = $"{receiverText}.ReplaceLineEndings()";

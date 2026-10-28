@@ -86,4 +86,27 @@ public class LinqWhereSimplificationRuleTests
         Assert.NotNull(match);
         Assert.Equal("items.FirstOrDefault(x => x.Id == 1)", match.SuggestedCode);
     }
+
+    [Fact]
+    public void TryMatch_WhereWithIndexLambda_DoesNotMatch()
+    {
+        var code = """
+            var item = items.Where((x, i) => i > 0 && x.Id == 1).Any();
+            """;
+
+        var tree = CSharpSyntaxTree.ParseText(code);
+        var root = tree.GetRoot();
+        var context = new CondensationContext
+        {
+            SyntaxTree = tree,
+            FilePath = "Test.cs",
+            Settings = _settings
+        };
+
+        var outerInvocation = root.DescendantNodes().OfType<InvocationExpressionSyntax>().First();
+        var matched = _rule.TryMatch(outerInvocation, context, out var match);
+
+        Assert.False(matched);
+        Assert.Null(match);
+    }
 }

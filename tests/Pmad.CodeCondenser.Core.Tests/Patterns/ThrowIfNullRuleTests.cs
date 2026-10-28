@@ -93,4 +93,29 @@ public class ThrowIfNullRuleTests
         Assert.False(matched);
         Assert.Null(match);
     }
+
+    [Fact]
+    public void TryMatch_CustomErrorMessage_DoesNotMatch()
+    {
+        var code = """
+            if (argument == null)
+                throw new ArgumentNullException(nameof(argument), "Must not be null");
+            """;
+
+        var tree = CSharpSyntaxTree.ParseText(code);
+        var root = tree.GetRoot();
+        var context = new CondensationContext
+        {
+            SyntaxTree = tree,
+            FilePath = "Test.cs",
+            Settings = _settings,
+            TargetDotNetVersion = new Version(8, 0)
+        };
+
+        var ifStmt = root.DescendantNodes().OfType<IfStatementSyntax>().First();
+        var matched = _rule.TryMatch(ifStmt, context, out var match);
+
+        Assert.False(matched);
+        Assert.Null(match);
+    }
 }

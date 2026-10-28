@@ -188,7 +188,6 @@ codecondenser report ./src --pattern-rules PCC401,PCC402,PCC405
 | **`PCC407`** | Use MinBy or MaxBy | Linq | .NET 6.0 | `items.OrderBy(x => x.Price).FirstOrDefault()` | `items.MinBy(x => x.Price)` |
 | **`PCC408`** | Simplify Redundant Null Check Before Is | Predicate | Any | `x != null && x is Widget` | `x is Widget` |
 | **`PCC409`** | Use Null-Coalescing Operator | Language | Any | `x != null ? x : fallback` | `x ?? fallback` |
-| **`PCC410`** | Use String.IsNullOrEmpty | Predicate | Any | `s == null || s.Length == 0` | `string.IsNullOrEmpty(s)` |
 
 ### Scenario G: Incremental Analysis (Modified Files Only)
 

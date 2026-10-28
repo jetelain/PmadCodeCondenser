@@ -646,7 +646,7 @@ public sealed class ConsoleFormatter : IConsoleFormatter
             var gainParts = new List<string>();
             if (gainChars > 0) gainParts.Add($"~{gainChars} chars");
             if (gainTokens > 0) gainParts.Add($"~{gainTokens} tokens");
-            var gainText = gainParts.Count > 0 ? $" (~{string.Join(", ", gainParts)} saved)" : string.Empty;
+            var gainText = gainParts.Count > 0 ? $" ({string.Join(", ", gainParts)} saved)" : string.Empty;
 
             writer.WriteLine(Cyan($"[CANDIDATE #{i + 1}] [{candidate.RuleId}] {candidate.RuleName}{gainText}:"));
             writer.WriteLine($"  Location:    {Cyan(relPath)}:{candidate.StartLine}:{candidate.StartColumn}");

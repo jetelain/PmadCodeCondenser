@@ -43,7 +43,7 @@ public sealed class PatternDetector : IPatternDetector
             return [];
         }
 
-        var effectiveVersion = targetDotNetVersion ?? settings.GetParsedTargetDotNetVersion();
+        var effectiveVersion = settings.GetParsedTargetDotNetVersion() ?? targetDotNetVersion;
         var rules = _registry.GetEnabledRules(settings, effectiveVersion);
         if (rules.Count == 0)
         {

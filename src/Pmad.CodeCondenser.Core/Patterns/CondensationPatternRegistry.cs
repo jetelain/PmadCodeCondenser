@@ -27,8 +27,7 @@ public sealed class CondensationPatternRegistry : ICondensationPatternRegistry
             new StringContainsComparisonRule(),
             new MinByMaxByRule(),
             new RedundantNullCheckWithIsRule(),
-            new TernaryNullCoalescingRule(),
-            new NullOrEmptyCheckRule()
+            new TernaryNullCoalescingRule()
         ]);
         return registry;
     }

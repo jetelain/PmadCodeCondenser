@@ -72,7 +72,10 @@ public sealed class TernaryNullCoalescingRule : CondensationPatternRuleBase<Cond
         }
 
         var cleanTarget = StripParens(target).WithoutTrivia();
-        var cleanFallback = StripParens(fallback).WithoutTrivia();
+        var innerFallback = StripParens(fallback).WithoutTrivia();
+        ExpressionSyntax cleanFallback = innerFallback is ConditionalExpressionSyntax or BinaryExpressionSyntax or AssignmentExpressionSyntax
+            ? SyntaxFactory.ParenthesizedExpression(innerFallback)
+            : innerFallback;
 
         var replacementNode = SyntaxFactory.BinaryExpression(
             SyntaxKind.CoalesceExpression,

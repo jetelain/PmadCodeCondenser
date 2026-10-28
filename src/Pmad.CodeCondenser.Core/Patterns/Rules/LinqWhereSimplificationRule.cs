@@ -70,6 +70,20 @@ public sealed class LinqWhereSimplificationRule : CondensationPatternRuleBase<In
         var receiver = innerMemberAccess.Expression;
         var predicateArg = innerInvocation.ArgumentList.Arguments[0];
 
+        // Terminal methods (Any, Count, First, etc.) only accept Func<T, bool>, not indexed Func<T, int, bool>
+        if (predicateArg.Expression is ParenthesizedLambdaExpressionSyntax parenthesizedLambda &&
+            parenthesizedLambda.ParameterList.Parameters.Count > 1)
+        {
+            return false;
+        }
+
+        if (predicateArg.Expression is AnonymousMethodExpressionSyntax anonMethod &&
+            anonMethod.ParameterList != null &&
+            anonMethod.ParameterList.Parameters.Count > 1)
+        {
+            return false;
+        }
+
         var suggestedCode = $"{receiver}.{terminalName}({predicateArg.Expression})";
 
         var replacementNode = SyntaxFactory.InvocationExpression(

@@ -83,13 +83,17 @@ public static partial class ProjectTargetFrameworkResolver
         return null;
     }
 
-    private static Version? ParseTfmVersion(string tfm)
+    /// <summary>
+    /// Parses target framework version from a TFM string (e.g. "net10.0", "net8.0-windows", "net48", "netstandard2.0").
+    /// </summary>
+    public static Version? ParseTfmVersion(string? tfm)
     {
-        var text = tfm.Trim();
-        if (text.StartsWith("net", StringComparison.OrdinalIgnoreCase))
+        if (string.IsNullOrWhiteSpace(tfm))
         {
-            text = text[3..];
+            return null;
         }
+
+        var text = tfm.Trim();
 
         // Filter out windows/android suffix e.g. net8.0-windows
         var dashIdx = text.IndexOf('-', StringComparison.Ordinal);
@@ -98,14 +102,48 @@ public static partial class ProjectTargetFrameworkResolver
             text = text[..dashIdx];
         }
 
+        if (text.StartsWith("netcoreapp", StringComparison.OrdinalIgnoreCase))
+        {
+            var verText = text[10..];
+            return Version.TryParse(verText, out var v) ? v : null;
+        }
+
+        if (text.StartsWith("netstandard", StringComparison.OrdinalIgnoreCase))
+        {
+            var verText = text[11..];
+            return Version.TryParse(verText, out var v) ? v : null;
+        }
+
+        if (text.StartsWith("net", StringComparison.OrdinalIgnoreCase))
+        {
+            text = text[3..];
+        }
+
+        // Handle .NET Framework 4.x / 3.x / 2.x without dots, e.g. "48" -> 4.8, "472" -> 4.7.2, "35" -> 3.5
+        if (text.Length is 2 or 3 && char.IsDigit(text[0]) && char.IsDigit(text[1]))
+        {
+            var major = text[0] - '0';
+            var minor = text[1] - '0';
+            if (major is 2 or 3 or 4)
+            {
+                if (text.Length == 3 && char.IsDigit(text[2]))
+                {
+                    var build = text[2] - '0';
+                    return new Version(major, minor, build);
+                }
+
+                return new Version(major, minor);
+            }
+        }
+
         if (Version.TryParse(text, out var ver))
         {
             return ver;
         }
 
-        if (int.TryParse(text, out var major))
+        if (int.TryParse(text, out var modernMajor) && modernMajor >= 5)
         {
-            return new Version(major, 0);
+            return new Version(modernMajor, 0);
         }
 
         return null;

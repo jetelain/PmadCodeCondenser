@@ -603,28 +603,7 @@ public sealed class CodeCondenserSettings
     /// </summary>
     public Version? GetParsedTargetDotNetVersion()
     {
-        if (string.IsNullOrWhiteSpace(TargetDotNetVersion))
-        {
-            return null;
-        }
-
-        var text = TargetDotNetVersion.Trim();
-        if (text.StartsWith("net", StringComparison.OrdinalIgnoreCase))
-        {
-            text = text[3..];
-        }
-
-        if (Version.TryParse(text, out var ver))
-        {
-            return ver;
-        }
-
-        if (int.TryParse(text, out var major))
-        {
-            return new Version(major, 0);
-        }
-
-        return null;
+        return Patterns.ProjectTargetFrameworkResolver.ParseTfmVersion(TargetDotNetVersion);
     }
 
     /// When true, includes XML documentation comments (///) in addition to single-line (//) and multi-line (/* */) comments.

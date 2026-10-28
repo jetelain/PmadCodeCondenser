@@ -77,25 +77,65 @@ public static class PatternIgnoreMarker
                 var text = trivia.ToFullString();
                 foreach (var marker in CommentMarkerPatterns)
                 {
-                    var idx = text.IndexOf(marker, StringComparison.OrdinalIgnoreCase);
-                    if (idx >= 0)
+                    int startIdx = 0;
+                    while (startIdx < text.Length)
                     {
+                        var idx = text.IndexOf(marker, startIdx, StringComparison.OrdinalIgnoreCase);
+                        if (idx < 0)
+                        {
+                            break;
+                        }
+
+                        var afterMarkerIdx = idx + marker.Length;
+                        // Verify that the marker is not followed by an identifier character (e.g. '-' or alphanumeric)
+                        if (afterMarkerIdx < text.Length)
+                        {
+                            var nextChar = text[afterMarkerIdx];
+                            if (char.IsLetterOrDigit(nextChar) || nextChar == '-')
+                            {
+                                startIdx = afterMarkerIdx;
+                                continue;
+                            }
+                        }
+
+                        // Valid marker match found!
                         if (string.IsNullOrWhiteSpace(ruleId))
                         {
                             return true;
                         }
 
-                        // Check if specific ruleId is specified or if general ignore
-                        var remainder = text[(idx + marker.Length)..].Trim();
-                        if (remainder.Length == 0 || remainder.StartsWith(':') && remainder.Contains(ruleId, StringComparison.OrdinalIgnoreCase))
+                        // Check what follows the marker
+                        var remainder = text[afterMarkerIdx..].Trim();
+                        if (remainder.StartsWith("*/", StringComparison.Ordinal))
+                        {
+                            remainder = string.Empty;
+                        }
+
+                        // If no colon, this is a general/unqualified ignore marker
+                        if (!remainder.StartsWith(':'))
                         {
                             return true;
                         }
 
-                        if (remainder.Length == 0 || !remainder.StartsWith(':'))
+                        // Colon present: parse rule IDs e.g. ":PCC401,PCC402" or ": PCC401, PCC402"
+                        var rulesPart = remainder[1..];
+                        if (rulesPart.EndsWith("*/", StringComparison.Ordinal))
+                        {
+                            rulesPart = rulesPart[..^2];
+                        }
+
+                        var specifiedRules = rulesPart.Split([',', ';', ' ', '\t', '\r', '\n'], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+                        if (specifiedRules.Length == 0)
                         {
                             return true;
                         }
+
+                        if (specifiedRules.Any(r => r.Equals(ruleId, StringComparison.OrdinalIgnoreCase)))
+                        {
+                            return true;
+                        }
+
+                        break;
                     }
                 }
             }
@@ -111,18 +151,19 @@ public static class PatternIgnoreMarker
             foreach (var attr in attrList.Attributes)
             {
                 var name = attr.Name.ToString();
+                var simpleName = name.Contains('.') ? name[(name.LastIndexOf('.') + 1)..] : name;
                 foreach (var pattern in AttributeNamePatterns)
                 {
-                    if (name.Equals(pattern, StringComparison.OrdinalIgnoreCase) ||
-                        name.Equals(pattern + "Attribute", StringComparison.OrdinalIgnoreCase))
+                    if (simpleName.Equals(pattern, StringComparison.OrdinalIgnoreCase) ||
+                        simpleName.Equals(pattern + "Attribute", StringComparison.OrdinalIgnoreCase))
                     {
                         return true;
                     }
                 }
 
                 // Check SuppressMessageAttribute
-                if (name.Equals("SuppressMessage", StringComparison.OrdinalIgnoreCase) ||
-                    name.Equals("SuppressMessageAttribute", StringComparison.OrdinalIgnoreCase))
+                if (simpleName.Equals("SuppressMessage", StringComparison.OrdinalIgnoreCase) ||
+                    simpleName.Equals("SuppressMessageAttribute", StringComparison.OrdinalIgnoreCase))
                 {
                     if (attr.ArgumentList != null && !string.IsNullOrWhiteSpace(ruleId))
                     {

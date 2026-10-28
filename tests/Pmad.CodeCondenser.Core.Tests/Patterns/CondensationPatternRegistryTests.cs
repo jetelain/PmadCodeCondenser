@@ -17,7 +17,7 @@ public class CondensationPatternRegistryTests
         var registry = CondensationPatternRegistry.CreateDefault();
         var rules = registry.GetAllRules();
 
-        Assert.Equal(10, rules.Count);
+        Assert.Equal(9, rules.Count);
         Assert.Contains(rules, r => r.RuleId == "PCC401");
         Assert.Contains(rules, r => r.RuleId == "PCC402");
         Assert.Contains(rules, r => r.RuleId == "PCC403");
@@ -27,7 +27,6 @@ public class CondensationPatternRegistryTests
         Assert.Contains(rules, r => r.RuleId == "PCC407");
         Assert.Contains(rules, r => r.RuleId == "PCC408");
         Assert.Contains(rules, r => r.RuleId == "PCC409");
-        Assert.Contains(rules, r => r.RuleId == "PCC410");
     }
 
     [Fact]
@@ -86,7 +85,6 @@ public class CondensationPatternRegistryTests
         Assert.Contains(enabled, r => r.RuleId == "PCC406");        // any (fallback to 1-arg)
         Assert.Contains(enabled, r => r.RuleId == "PCC408");        // any
         Assert.Contains(enabled, r => r.RuleId == "PCC409");        // any
-        Assert.Contains(enabled, r => r.RuleId == "PCC410");        // any
     }
 
     private sealed class DummyCustomRule : CondensationPatternRuleBase<InvocationExpressionSyntax>

@@ -42,7 +42,7 @@ public sealed class PatternRewriter : IPatternRewriter
             return syntaxTree;
         }
 
-        var effectiveVersion = targetDotNetVersion ?? settings.GetParsedTargetDotNetVersion();
+        var effectiveVersion = settings.GetParsedTargetDotNetVersion() ?? targetDotNetVersion;
         var rules = _registry.GetEnabledRules(settings, effectiveVersion)
             .Where(r => r.CanAutoFix && (ruleIdsToApply == null || ruleIdsToApply.Contains(r.RuleId)))
             .ToList();

@@ -120,7 +120,13 @@ public sealed class ThrowIfNullOrWhiteSpaceRule : CondensationPatternRuleBase<If
 
         // Validate paramName argument if provided in ArgumentException(message, paramName)
         var args = creation.ArgumentList?.Arguments ?? default;
-        if (args.Count >= 2)
+        if (args.Count > 2)
+        {
+            // Inner exception present; ThrowIfNullOr* helpers cannot preserve inner exceptions
+            return false;
+        }
+
+        if (args.Count == 2)
         {
             var secondArg = args[1].Expression;
             if (!MatchesParamName(secondArg, paramName))
@@ -131,8 +137,7 @@ public sealed class ThrowIfNullOrWhiteSpaceRule : CondensationPatternRuleBase<If
         else if (args.Count == 1)
         {
             var singleArg = args[0].Expression;
-            if (ExtractNameofIdentifier(singleArg) is { } nameofId &&
-                !nameofId.Equals(paramName, StringComparison.Ordinal))
+            if (!MatchesParamName(singleArg, paramName))
             {
                 return false;
             }

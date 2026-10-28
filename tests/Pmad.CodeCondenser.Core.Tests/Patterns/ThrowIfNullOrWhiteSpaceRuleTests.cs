@@ -118,4 +118,54 @@ public class ThrowIfNullOrWhiteSpaceRuleTests
         Assert.False(matched);
         Assert.Null(match);
     }
+
+    [Fact]
+    public void TryMatch_InnerExceptionPresent_DoesNotMatch()
+    {
+        var code = """
+            if (string.IsNullOrWhiteSpace(name))
+                throw new ArgumentException("Name cannot be empty", nameof(name), innerEx);
+            """;
+
+        var tree = CSharpSyntaxTree.ParseText(code);
+        var root = tree.GetRoot();
+        var context = new CondensationContext
+        {
+            SyntaxTree = tree,
+            FilePath = "Test.cs",
+            Settings = _settings,
+            TargetDotNetVersion = new Version(8, 0)
+        };
+
+        var ifStmt = root.DescendantNodes().OfType<IfStatementSyntax>().First();
+        var matched = _rule.TryMatch(ifStmt, context, out var match);
+
+        Assert.False(matched);
+        Assert.Null(match);
+    }
+
+    [Fact]
+    public void TryMatch_SingleArgumentNonParamMessage_DoesNotMatch()
+    {
+        var code = """
+            if (string.IsNullOrWhiteSpace(name))
+                throw new ArgumentException("Arbitrary domain validation failed");
+            """;
+
+        var tree = CSharpSyntaxTree.ParseText(code);
+        var root = tree.GetRoot();
+        var context = new CondensationContext
+        {
+            SyntaxTree = tree,
+            FilePath = "Test.cs",
+            Settings = _settings,
+            TargetDotNetVersion = new Version(8, 0)
+        };
+
+        var ifStmt = root.DescendantNodes().OfType<IfStatementSyntax>().First();
+        var matched = _rule.TryMatch(ifStmt, context, out var match);
+
+        Assert.False(matched);
+        Assert.Null(match);
+    }
 }

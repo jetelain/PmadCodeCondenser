@@ -85,7 +85,7 @@ public class MinByMaxByRuleTests
     }
 
     [Fact]
-    public void TryMatch_OrderByLast_SuggestsMaxBy()
+    public void TryMatch_OrderByLast_DoesNotMatch()
     {
         var code = "var max = items.OrderBy(x => x.Val).Last();";
         var tree = CSharpSyntaxTree.ParseText(code);
@@ -101,9 +101,8 @@ public class MinByMaxByRuleTests
         var invocation = root.DescendantNodes().OfType<InvocationExpressionSyntax>().First();
         var matched = _rule.TryMatch(invocation, context, out var match);
 
-        Assert.True(matched);
-        Assert.NotNull(match);
-        Assert.Equal("items.MaxBy(x => x.Val)", match.SuggestedCode);
+        Assert.False(matched);
+        Assert.Null(match);
     }
 
     [Fact]

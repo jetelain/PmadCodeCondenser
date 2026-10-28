@@ -108,4 +108,53 @@ public class ReplaceLineEndingsRuleTests
 
         Assert.Equal("text.ReplaceLineEndings(\"\\n\")", rewritten.ToString());
     }
+
+    [Fact]
+    public void TryMatch_NonNewlineReplacement_DoesNotMatch()
+    {
+        var code = """
+            var result = text.Replace("\r\n", "").Replace("\r", "");
+            """;
+
+        var tree = CSharpSyntaxTree.ParseText(code);
+        var root = tree.GetRoot();
+        var context = new CondensationContext
+        {
+            SyntaxTree = tree,
+            FilePath = "Test.cs",
+            Settings = _settings,
+            TargetDotNetVersion = new Version(8, 0)
+        };
+
+        var invocation = root.DescendantNodes().OfType<Microsoft.CodeAnalysis.CSharp.Syntax.InvocationExpressionSyntax>().First();
+        var matched = _rule.TryMatch(invocation, context, out var match);
+
+        Assert.False(matched);
+        Assert.Null(match);
+    }
+
+    [Fact]
+    public void TryMatch_WindowsCrlfReplacement_Matches()
+    {
+        var code = """
+            var result = text.Replace("\r\n", "\r\n").Replace("\r", "\r\n");
+            """;
+
+        var tree = CSharpSyntaxTree.ParseText(code);
+        var root = tree.GetRoot();
+        var context = new CondensationContext
+        {
+            SyntaxTree = tree,
+            FilePath = "Test.cs",
+            Settings = _settings,
+            TargetDotNetVersion = new Version(8, 0)
+        };
+
+        var invocation = root.DescendantNodes().OfType<Microsoft.CodeAnalysis.CSharp.Syntax.InvocationExpressionSyntax>().First();
+        var matched = _rule.TryMatch(invocation, context, out var match);
+
+        Assert.True(matched);
+        Assert.NotNull(match);
+        Assert.Equal("text.ReplaceLineEndings(\"\\r\\n\")", match.SuggestedCode);
+    }
 }
