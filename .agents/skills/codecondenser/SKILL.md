@@ -27,6 +27,7 @@ The CLI can be invoked via the global tool `codecondenser`, local tool `dotnet c
 | :--- | :--- | :---: |
 | **Status report of types, clones, predicates, LOC & comments (deterministic)** | `codecondenser report ./src` | No |
 | **Check clones only (disable comments, strings, types, LOC & predicates)** | `codecondenser analyze ./src --no-comments --no-strings --no-type-split --no-loc --no-predicates` | No |
+| **Limit displayed results to top N with largest benefit** | `codecondenser report ./src --limit 10` | No |
 | **Check production code only (skip tests)** | `codecondenser analyze ./ --exclude-tests --no-comments` | No |
 | **Incremental CI check (strict guardrails: clones + comments + strings + types + LOC + predicates)** | `codecondenser analyze ./ --incremental --duplication-tolerance 0 -ct 0 -st 0 -tt 0 -lt 0 -pt 0` | No |
 | **Incremental CI check (strict duplication & predicates only)** | `codecondenser analyze ./ --incremental --duplication-tolerance 0 -pt 0` | No |

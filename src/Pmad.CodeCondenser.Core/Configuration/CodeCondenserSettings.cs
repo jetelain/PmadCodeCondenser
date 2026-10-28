@@ -542,6 +542,21 @@ public sealed class CodeCondenserSettings
         set { if (value.HasValue) LinesOfCodeExitCode = value.Value; }
     }
 
+    /// <summary>
+    /// Maximum number of items to display across all categories, prioritized by largest estimated benefit.
+    /// Default is null (all detected items are displayed).
+    /// </summary>
+    public int? Limit { get; set; }
+
+    /// <summary>
+    /// Alias for <see cref="Limit"/>.
+    /// </summary>
+    public int? MaxDisplayedItems
+    {
+        get => Limit;
+        set => Limit = value;
+    }
+
 
     /// <summary>
     /// When true, includes XML documentation comments (///) in addition to single-line (//) and multi-line (/* */) comments.
@@ -928,7 +943,8 @@ public sealed class CodeCondenserSettings
             MethodLinesOfCodeThreshold = MethodLinesOfCodeThreshold,
             ClassLinesOfCodeThreshold = ClassLinesOfCodeThreshold,
             LinesOfCodeTolerance = LinesOfCodeTolerance,
-            LinesOfCodeExitCode = LinesOfCodeExitCode
+            LinesOfCodeExitCode = LinesOfCodeExitCode,
+            Limit = Limit
         };
     }
 }

@@ -45,6 +45,7 @@ codecondenser [command] [path] [options]
 | `--threshold-method-lines <n>` | `-tml` | `int` | `150` | Maximum lines of code threshold for methods |
 | `--threshold-class-lines <n>` | `-tcl` | `int` | `1500` | Maximum lines of code threshold for classes and records |
 | `--loc-tolerance <n>` | `-lt` | `int` | `null` | Max new lines of code violations tolerated in incremental mode |
+| `--limit <n>` | `-l`, `--max-items` | `int` | `null` | Limit displayed items across all categories to top N with largest benefit |
 | `--no-comments` | | `switch` | `false` | Disable comment extraction and LLM summarization |
 | `--enable-comments` | | `switch` | `true` | Explicitly enable comment extraction and summarization |
 | `--no-duplication` | | `switch` | `false` | Disable structural code clone detection |

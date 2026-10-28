@@ -13,28 +13,36 @@ public static class CloneGainEstimator
     /// Estimates the tokens saved by keeping a single copy of a method clone group.
     /// Returns 0 when source files cannot be read.
     /// </summary>
-    public static int EstimateGainTokens(CodeCloneGroup group, HeuristicTokenEstimator? estimator = null, string? baseDirectory = null)
+    public static int EstimateGainTokens(
+        CodeCloneGroup group,
+        HeuristicTokenEstimator? estimator = null,
+        string? baseDirectory = null,
+        Dictionary<string, string[]?>? cache = null)
     {
         ArgumentNullException.ThrowIfNull(group);
         return EstimateGain(
             group.Methods.Select(m => (m.FilePath, m.StartLine, m.EndLine)),
             estimator,
             baseDirectory,
-            new Dictionary<string, string[]?>(StringComparer.OrdinalIgnoreCase));
+            cache ?? new Dictionary<string, string[]?>(StringComparer.OrdinalIgnoreCase));
     }
 
     /// <summary>
     /// Estimates the tokens saved by keeping a single copy of a sub-method clone group.
     /// Returns 0 when source files cannot be read.
     /// </summary>
-    public static int EstimateGainTokens(SubMethodCloneGroup group, HeuristicTokenEstimator? estimator = null, string? baseDirectory = null)
+    public static int EstimateGainTokens(
+        SubMethodCloneGroup group,
+        HeuristicTokenEstimator? estimator = null,
+        string? baseDirectory = null,
+        Dictionary<string, string[]?>? cache = null)
     {
         ArgumentNullException.ThrowIfNull(group);
         return EstimateGain(
             group.Occurrences.Select(o => (o.FilePath, o.StartLine, o.EndLine)),
             estimator,
             baseDirectory,
-            new Dictionary<string, string[]?>(StringComparer.OrdinalIgnoreCase));
+            cache ?? new Dictionary<string, string[]?>(StringComparer.OrdinalIgnoreCase));
     }
 
     /// <summary>

@@ -1120,4 +1120,98 @@ public class ConsoleFormatterTests
         output.Should().Contain("[AI AGENT ACTION REQUIRED] Predicate Clone Policy Violation (Exit Code: 2)");
         output.Should().Contain("Incremental analysis detected 1 new predicate clone cluster(s)");
     }
+
+    [Fact]
+    public void PrintSummary_WhenCommentsNotAnalyzed_DoesNotPrintVerboseCommentsOrCommentGain()
+    {
+        var formatter = new ConsoleFormatter(enableColor: false);
+        using var writer = new StringWriter();
+
+        formatter.PrintSummary(
+            writer,
+            filesAnalyzed: 3,
+            methodsScanned: 5,
+            cloneGroupsCount: 0,
+            verboseCommentsCount: null,
+            mode: "Dry-Run");
+
+        var output = writer.ToString();
+        output.Should().NotContain("Verbose Comments:");
+        output.Should().NotContain("Comment Gain:");
+        output.Should().Contain("Clone Clusters:    0");
+    }
+
+    [Fact]
+    public void PrintSummary_WhenDuplicationNotAnalyzed_DoesNotPrintCloneClustersOrMethodsScanned()
+    {
+        var formatter = new ConsoleFormatter(enableColor: false);
+        using var writer = new StringWriter();
+
+        formatter.PrintSummary(
+            writer,
+            filesAnalyzed: 3,
+            methodsScanned: null,
+            cloneGroupsCount: null,
+            verboseCommentsCount: 2,
+            mode: "Dry-Run");
+
+        var output = writer.ToString();
+        output.Should().NotContain("Methods Scanned:");
+        output.Should().NotContain("Clone Clusters:");
+        output.Should().NotContain("Production Clones:");
+        output.Should().NotContain("Test Clones:");
+        output.Should().NotContain("Clone Gain:");
+        output.Should().Contain("Verbose Comments:  2");
+    }
+
+    [Fact]
+    public void PrintVerboseComments_WhenLimited_PrintsHeaderWithShowingTopCount()
+    {
+        var formatter = new ConsoleFormatter(enableColor: false);
+        using var writer = new StringWriter();
+
+        var comment = new VerboseComment("A.cs", 1, 5, 0, 150, CommentKind.SingleLine, new string('X', 150), "");
+        formatter.PrintVerboseComments(writer, [comment], new Dictionary<string, string>(), ".", totalCount: 10);
+
+        var output = writer.ToString();
+        output.Should().Contain("Found 10 verbose comment(s) exceeding threshold (Showing top 1 with largest benefit):");
+    }
+
+    [Fact]
+    public void PrintCloneGroups_WhenLimited_PrintsHeaderWithShowingTopCount()
+    {
+        var formatter = new ConsoleFormatter(enableColor: false);
+        using var writer = new StringWriter();
+
+        var method = new MethodCloneInfo("A.cs", "M1", 1, 10, 10, "h1", "void M1()");
+        var group = new CodeCloneGroup("h1", [method, method], CloneCategory.Production, ImpactScore: 20);
+        formatter.PrintCloneGroups(writer, [group], ".", totalCount: 15, totalProductionCount: 15);
+
+        var output = writer.ToString();
+        output.Should().Contain("Found 15 Production Duplication Cluster(s) (Showing top 1 with largest benefit):");
+    }
+
+    [Fact]
+    public void PrintCloneGroups_WhenLimitedToZero_DoesNotSayNoStructuralDuplicationDetected()
+    {
+        var formatter = new ConsoleFormatter(enableColor: false);
+        using var writer = new StringWriter();
+
+        formatter.PrintCloneGroups(writer, [], ".", totalCount: 5);
+
+        var output = writer.ToString();
+        output.Should().NotContain("No structural code duplication detected.");
+    }
+
+    [Fact]
+    public void PrintVerboseComments_WhenLimitedToZero_DoesNotSayNoVerboseCommentsDetected()
+    {
+        var formatter = new ConsoleFormatter(enableColor: false);
+        using var writer = new StringWriter();
+
+        formatter.PrintVerboseComments(writer, [], new Dictionary<string, string>(), ".", totalCount: 5);
+
+        var output = writer.ToString();
+        output.Should().NotContain("No verbose comments detected.");
+    }
 }

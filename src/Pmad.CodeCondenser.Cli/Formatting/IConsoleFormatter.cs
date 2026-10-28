@@ -10,53 +10,74 @@ public interface IConsoleFormatter
 {
     void PrintBanner(TextWriter writer);
 
-    void PrintCloneGroups(TextWriter writer, IReadOnlyList<CodeCloneGroup> cloneGroups, string baseDirectory, HeuristicTokenEstimator? estimator = null);
+    void PrintCloneGroups(
+        TextWriter writer,
+        IReadOnlyList<CodeCloneGroup> cloneGroups,
+        string baseDirectory,
+        HeuristicTokenEstimator? estimator = null,
+        int? totalCount = null,
+        int? totalProductionCount = null,
+        int? totalTestCount = null);
 
-    void PrintSubMethodCloneGroups(TextWriter writer, IReadOnlyList<SubMethodCloneGroup> subMethodGroups, string baseDirectory, HeuristicTokenEstimator? estimator = null);
+    void PrintSubMethodCloneGroups(
+        TextWriter writer,
+        IReadOnlyList<SubMethodCloneGroup> subMethodGroups,
+        string baseDirectory,
+        HeuristicTokenEstimator? estimator = null,
+        int? totalCount = null);
 
     void PrintVerboseComments(
         TextWriter writer,
         IReadOnlyList<VerboseComment> comments,
         IReadOnlyDictionary<string, string> summaries,
         string baseDirectory,
-        HeuristicTokenEstimator? estimator = null);
+        HeuristicTokenEstimator? estimator = null,
+        int? totalCount = null);
 
     void PrintRepeatedStringGroups(
         TextWriter writer,
         IReadOnlyList<RepeatedStringGroup> repeatedStrings,
         string baseDirectory,
-        HeuristicTokenEstimator? estimator = null);
+        HeuristicTokenEstimator? estimator = null,
+        int? totalCount = null,
+        int? totalProductionCount = null,
+        int? totalTestCount = null);
 
     void PrintTypeFileIssues(
         TextWriter writer,
         IReadOnlyList<TypeFileAnalysis> typeIssues,
         string baseDirectory,
-        int lineTolerance = 1);
+        int lineTolerance = 1,
+        int? totalCount = null);
 
     void PrintLinesOfCodeViolations(
         TextWriter writer,
         IReadOnlyList<LinesOfCodeViolation> violations,
-        string baseDirectory);
+        string baseDirectory,
+        int? totalCount = null);
 
     void PrintPredicateCloneGroups(
         TextWriter writer,
         IReadOnlyList<PredicateCloneGroup> predicateGroups,
         string baseDirectory,
-        HeuristicTokenEstimator? estimator = null);
+        HeuristicTokenEstimator? estimator = null,
+        int? totalCount = null,
+        int? totalProductionCount = null,
+        int? totalTestCount = null);
 
     void PrintSummary(
         TextWriter writer,
         int filesAnalyzed,
-        int methodsScanned,
-        int cloneGroupsCount,
-        int verboseCommentsCount,
+        int? methodsScanned,
+        int? cloneGroupsCount,
+        int? verboseCommentsCount,
         string mode,
-        int productionFiles,
-        int testFiles,
-        int skippedGenerated,
-        int productionClones,
-        int testClones,
-        int subMethodClones = 0,
+        int productionFiles = 0,
+        int testFiles = 0,
+        int skippedGenerated = 0,
+        int? productionClones = null,
+        int? testClones = null,
+        int? subMethodClones = null,
         int? commentGainChars = null,
         int? commentReductionPercent = null,
         int? commentGainTokens = null,

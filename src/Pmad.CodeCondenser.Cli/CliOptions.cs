@@ -95,6 +95,11 @@ public sealed class CliOptions
     public string? OutputFilePath { get; set; }
 
     /// <summary>
+    /// Maximum number of items to display across all categories, prioritized by largest estimated benefit.
+    /// </summary>
+    public int? Limit { get; set; }
+
+    /// <summary>
     /// Ollama endpoint URL override (e.g. "http://localhost:11434").
     /// </summary>
     public string? Endpoint { get; set; }
