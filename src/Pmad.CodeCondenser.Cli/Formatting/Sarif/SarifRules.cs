@@ -181,8 +181,8 @@ public static class SarifRules
             },
             Help = new SarifMultiformatMessageString
             {
-                Text = "Extract duplicate condition into a shared helper method or property. To suppress, add '// [codecondenser:ignore-predicate]' above the condition or statement.",
-                Markdown = "Extract duplicate condition into a shared helper method or property.\n\nTo suppress, add `// [codecondenser:ignore-predicate]` on the preceding line or `[SuppressMessage(\"CodeCondenser\", \"PredicateDuplication\")]`."
+                Text = "Extract duplicate condition into a shared helper method or property. To suppress, add '// codecondenser:ignore-predicate' above the condition or statement.",
+                Markdown = "Extract duplicate condition into a shared helper method or property.\n\nTo suppress, add `// codecondenser:ignore-predicate` on the preceding line or `[SuppressMessage(\"CodeCondenser\", \"PredicateDuplication\")]`."
             },
             DefaultConfiguration = new SarifReportingConfiguration
             {
@@ -199,8 +199,8 @@ public static class SarifRules
             },
             Help = new SarifMultiformatMessageString
             {
-                Text = "Replace inline condition with the existing helper call. To suppress, add '// [codecondenser:ignore-predicate]' above the condition or statement.",
-                Markdown = "Replace inline condition with the existing helper call.\n\nTo suppress, add `// [codecondenser:ignore-predicate]` on the preceding line or `[SuppressMessage(\"CodeCondenser\", \"PredicateExistingHelper\")]`."
+                Text = "Replace inline condition with the existing helper call. To suppress, add '// codecondenser:ignore-predicate' above the condition or statement.",
+                Markdown = "Replace inline condition with the existing helper call.\n\nTo suppress, add `// codecondenser:ignore-predicate` on the preceding line or `[SuppressMessage(\"CodeCondenser\", \"PredicateExistingHelper\")]`."
             },
             DefaultConfiguration = new SarifReportingConfiguration
             {
