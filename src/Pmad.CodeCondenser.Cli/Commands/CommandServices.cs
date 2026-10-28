@@ -76,6 +76,11 @@ public sealed class CommandServices
             options.NoGlobalConfig);
 
         // Apply CLI overrides
+        if (options.Limit.HasValue)
+        {
+            settings.Limit = options.Limit.Value;
+        }
+
         if (options.ThresholdStatements.HasValue)
         {
             settings.DuplicationStatementThreshold = options.ThresholdStatements.Value;

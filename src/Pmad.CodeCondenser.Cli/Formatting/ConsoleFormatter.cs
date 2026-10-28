@@ -37,14 +37,28 @@ public sealed class ConsoleFormatter : IConsoleFormatter
 
     private static string CloneGainText(int tokens) => tokens > 0 ? $", Potential Gain: ~{tokens} tokens" : string.Empty;
 
-    public void PrintCloneGroups(TextWriter writer, IReadOnlyList<CodeCloneGroup> cloneGroups, string baseDirectory, HeuristicTokenEstimator? estimator = null)
+    public void PrintCloneGroups(
+        TextWriter writer,
+        IReadOnlyList<CodeCloneGroup> cloneGroups,
+        string baseDirectory,
+        HeuristicTokenEstimator? estimator = null,
+        int? totalCount = null,
+        int? totalProductionCount = null,
+        int? totalTestCount = null)
     {
         ArgumentNullException.ThrowIfNull(writer);
         ArgumentNullException.ThrowIfNull(cloneGroups);
 
-        if (cloneGroups.Count == 0)
+        int total = totalCount ?? cloneGroups.Count;
+
+        if (total == 0)
         {
             writer.WriteLine(Green("✓ No structural code duplication detected."));
+            return;
+        }
+
+        if (cloneGroups.Count == 0)
+        {
             return;
         }
 
@@ -53,7 +67,11 @@ public sealed class ConsoleFormatter : IConsoleFormatter
 
         if (prodAndCrossGroups.Count > 0)
         {
-            writer.WriteLine(Yellow(Bold($"Found {prodAndCrossGroups.Count} Production Duplication Cluster(s) (Highest Impact):")));
+            int totalProd = totalProductionCount ?? prodAndCrossGroups.Count;
+            var headerSuffix = totalProd > prodAndCrossGroups.Count
+                ? $" (Showing top {prodAndCrossGroups.Count} with largest benefit):"
+                : " (Highest Impact):";
+            writer.WriteLine(Yellow(Bold($"Found {totalProd} Production Duplication Cluster(s){headerSuffix}")));
             writer.WriteLine();
 
             for (int i = 0; i < prodAndCrossGroups.Count; i++)
@@ -97,7 +115,11 @@ public sealed class ConsoleFormatter : IConsoleFormatter
                 writer.WriteLine();
             }
 
-            writer.WriteLine(Yellow(Bold($"Found {testGroups.Count} Test Duplication Cluster(s) (Review for DAMP vs DRY):")));
+            int totalTest = totalTestCount ?? testGroups.Count;
+            var headerSuffix = totalTest > testGroups.Count
+                ? $" (Showing top {testGroups.Count} with largest benefit):"
+                : " (Review for DAMP vs DRY):";
+            writer.WriteLine(Yellow(Bold($"Found {totalTest} Test Duplication Cluster(s){headerSuffix}")));
             writer.WriteLine();
 
             for (int i = 0; i < testGroups.Count; i++)
@@ -133,17 +155,27 @@ public sealed class ConsoleFormatter : IConsoleFormatter
         }
     }
 
-    public void PrintSubMethodCloneGroups(TextWriter writer, IReadOnlyList<SubMethodCloneGroup> subMethodGroups, string baseDirectory, HeuristicTokenEstimator? estimator = null)
+    public void PrintSubMethodCloneGroups(
+        TextWriter writer,
+        IReadOnlyList<SubMethodCloneGroup> subMethodGroups,
+        string baseDirectory,
+        HeuristicTokenEstimator? estimator = null,
+        int? totalCount = null)
     {
         ArgumentNullException.ThrowIfNull(writer);
         ArgumentNullException.ThrowIfNull(subMethodGroups);
 
-        if (subMethodGroups.Count == 0)
+        int total = totalCount ?? subMethodGroups.Count;
+
+        if (total == 0 || subMethodGroups.Count == 0)
         {
             return;
         }
 
-        writer.WriteLine(Yellow(Bold($"Found {subMethodGroups.Count} Sub-Method Duplication Cluster(s):")));
+        var headerSuffix = total > subMethodGroups.Count
+            ? $" (Showing top {subMethodGroups.Count} with largest benefit):"
+            : ":";
+        writer.WriteLine(Yellow(Bold($"Found {total} Sub-Method Duplication Cluster(s){headerSuffix}")));
         writer.WriteLine();
 
         for (int i = 0; i < subMethodGroups.Count; i++)
@@ -168,12 +200,21 @@ public sealed class ConsoleFormatter : IConsoleFormatter
         }
     }
 
-    public void PrintRepeatedStringGroups(TextWriter writer, IReadOnlyList<RepeatedStringGroup> repeatedStrings, string baseDirectory, HeuristicTokenEstimator? estimator = null)
+    public void PrintRepeatedStringGroups(
+        TextWriter writer,
+        IReadOnlyList<RepeatedStringGroup> repeatedStrings,
+        string baseDirectory,
+        HeuristicTokenEstimator? estimator = null,
+        int? totalCount = null,
+        int? totalProductionCount = null,
+        int? totalTestCount = null)
     {
         ArgumentNullException.ThrowIfNull(writer);
         ArgumentNullException.ThrowIfNull(repeatedStrings);
 
-        if (repeatedStrings.Count == 0)
+        int total = totalCount ?? repeatedStrings.Count;
+
+        if (total == 0 || repeatedStrings.Count == 0)
         {
             return;
         }
@@ -183,7 +224,11 @@ public sealed class ConsoleFormatter : IConsoleFormatter
 
         if (prodAndCrossGroups.Count > 0)
         {
-            writer.WriteLine(Yellow(Bold($"Found {prodAndCrossGroups.Count} Repeated Inline String Cluster(s) (Highest Impact):")));
+            int totalProd = totalProductionCount ?? prodAndCrossGroups.Count;
+            var headerSuffix = totalProd > prodAndCrossGroups.Count
+                ? $" (Showing top {prodAndCrossGroups.Count} with largest benefit):"
+                : " (Highest Impact):";
+            writer.WriteLine(Yellow(Bold($"Found {totalProd} Repeated Inline String Cluster(s){headerSuffix}")));
             writer.WriteLine();
 
             for (int i = 0; i < prodAndCrossGroups.Count; i++)
@@ -260,7 +305,11 @@ public sealed class ConsoleFormatter : IConsoleFormatter
                 writer.WriteLine();
             }
 
-            writer.WriteLine(Yellow(Bold($"Found {testGroups.Count} Test Repeated String Cluster(s):")));
+            int totalTest = totalTestCount ?? testGroups.Count;
+            var headerSuffix = totalTest > testGroups.Count
+                ? $" (Showing top {testGroups.Count} with largest benefit):"
+                : ":";
+            writer.WriteLine(Yellow(Bold($"Found {totalTest} Test Repeated String Cluster(s){headerSuffix}")));
             writer.WriteLine();
 
             for (int i = 0; i < testGroups.Count; i++)
@@ -327,12 +376,17 @@ public sealed class ConsoleFormatter : IConsoleFormatter
         TextWriter writer,
         IReadOnlyList<PredicateCloneGroup> predicateGroups,
         string baseDirectory,
-        HeuristicTokenEstimator? estimator = null)
+        HeuristicTokenEstimator? estimator = null,
+        int? totalCount = null,
+        int? totalProductionCount = null,
+        int? totalTestCount = null)
     {
         ArgumentNullException.ThrowIfNull(writer);
         ArgumentNullException.ThrowIfNull(predicateGroups);
 
-        if (predicateGroups.Count == 0)
+        int total = totalCount ?? predicateGroups.Count;
+
+        if (total == 0 || predicateGroups.Count == 0)
         {
             return;
         }
@@ -342,7 +396,11 @@ public sealed class ConsoleFormatter : IConsoleFormatter
 
         if (prodAndCrossGroups.Count > 0)
         {
-            writer.WriteLine(Yellow(Bold($"Found {prodAndCrossGroups.Count} Predicate / Boolean Condition Clone Cluster(s):")));
+            int totalProd = totalProductionCount ?? prodAndCrossGroups.Count;
+            var headerSuffix = totalProd > prodAndCrossGroups.Count
+                ? $" (Showing top {prodAndCrossGroups.Count} with largest benefit):"
+                : ":";
+            writer.WriteLine(Yellow(Bold($"Found {totalProd} Predicate / Boolean Condition Clone Cluster(s){headerSuffix}")));
             writer.WriteLine();
 
             for (int i = 0; i < prodAndCrossGroups.Count; i++)
@@ -402,7 +460,11 @@ public sealed class ConsoleFormatter : IConsoleFormatter
 
         if (testGroups.Count > 0)
         {
-            writer.WriteLine(Yellow(Bold($"Found {testGroups.Count} Test Predicate Clone Cluster(s):")));
+            int totalTest = totalTestCount ?? testGroups.Count;
+            var headerSuffix = totalTest > testGroups.Count
+                ? $" (Showing top {testGroups.Count} with largest benefit):"
+                : ":";
+            writer.WriteLine(Yellow(Bold($"Found {totalTest} Test Predicate Clone Cluster(s){headerSuffix}")));
             writer.WriteLine();
 
             for (int i = 0; i < testGroups.Count; i++)
@@ -425,18 +487,24 @@ public sealed class ConsoleFormatter : IConsoleFormatter
         TextWriter writer,
         IReadOnlyList<TypeFileAnalysis> typeIssues,
         string baseDirectory,
-        int lineTolerance = 1)
+        int lineTolerance = 1,
+        int? totalCount = null)
     {
         ArgumentNullException.ThrowIfNull(writer);
         ArgumentNullException.ThrowIfNull(typeIssues);
 
         var violations = typeIssues.Where(i => i.HasViolation).ToList();
-        if (violations.Count == 0)
+        int total = totalCount ?? violations.Count;
+
+        if (total == 0 || violations.Count == 0)
         {
             return;
         }
 
-        writer.WriteLine(Yellow(Bold($"Found {violations.Count} File(s) with Multiple Types or Mismatched Names:")));
+        var headerSuffix = total > violations.Count
+            ? $" (Showing top {violations.Count} with largest benefit):"
+            : ":";
+        writer.WriteLine(Yellow(Bold($"Found {total} File(s) with Multiple Types or Mismatched Names{headerSuffix}")));
         writer.WriteLine();
 
         for (int i = 0; i < violations.Count; i++)
@@ -492,12 +560,15 @@ public sealed class ConsoleFormatter : IConsoleFormatter
     public void PrintLinesOfCodeViolations(
         TextWriter writer,
         IReadOnlyList<LinesOfCodeViolation> violations,
-        string baseDirectory)
+        string baseDirectory,
+        int? totalCount = null)
     {
         ArgumentNullException.ThrowIfNull(writer);
         ArgumentNullException.ThrowIfNull(violations);
 
-        if (violations.Count == 0)
+        int total = totalCount ?? violations.Count;
+
+        if (total == 0 || violations.Count == 0)
         {
             return;
         }
@@ -505,7 +576,10 @@ public sealed class ConsoleFormatter : IConsoleFormatter
         var methodViolations = violations.Where(v => v.Kind == LinesOfCodeKind.Method).ToList();
         var classViolations = violations.Where(v => v.Kind == LinesOfCodeKind.Class).ToList();
 
-        writer.WriteLine(Yellow(Bold($"Found {violations.Count} Declaration(s) Exceeding Lines of Code Thresholds:")));
+        var headerSuffix = total > violations.Count
+            ? $" (Showing top {violations.Count} with largest benefit):"
+            : ":";
+        writer.WriteLine(Yellow(Bold($"Found {total} Declaration(s) Exceeding Lines of Code Thresholds{headerSuffix}")));
         writer.WriteLine();
 
         if (classViolations.Count > 0)
@@ -546,19 +620,30 @@ public sealed class ConsoleFormatter : IConsoleFormatter
         IReadOnlyList<VerboseComment> comments,
         IReadOnlyDictionary<string, string> summaries,
         string baseDirectory,
-        HeuristicTokenEstimator? estimator = null)
+        HeuristicTokenEstimator? estimator = null,
+        int? totalCount = null)
     {
         ArgumentNullException.ThrowIfNull(writer);
         ArgumentNullException.ThrowIfNull(comments);
         ArgumentNullException.ThrowIfNull(summaries);
 
-        if (comments.Count == 0)
+        int total = totalCount ?? comments.Count;
+
+        if (total == 0)
         {
             writer.WriteLine(Green("✓ No verbose comments detected."));
             return;
         }
 
-        writer.WriteLine(Cyan(Bold($"Found {comments.Count} verbose comment(s) exceeding threshold:")));
+        if (comments.Count == 0)
+        {
+            return;
+        }
+
+        var headerSuffix = total > comments.Count
+            ? $" (Showing top {comments.Count} with largest benefit):"
+            : ":";
+        writer.WriteLine(Cyan(Bold($"Found {total} verbose comment(s) exceeding threshold{headerSuffix}")));
         writer.WriteLine();
 
         var effEstimator = estimator ?? HeuristicTokenEstimator.Default;
@@ -661,16 +746,16 @@ public sealed class ConsoleFormatter : IConsoleFormatter
     public void PrintSummary(
         TextWriter writer,
         int filesAnalyzed,
-        int methodsScanned,
-        int cloneGroupsCount,
-        int verboseCommentsCount,
+        int? methodsScanned,
+        int? cloneGroupsCount,
+        int? verboseCommentsCount,
         string mode,
         int productionFiles = 0,
         int testFiles = 0,
         int skippedGenerated = 0,
-        int productionClones = 0,
-        int testClones = 0,
-        int subMethodClones = 0,
+        int? productionClones = null,
+        int? testClones = null,
+        int? subMethodClones = null,
         int? commentGainChars = null,
         int? commentReductionPercent = null,
         int? commentGainTokens = null,
@@ -704,21 +789,26 @@ public sealed class ConsoleFormatter : IConsoleFormatter
             writer.WriteLine($"  Files Analyzed:    {filesAnalyzed}");
         }
 
-        writer.WriteLine($"  Methods Scanned:   {methodsScanned}");
-
-        if (productionClones > 0 || testClones > 0)
+        if (methodsScanned.HasValue)
         {
-            writer.WriteLine($"  Production Clones: {(productionClones > 0 ? Yellow(productionClones.ToString()) : Green("0"))}");
-            writer.WriteLine($"  Test Clones:       {(testClones > 0 ? Yellow(testClones.ToString()) : Green("0"))}");
-        }
-        else
-        {
-            writer.WriteLine($"  Clone Clusters:    {(cloneGroupsCount > 0 ? Yellow(cloneGroupsCount.ToString()) : Green("0"))}");
+            writer.WriteLine($"  Methods Scanned:   {methodsScanned.Value}");
         }
 
-        if (subMethodClones > 0)
+        if (productionClones.HasValue || testClones.HasValue)
         {
-            writer.WriteLine($"  Sub-Method Clones: {Yellow(subMethodClones.ToString())}");
+            var prod = productionClones ?? 0;
+            var test = testClones ?? 0;
+            writer.WriteLine($"  Production Clones: {(prod > 0 ? Yellow(prod.ToString()) : Green("0"))}");
+            writer.WriteLine($"  Test Clones:       {(test > 0 ? Yellow(test.ToString()) : Green("0"))}");
+        }
+        else if (cloneGroupsCount.HasValue)
+        {
+            writer.WriteLine($"  Clone Clusters:    {(cloneGroupsCount.Value > 0 ? Yellow(cloneGroupsCount.Value.ToString()) : Green("0"))}");
+        }
+
+        if (subMethodClones.HasValue && subMethodClones.Value > 0)
+        {
+            writer.WriteLine($"  Sub-Method Clones: {Yellow(subMethodClones.Value.ToString())}");
         }
 
         if (cloneGainTokens.HasValue && cloneGainTokens.Value > 0)
@@ -758,7 +848,10 @@ public sealed class ConsoleFormatter : IConsoleFormatter
             writer.WriteLine($"  Predicate Gain:    {Green($"+{predicateGainChars.Value} chars{tokensSuffix} (potential)")}");
         }
 
-        writer.WriteLine($"  Verbose Comments:  {(verboseCommentsCount > 0 ? Cyan(verboseCommentsCount.ToString()) : Green("0"))}");
+        if (verboseCommentsCount.HasValue)
+        {
+            writer.WriteLine($"  Verbose Comments:  {(verboseCommentsCount.Value > 0 ? Cyan(verboseCommentsCount.Value.ToString()) : Green("0"))}");
+        }
 
         if (commentGainChars.HasValue)
         {

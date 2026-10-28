@@ -48,6 +48,12 @@ public sealed class GlobalOptions
         Recursive = true
     };
 
+    public Option<int?> LimitOption { get; } = new("--limit", "-l", "--max-items")
+    {
+        Description = "Maximum number of items to display across all categories, prioritized by largest estimated benefit",
+        Recursive = true
+    };
+
     // Path filtering & Exclusions
     public Option<string[]> IncludeOption { get; } = new("--include")
     {
@@ -368,6 +374,7 @@ public sealed class GlobalOptions
         root.Add(FormatOption);
         root.Add(OutputOption);
         root.Add(NoColorOption);
+        root.Add(LimitOption);
 
         root.Add(IncludeOption);
         root.Add(ExcludeOption);
@@ -443,6 +450,7 @@ public sealed class GlobalOptions
             Format = pr.GetValue(FormatOption),
             OutputFilePath = pr.GetValue(OutputOption),
             NoColor = pr.GetValue(NoColorOption),
+            Limit = pr.GetValue(LimitOption),
             DryRun = pr.GetValue(DryRunOption),
 
             ExcludeTests = pr.GetValue(ExcludeTestsOption),

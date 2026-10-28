@@ -160,7 +160,8 @@ public class CliIntegrationTests : IDisposable
         var exitCode = await Program.RunAsync(["report", _testDirectory, "--no-comments", "--no-color"], output, error);
 
         exitCode.Should().Be(0);
-        output.ToString().Should().Contain("No verbose comments detected.");
+        output.ToString().Should().NotContain("No verbose comments detected.");
+        output.ToString().Should().NotContain("Verbose Comments:");
         output.ToString().Should().NotContain("Found 1 verbose comment(s) exceeding threshold:");
     }
 
@@ -657,8 +658,10 @@ public class CliIntegrationTests : IDisposable
             customEngine: engine);
 
         exitCode.Should().Be(0);
-        output.ToString().Should().Contain("No structural code duplication detected.");
+        output.ToString().Should().NotContain("No structural code duplication detected.");
         output.ToString().Should().NotContain("Found 1 code duplication cluster(s):");
+        output.ToString().Should().NotContain("Production Clones:");
+        output.ToString().Should().NotContain("Clone Clusters:");
     }
 
     [Fact]
@@ -684,7 +687,8 @@ public class CliIntegrationTests : IDisposable
             customEngine: engine);
 
         exitCode.Should().Be(0);
-        output.ToString().Should().Contain("No verbose comments detected.");
+        output.ToString().Should().NotContain("No verbose comments detected.");
+        output.ToString().Should().NotContain("Verbose Comments:");
         output.ToString().Should().NotContain("Found 1 verbose comment(s) exceeding threshold:");
     }
 
@@ -1417,6 +1421,70 @@ public class CliIntegrationTests : IDisposable
         exitCode2.Should().Be(2);
         output2.ToString().Should().Contain("[AI AGENT ACTION REQUIRED]");
         output2.ToString().Should().Contain("NewConsumer.cs");
+    }
+
+    [Fact]
+    public async Task RunAsync_WithLimit_LimitsConsoleOutputToTopItems_WhileSummaryReflectsTotal()
+    {
+        var file1 = Path.Combine(_testDirectory, "Class1.cs");
+        await File.WriteAllTextAsync(file1, """
+        namespace MyCompany;
+        public class Class1
+        {
+            // This is a moderately verbose comment that easily exceeds one hundred characters in total length for test purposes.
+            public void M1() {}
+
+            // This is a much longer and significantly more verbose comment that contains a massive amount of redundant descriptive text exceeding the default threshold by many more characters than the other comment so it should have a higher estimated benefit when condensed.
+            public void M2() {}
+        }
+        """);
+
+        var engine = new CodeCondenserEngine(snapshotStore: new JsonSnapshotStore());
+
+        using var output = new StringWriter();
+        var exitCode = await Program.RunAsync(
+            ["analyze", _testDirectory, "--limit", "1", "--no-color", "--no-duplication"],
+            output,
+            new StringWriter(),
+            customEngine: engine);
+
+        exitCode.Should().Be(0);
+        var outputText = output.ToString();
+        outputText.Should().Contain("Showing top 1 with largest benefit");
+        outputText.Should().Contain("much longer and significantly more verbose comment");
+        outputText.Should().NotContain("moderately verbose comment");
+        outputText.Should().Contain("Verbose Comments:  2");
+    }
+
+    [Fact]
+    public async Task RunAsync_WithShortLimitFlag_LimitsConsoleOutput()
+    {
+        var file1 = Path.Combine(_testDirectory, "ShortLimit.cs");
+        await File.WriteAllTextAsync(file1, """
+        namespace MyCompany;
+        public class ShortLimit
+        {
+            // First verbose comment that exceeds one hundred characters in total length for testing the short limit flag.
+            public void M1() {}
+
+            // Second verbose comment that also exceeds one hundred characters in total length for testing the short limit flag.
+            public void M2() {}
+        }
+        """);
+
+        var engine = new CodeCondenserEngine(snapshotStore: new JsonSnapshotStore());
+
+        using var output = new StringWriter();
+        var exitCode = await Program.RunAsync(
+            ["analyze", _testDirectory, "-l", "1", "--no-color", "--no-duplication"],
+            output,
+            new StringWriter(),
+            customEngine: engine);
+
+        exitCode.Should().Be(0);
+        var outputText = output.ToString();
+        outputText.Should().Contain("Showing top 1 with largest benefit");
+        outputText.Should().Contain("Verbose Comments:  2");
     }
 
     private sealed class SettingsCapturingSummarizer : ICommentSummarizer

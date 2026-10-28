@@ -287,6 +287,7 @@ jobs:
 | `-tml, --threshold-method-lines <n>` | `-tml` | Maximum lines of code threshold for methods | `150` |
 | `-tcl, --threshold-class-lines <n>` | `-tcl` | Maximum lines of code threshold for classes and records | `1500` |
 | `-lt, --loc-tolerance <n>` | `-lt` | Maximum new lines of code violations tolerated in incremental mode | `null` |
+| `-l, --limit <n>` | `-l`, `--max-items` | Limit displayed items across all categories to top N with largest benefit | `null` *(all)* |
 | `--summary <mode>` | | Comment summary mode: `disabled`, `summarize`, or `report` | Auto (`summarize` if LLM configured, `report` otherwise) |
 | `--report-only` | | Report-only mode for comments without calling an LLM (alias for `--summary report`) | `false` |
 | `--include <pattern>` | | Add glob pattern of files/directories to include (multi-value) | `[]` *(all .cs files)* |
