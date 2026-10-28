@@ -33,7 +33,8 @@ public static class DisplayedItemLimiter
         AnalysisResult result,
         CodeCondenserSettings settings,
         string baseDirectory,
-        HeuristicTokenEstimator? estimator = null)
+        HeuristicTokenEstimator? estimator = null,
+        bool includeComments = true)
     {
         ArgumentNullException.ThrowIfNull(result);
         ArgumentNullException.ThrowIfNull(settings);
@@ -44,7 +45,7 @@ public static class DisplayedItemLimiter
         bool isSubMethodAnalyzed = settings.EnableSubMethodCloneDetection;
         bool isStringsAnalyzed = settings.EnableRepeatedStringDetection;
         bool isPredicatesAnalyzed = settings.EnablePredicateCloneDetection;
-        bool isCommentsAnalyzed = settings.GetEffectiveSummaryMode() != SummaryMode.Disabled && settings.EnableCommentSummarization;
+        bool isCommentsAnalyzed = includeComments && settings.GetEffectiveSummaryMode() != SummaryMode.Disabled && settings.EnableCommentSummarization;
         bool isTypeAnalyzed = settings.EnableTypeSplitting;
         bool isLocAnalyzed = settings.EnableLinesOfCodeDetection;
 
@@ -65,38 +66,21 @@ public static class DisplayedItemLimiter
             + candidateLocViolations.Count;
 
         int? limit = settings.Limit;
+        bool isLimited = limit.HasValue && limit.Value >= 0 && limit.Value < totalCount;
 
-        // If no limit or limit is non-positive or limit >= totalCount, display all analyzed items ordered by benefit descending
-        if (!limit.HasValue || limit.Value <= 0 || limit.Value >= totalCount)
-        {
-            return new LimitedDisplayItems
-            {
-                CloneGroups = candidateCloneGroups.OrderByDescending(g => GetCloneBenefit(g, effEstimator, baseDirectory)).ToList(),
-                SubMethodCloneGroups = candidateSubMethodGroups.OrderByDescending(g => GetSubMethodBenefit(g, effEstimator, baseDirectory)).ToList(),
-                RepeatedStringGroups = candidateStringGroups.OrderByDescending(g => GetRepeatedStringBenefit(g, effEstimator)).ToList(),
-                PredicateCloneGroups = candidatePredicateGroups.OrderByDescending(g => GetPredicateBenefit(g, effEstimator)).ToList(),
-                VerboseComments = candidateComments.OrderByDescending(c => GetCommentBenefit(c, result.SummarizedComments, effEstimator)).ToList(),
-                TypeFileIssues = candidateTypeIssues.OrderByDescending(GetTypeIssueBenefit).ToList(),
-                LinesOfCodeViolations = candidateLocViolations.OrderByDescending(GetLocViolationBenefit).ToList(),
-                TotalItemCount = totalCount,
-                DisplayedItemCount = totalCount,
-                IsLimited = false
-            };
-        }
-
-        // Global limiting: gather all items across categories and prioritize by largest estimated benefit
+        var fileCache = new Dictionary<string, string[]?>(StringComparer.OrdinalIgnoreCase);
         var allCandidates = new List<(object Item, int Benefit, int CategoryPriority, int Index)>(totalCount);
 
         for (int i = 0; i < candidateCloneGroups.Count; i++)
         {
             var item = candidateCloneGroups[i];
-            allCandidates.Add((item, GetCloneBenefit(item, effEstimator, baseDirectory), 1, i));
+            allCandidates.Add((item, GetCloneBenefit(item, effEstimator, baseDirectory, fileCache), 1, i));
         }
 
         for (int i = 0; i < candidateSubMethodGroups.Count; i++)
         {
             var item = candidateSubMethodGroups[i];
-            allCandidates.Add((item, GetSubMethodBenefit(item, effEstimator, baseDirectory), 2, i));
+            allCandidates.Add((item, GetSubMethodBenefit(item, effEstimator, baseDirectory, fileCache), 2, i));
         }
 
         for (int i = 0; i < candidateStringGroups.Count; i++)
@@ -129,30 +113,24 @@ public static class DisplayedItemLimiter
             allCandidates.Add((item, GetLocViolationBenefit(item), 7, i));
         }
 
-        var topItems = allCandidates
+        var sorted = allCandidates
             .OrderByDescending(c => c.Benefit)
             .ThenBy(c => c.CategoryPriority)
-            .ThenBy(c => c.Index)
-            .Take(limit.Value)
-            .ToList();
+            .ThenBy(c => c.Index);
 
-        var selectedSet = new HashSet<object>(topItems.Select(t => t.Item), ReferenceEqualityComparer.Instance);
+        var chosenItems = isLimited
+            ? sorted.Take(limit!.Value).ToList()
+            : sorted.ToList();
 
-        var selectedClones = candidateCloneGroups.Where(selectedSet.Contains).OrderByDescending(g => GetCloneBenefit(g, effEstimator, baseDirectory)).ToList();
-        var selectedSubMethods = candidateSubMethodGroups.Where(selectedSet.Contains).OrderByDescending(g => GetSubMethodBenefit(g, effEstimator, baseDirectory)).ToList();
-        var selectedStrings = candidateStringGroups.Where(selectedSet.Contains).OrderByDescending(g => GetRepeatedStringBenefit(g, effEstimator)).ToList();
-        var selectedPredicates = candidatePredicateGroups.Where(selectedSet.Contains).OrderByDescending(g => GetPredicateBenefit(g, effEstimator)).ToList();
-        var selectedComments = candidateComments.Where(selectedSet.Contains).OrderByDescending(c => GetCommentBenefit(c, result.SummarizedComments, effEstimator)).ToList();
-        var selectedTypes = candidateTypeIssues.Where(selectedSet.Contains).OrderByDescending(GetTypeIssueBenefit).ToList();
-        var selectedLocs = candidateLocViolations.Where(selectedSet.Contains).OrderByDescending(GetLocViolationBenefit).ToList();
+        var selectedClones = chosenItems.Where(t => t.Item is CodeCloneGroup).Select(t => (CodeCloneGroup)t.Item).ToList();
+        var selectedSubMethods = chosenItems.Where(t => t.Item is SubMethodCloneGroup).Select(t => (SubMethodCloneGroup)t.Item).ToList();
+        var selectedStrings = chosenItems.Where(t => t.Item is RepeatedStringGroup).Select(t => (RepeatedStringGroup)t.Item).ToList();
+        var selectedPredicates = chosenItems.Where(t => t.Item is PredicateCloneGroup).Select(t => (PredicateCloneGroup)t.Item).ToList();
+        var selectedComments = chosenItems.Where(t => t.Item is VerboseComment).Select(t => (VerboseComment)t.Item).ToList();
+        var selectedTypes = chosenItems.Where(t => t.Item is TypeFileAnalysis).Select(t => (TypeFileAnalysis)t.Item).ToList();
+        var selectedLocs = chosenItems.Where(t => t.Item is LinesOfCodeViolation).Select(t => (LinesOfCodeViolation)t.Item).ToList();
 
-        int displayedCount = selectedClones.Count
-            + selectedSubMethods.Count
-            + selectedStrings.Count
-            + selectedPredicates.Count
-            + selectedComments.Count
-            + selectedTypes.Count
-            + selectedLocs.Count;
+        int displayedCount = chosenItems.Count;
 
         return new LimitedDisplayItems
         {
@@ -165,20 +143,28 @@ public static class DisplayedItemLimiter
             LinesOfCodeViolations = selectedLocs,
             TotalItemCount = totalCount,
             DisplayedItemCount = displayedCount,
-            IsLimited = true
+            IsLimited = isLimited
         };
     }
 
-    public static int GetCloneBenefit(CodeCloneGroup group, HeuristicTokenEstimator estimator, string baseDirectory)
+    public static int GetCloneBenefit(
+        CodeCloneGroup group,
+        HeuristicTokenEstimator estimator,
+        string baseDirectory,
+        Dictionary<string, string[]?>? cache = null)
     {
-        int gain = CloneGainEstimator.EstimateGainTokens(group, estimator, baseDirectory);
+        int gain = CloneGainEstimator.EstimateGainTokens(group, estimator, baseDirectory, cache);
         if (gain > 0) return gain;
         return Math.Max(1, group.StatementCount * 10 * Math.Max(1, group.Methods.Count - 1));
     }
 
-    public static int GetSubMethodBenefit(SubMethodCloneGroup group, HeuristicTokenEstimator estimator, string baseDirectory)
+    public static int GetSubMethodBenefit(
+        SubMethodCloneGroup group,
+        HeuristicTokenEstimator estimator,
+        string baseDirectory,
+        Dictionary<string, string[]?>? cache = null)
     {
-        int gain = CloneGainEstimator.EstimateGainTokens(group, estimator, baseDirectory);
+        int gain = CloneGainEstimator.EstimateGainTokens(group, estimator, baseDirectory, cache);
         if (gain > 0) return gain;
         return Math.Max(1, group.StatementCount * 10 * Math.Max(1, group.Occurrences.Count - 1));
     }

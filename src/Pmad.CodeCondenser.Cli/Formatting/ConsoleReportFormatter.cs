@@ -55,7 +55,7 @@ public sealed class ConsoleReportFormatter : IReportFormatter
                 totalTestCount: totalTest);
         }
 
-        if (isSubMethodAnalyzed && (displayed.SubMethodCloneGroups.Count > 0 || result.SubMethodCloneGroups.Count > 0))
+        if (isSubMethodAnalyzed && displayed.SubMethodCloneGroups.Count > 0)
         {
             _consoleFormatter.PrintSubMethodCloneGroups(
                 output,
@@ -65,7 +65,7 @@ public sealed class ConsoleReportFormatter : IReportFormatter
                 totalCount: result.SubMethodCloneGroups.Count);
         }
 
-        if (isStringsAnalyzed && (displayed.RepeatedStringGroups.Count > 0 || result.RepeatedStringGroups.Count > 0))
+        if (isStringsAnalyzed && displayed.RepeatedStringGroups.Count > 0)
         {
             int totalProd = result.RepeatedStringGroups.Count(g => g.Category != CloneCategory.Test);
             int totalTest = result.RepeatedStringGroups.Count(g => g.Category == CloneCategory.Test);
@@ -79,7 +79,7 @@ public sealed class ConsoleReportFormatter : IReportFormatter
                 totalTestCount: totalTest);
         }
 
-        if (isTypeAnalyzed && (displayed.TypeFileIssues.Count > 0 || result.TypeFileIssues.Any(i => i.HasViolation)))
+        if (isTypeAnalyzed && displayed.TypeFileIssues.Count > 0)
         {
             _consoleFormatter.PrintTypeFileIssues(
                 output,
@@ -89,7 +89,7 @@ public sealed class ConsoleReportFormatter : IReportFormatter
                 totalCount: result.TypeFileIssues.Count(i => i.HasViolation));
         }
 
-        if (isLocAnalyzed && (displayed.LinesOfCodeViolations.Count > 0 || result.LinesOfCodeViolations.Count > 0))
+        if (isLocAnalyzed && displayed.LinesOfCodeViolations.Count > 0)
         {
             _consoleFormatter.PrintLinesOfCodeViolations(
                 output,
@@ -98,7 +98,7 @@ public sealed class ConsoleReportFormatter : IReportFormatter
                 totalCount: result.LinesOfCodeViolations.Count);
         }
 
-        if (isPredicatesAnalyzed && (displayed.PredicateCloneGroups.Count > 0 || result.PredicateCloneGroups.Count > 0))
+        if (isPredicatesAnalyzed && displayed.PredicateCloneGroups.Count > 0)
         {
             int totalProd = result.PredicateCloneGroups.Count(g => g.Category != CloneCategory.Test);
             int totalTest = result.PredicateCloneGroups.Count(g => g.Category == CloneCategory.Test);
@@ -130,7 +130,7 @@ public sealed class ConsoleReportFormatter : IReportFormatter
         int? prodClones = isDuplicationAnalyzed ? result.CloneGroups.Count(g => g.Category != CloneCategory.Test) : null;
         int? testClones = isDuplicationAnalyzed ? result.CloneGroups.Count(g => g.Category == CloneCategory.Test) : null;
         int? subMethodClones = isSubMethodAnalyzed ? result.SubMethodCloneGroups.Count : null;
-        int? cloneGainTokens = isDuplicationAnalyzed ? CloneGainEstimator.EstimateTotalGainTokens(result.CloneGroups, result.SubMethodCloneGroups, estimator, baseDirectory) : null;
+        int? cloneGainTokens = (isDuplicationAnalyzed || isSubMethodAnalyzed) ? CloneGainEstimator.EstimateTotalGainTokens(result.CloneGroups, result.SubMethodCloneGroups, estimator, baseDirectory) : null;
 
         var commentGainResult = isCommentsAnalyzed ? result.CalculateCommentGain(estimator) : null;
         int? verboseCommentsCount = isCommentsAnalyzed ? result.VerboseComments.Count : null;

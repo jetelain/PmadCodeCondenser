@@ -162,4 +162,52 @@ public class DisplayedItemLimiterTests
         limited.DisplayedItemCount.Should().Be(1);
         limited.VerboseComments.Should().HaveCount(1);
     }
+
+    [Fact]
+    public void SelectItems_WhenLimitZero_ReturnsZeroDisplayedItemsAndIsMarkedLimited()
+    {
+        var comment = CreateComment(new string('C', 200));
+        var clone = CreateClone("clone1", 10, 2);
+        var result = new AnalysisResult
+        {
+            AnalyzedFilesCount = 2,
+            TotalMethodsScanned = 5,
+            CloneGroups = [clone],
+            VerboseComments = [comment],
+            SummarizedComments = new Dictionary<string, string>()
+        };
+
+        var settings = new CodeCondenserSettings { Limit = 0 };
+        var limited = DisplayedItemLimiter.SelectItems(result, settings, ".");
+
+        limited.IsLimited.Should().BeTrue();
+        limited.TotalItemCount.Should().Be(2);
+        limited.DisplayedItemCount.Should().Be(0);
+        limited.CloneGroups.Should().BeEmpty();
+        limited.VerboseComments.Should().BeEmpty();
+    }
+
+    [Fact]
+    public void SelectItems_WhenIncludeCommentsFalse_ExcludesCommentsFromSelection()
+    {
+        var comment = CreateComment(new string('C', 1000));
+        var clone = CreateClone("clone1", 10, 2);
+        var result = new AnalysisResult
+        {
+            AnalyzedFilesCount = 2,
+            TotalMethodsScanned = 5,
+            CloneGroups = [clone],
+            VerboseComments = [comment],
+            SummarizedComments = new Dictionary<string, string>()
+        };
+
+        var settings = new CodeCondenserSettings { Limit = 1 };
+        var limited = DisplayedItemLimiter.SelectItems(result, settings, ".", includeComments: false);
+
+        limited.IsLimited.Should().BeFalse();
+        limited.TotalItemCount.Should().Be(1);
+        limited.DisplayedItemCount.Should().Be(1);
+        limited.CloneGroups.Should().HaveCount(1);
+        limited.VerboseComments.Should().BeEmpty();
+    }
 }

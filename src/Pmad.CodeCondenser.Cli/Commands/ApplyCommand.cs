@@ -89,7 +89,7 @@ public sealed class ApplyCommand : ICommand
         var baseDirectory = PathFilter.ResolveBaseDirectory(options.TargetPath);
 
         var estimator = CodeCondenserEngine.ResolveEstimator(settings);
-        var displayed = DisplayedItemLimiter.SelectItems(result, settings, baseDirectory, estimator);
+        var displayed = DisplayedItemLimiter.SelectItems(result, settings, baseDirectory, estimator, includeComments: false);
 
         bool isDuplicationAnalyzed = settings.EnableDuplicationDetection;
         bool isSubMethodAnalyzed = settings.EnableSubMethodCloneDetection;
@@ -113,7 +113,7 @@ public sealed class ApplyCommand : ICommand
                 totalTestCount: totalTest);
         }
 
-        if (isSubMethodAnalyzed && (displayed.SubMethodCloneGroups.Count > 0 || result.SubMethodCloneGroups.Count > 0))
+        if (isSubMethodAnalyzed && displayed.SubMethodCloneGroups.Count > 0)
         {
             formatter.PrintSubMethodCloneGroups(
                 output,
@@ -123,7 +123,21 @@ public sealed class ApplyCommand : ICommand
                 totalCount: result.SubMethodCloneGroups.Count);
         }
 
-        if (isTypeAnalyzed && (displayed.TypeFileIssues.Count > 0 || result.TypeFileIssues.Any(i => i.HasViolation)))
+        if (isStringsAnalyzed && displayed.RepeatedStringGroups.Count > 0)
+        {
+            int totalProd = result.RepeatedStringGroups.Count(g => g.Category != CloneCategory.Test);
+            int totalTest = result.RepeatedStringGroups.Count(g => g.Category == CloneCategory.Test);
+            formatter.PrintRepeatedStringGroups(
+                output,
+                displayed.RepeatedStringGroups,
+                baseDirectory,
+                estimator,
+                totalCount: result.RepeatedStringGroups.Count,
+                totalProductionCount: totalProd,
+                totalTestCount: totalTest);
+        }
+
+        if (isTypeAnalyzed && displayed.TypeFileIssues.Count > 0)
         {
             formatter.PrintTypeFileIssues(
                 output,
@@ -133,13 +147,27 @@ public sealed class ApplyCommand : ICommand
                 totalCount: result.TypeFileIssues.Count(i => i.HasViolation));
         }
 
-        if (isLocAnalyzed && (displayed.LinesOfCodeViolations.Count > 0 || result.LinesOfCodeViolations.Count > 0))
+        if (isLocAnalyzed && displayed.LinesOfCodeViolations.Count > 0)
         {
             formatter.PrintLinesOfCodeViolations(
                 output,
                 displayed.LinesOfCodeViolations,
                 baseDirectory,
                 totalCount: result.LinesOfCodeViolations.Count);
+        }
+
+        if (isPredicatesAnalyzed && displayed.PredicateCloneGroups.Count > 0)
+        {
+            int totalProd = result.PredicateCloneGroups.Count(g => g.Category != CloneCategory.Test);
+            int totalTest = result.PredicateCloneGroups.Count(g => g.Category == CloneCategory.Test);
+            formatter.PrintPredicateCloneGroups(
+                output,
+                displayed.PredicateCloneGroups,
+                baseDirectory,
+                estimator,
+                totalCount: result.PredicateCloneGroups.Count,
+                totalProductionCount: totalProd,
+                totalTestCount: totalTest);
         }
 
         var modifiedFiles = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
@@ -205,9 +233,11 @@ public sealed class ApplyCommand : ICommand
         int? prodClones = isDuplicationAnalyzed ? result.CloneGroups.Count(g => g.Category != CloneCategory.Test) : null;
         int? testClones = isDuplicationAnalyzed ? result.CloneGroups.Count(g => g.Category == CloneCategory.Test) : null;
         int? subMethodClones = isSubMethodAnalyzed ? result.SubMethodCloneGroups.Count : null;
-        int? cloneGainTokens = isDuplicationAnalyzed ? Pmad.CodeCondenser.Core.Clones.CloneGainEstimator.EstimateTotalGainTokens(result.CloneGroups, result.SubMethodCloneGroups, estimator, baseDirectory) : null;
+        int? cloneGainTokens = (isDuplicationAnalyzed || isSubMethodAnalyzed) ? Pmad.CodeCondenser.Core.Clones.CloneGainEstimator.EstimateTotalGainTokens(result.CloneGroups, result.SubMethodCloneGroups, estimator, baseDirectory) : null;
 
         int? repeatedStringsCount = isStringsAnalyzed ? result.RepeatedStringGroups.Count : null;
+        int? repeatedStringGainChars = (isStringsAnalyzed && result.RepeatedStringGroups.Count > 0) ? result.TotalRepeatedStringGainCharacters : null;
+        int? repeatedStringGainTokens = (isStringsAnalyzed && result.RepeatedStringGroups.Count > 0) ? result.TotalRepeatedStringGainTokens : null;
         int? typeIssuesCount = isTypeAnalyzed ? result.TypeFileIssues.Count(i => i.HasViolation) : null;
         int? linesOfCodeViolationsCount = isLocAnalyzed ? result.LinesOfCodeViolations.Count : null;
         int? predicateGroupsCount = isPredicatesAnalyzed ? result.PredicateCloneGroups.Count : null;
@@ -233,8 +263,8 @@ public sealed class ApplyCommand : ICommand
             commentGainTokens,
             cloneGainTokens,
             repeatedStringsCount: repeatedStringsCount,
-            repeatedStringGainChars: null,
-            repeatedStringGainTokens: null,
+            repeatedStringGainChars: repeatedStringGainChars,
+            repeatedStringGainTokens: repeatedStringGainTokens,
             typeIssuesCount: typeIssuesCount,
             linesOfCodeViolationsCount: linesOfCodeViolationsCount,
             predicateGroupsCount: predicateGroupsCount,
