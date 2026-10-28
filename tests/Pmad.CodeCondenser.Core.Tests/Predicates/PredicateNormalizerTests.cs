@@ -209,4 +209,86 @@ public class PredicateNormalizerTests
         Assert.DoesNotContain("$this.Math", helperResult.Signature);
         Assert.Contains("$this.Threshold", helperResult.Signature);
     }
+
+    [Fact]
+    public void Normalize_NullConditionalAccessInInstanceContext_PreservesMemberWithoutThisBinding()
+    {
+        var expr = ParseExpression("ExistingHelper?.IsPrivate ?? false");
+        var result = PredicateNormalizer.Normalize(
+            expr,
+            knownParameters: [],
+            isInstanceMemberContext: true);
+
+        Assert.Contains("$this.ExistingHelper?.IsPrivate ?? false", result.Signature);
+        Assert.DoesNotContain("?.$this.IsPrivate", result.Signature);
+        Assert.Empty(result.ArgumentExpressions);
+    }
+
+    [Fact]
+    public void Normalize_NullConditionalAccessAtCallSite_PreservesMemberNameWithoutArgumentSlot()
+    {
+        var expr = ParseExpression("order?.Customer?.IsActive == true");
+        var result = PredicateNormalizer.Normalize(expr);
+
+        Assert.Equal("$0?.Customer?.IsActive == true", result.Signature);
+        Assert.Single(result.ArgumentExpressions);
+        Assert.Equal("order", result.ArgumentExpressions[0]);
+    }
+
+    [Fact]
+    public void Normalize_TypePatternAndCasts_PreservesTypesWithoutThisBindingOrArgumentRegistration()
+    {
+        var expr = ParseExpression("x is Order && (int)y > 0 && z as Customer != null");
+        var result = PredicateNormalizer.Normalize(
+            expr,
+            knownParameters: ["x", "y", "z"],
+            isInstanceMemberContext: true);
+
+        Assert.Contains("$0 is Order", result.Signature);
+        Assert.Contains("(int)$1 > 0", result.Signature);
+        Assert.Contains("$2 as Customer != null", result.Signature);
+        Assert.DoesNotContain("$this.Order", result.Signature);
+        Assert.DoesNotContain("$this.Customer", result.Signature);
+    }
+
+    [Fact]
+    public void Normalize_NamedArgumentsAndObjectInitializers_PreservesNames()
+    {
+        var expr = ParseExpression("Validate(id: x, active: true) && new Filter { Min = 0 }.Matches(y)");
+        var result = PredicateNormalizer.Normalize(expr);
+
+        Assert.Contains("id: $0", result.Signature);
+        Assert.Contains("active: true", result.Signature);
+        Assert.Contains("Min = 0", result.Signature);
+        Assert.Equal(["x", "y"], result.ArgumentExpressions);
+    }
+
+    [Fact]
+    public void Normalize_LambdaParametersInsidePredicate_DoesNotTreatLambdaParamAsArgumentOrThis()
+    {
+        var expr = ParseExpression("items.Any(x => x.IsActive && x.Count > 0)");
+        var result = PredicateNormalizer.Normalize(
+            expr,
+            knownParameters: [],
+            isInstanceMemberContext: true);
+
+        Assert.Contains("$this.items.Any(x => x.IsActive && x.Count > 0)", result.Signature);
+        Assert.DoesNotContain("$this.x", result.Signature);
+        Assert.Empty(result.ArgumentExpressions);
+    }
+
+    [Fact]
+    public void Normalize_DeclarationExpressionOutVar_PreservesTypeAndRegistersOutVariableAsLocal()
+    {
+        var expr = ParseExpression("dict.TryGetValue(key, out var val) && val.IsActive");
+        var result = PredicateNormalizer.Normalize(
+            expr,
+            knownParameters: ["dict", "key"],
+            isInstanceMemberContext: true);
+
+        Assert.Contains("$0.TryGetValue($1, out var val) && val.IsActive", result.Signature);
+        Assert.DoesNotContain("$this.val", result.Signature);
+        Assert.DoesNotContain("$this.var", result.Signature);
+        Assert.DoesNotContain("val", result.ArgumentExpressions);
+    }
 }

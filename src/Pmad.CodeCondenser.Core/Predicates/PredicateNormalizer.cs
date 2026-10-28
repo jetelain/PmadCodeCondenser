@@ -36,7 +36,8 @@ public sealed class PredicateNormalizer
         ExpressionSyntax expression,
         string? explicitReceiver = null,
         IReadOnlyList<string>? knownParameters = null,
-        bool isInstanceMemberContext = false)
+        bool isInstanceMemberContext = false,
+        string? declaringTypeName = null)
     {
         ArgumentNullException.ThrowIfNull(expression);
 
@@ -50,7 +51,7 @@ public sealed class PredicateNormalizer
             isDirectNegation = true;
         }
 
-        var rewriter = new NormalizingRewriter(explicitReceiver, knownParameters, isInstanceMemberContext);
+        var rewriter = new NormalizingRewriter(explicitReceiver, knownParameters, isInstanceMemberContext, declaringTypeName);
         var normalizedNode = rewriter.Visit(unwrapped);
         var signature = normalizedNode.NormalizeWhitespace("", "").ToFullString();
         var hash = ComputeHash(signature);
@@ -70,12 +71,13 @@ public sealed class PredicateNormalizer
         ExpressionSyntax expression,
         string? explicitReceiver = null,
         IReadOnlyList<string>? knownParameters = null,
-        bool isInstanceMemberContext = false)
+        bool isInstanceMemberContext = false,
+        string? declaringTypeName = null)
     {
         ArgumentNullException.ThrowIfNull(expression);
 
         var inverted = InvertCondition(expression);
-        var result = Normalize(inverted, explicitReceiver, knownParameters, isInstanceMemberContext);
+        var result = Normalize(inverted, explicitReceiver, knownParameters, isInstanceMemberContext, declaringTypeName);
 
         return result with { IsNegated = true };
     }
@@ -224,7 +226,9 @@ public sealed class PredicateNormalizer
         private readonly Dictionary<string, string> _variableMap = new(StringComparer.Ordinal);
         private readonly List<string> _orderedArguments = new();
         private readonly HashSet<string> _knownParameterSet = new(StringComparer.Ordinal);
+        private readonly bool _hasKnownParameters;
         private readonly bool _isInstanceMemberContext;
+        private readonly string? _declaringTypeName;
 
         public string? DetectedReceiver => _explicitReceiver;
         public IReadOnlyList<string> OrderedArguments => _orderedArguments;
@@ -232,10 +236,13 @@ public sealed class PredicateNormalizer
         public NormalizingRewriter(
             string? explicitReceiver,
             IReadOnlyList<string>? knownParameters,
-            bool isInstanceMemberContext)
+            bool isInstanceMemberContext,
+            string? declaringTypeName = null)
         {
             _explicitReceiver = explicitReceiver;
             _isInstanceMemberContext = isInstanceMemberContext;
+            _declaringTypeName = declaringTypeName;
+            _hasKnownParameters = knownParameters != null;
 
             if (knownParameters != null)
             {
@@ -244,9 +251,12 @@ public sealed class PredicateNormalizer
                     var paramName = knownParameters[i];
                     _knownParameterSet.Add(paramName);
                     _variableMap[paramName] = $"${i}";
+                    _orderedArguments.Add(paramName);
                 }
             }
         }
+
+        private readonly HashSet<string> _localVariables = new(StringComparer.Ordinal);
 
         public override SyntaxTrivia VisitTrivia(SyntaxTrivia trivia)
         {
@@ -257,6 +267,89 @@ public sealed class PredicateNormalizer
         {
             var inner = (ExpressionSyntax)Visit(node.Expression)!;
             return SyntaxFactory.ParenthesizedExpression(inner);
+        }
+
+        public override SyntaxNode? VisitMemberBindingExpression(MemberBindingExpressionSyntax node)
+        {
+            // Member in null-conditional ?.Member is bound to the conditional receiver, not $this or an argument slot.
+            return node;
+        }
+
+        public override SyntaxNode? VisitNameColon(NameColonSyntax node)
+        {
+            // Preserve named argument / property pattern label (e.g. Method(name: val) or { Name: val })
+            var expr = (ExpressionSyntax)Visit(node.Expression)!;
+            return node.WithExpression(expr);
+        }
+
+        public override SyntaxNode? VisitNameEquals(NameEqualsSyntax node)
+        {
+            // Preserve object/with initializer property names (e.g. new Foo { Prop = val })
+            return node;
+        }
+
+        public override SyntaxNode? VisitSimpleLambdaExpression(SimpleLambdaExpressionSyntax node)
+        {
+            var paramName = node.Parameter.Identifier.ValueText;
+            bool added = !string.IsNullOrEmpty(paramName) && _localVariables.Add(paramName);
+            try
+            {
+                return base.VisitSimpleLambdaExpression(node);
+            }
+            finally
+            {
+                if (added)
+                {
+                    _localVariables.Remove(paramName);
+                }
+            }
+        }
+
+        public override SyntaxNode? VisitParenthesizedLambdaExpression(ParenthesizedLambdaExpressionSyntax node)
+        {
+            var addedList = new List<string>();
+            foreach (var p in node.ParameterList.Parameters)
+            {
+                var pName = p.Identifier.ValueText;
+                if (!string.IsNullOrEmpty(pName) && _localVariables.Add(pName))
+                {
+                    addedList.Add(pName);
+                }
+            }
+            try
+            {
+                return base.VisitParenthesizedLambdaExpression(node);
+            }
+            finally
+            {
+                foreach (var pName in addedList)
+                {
+                    _localVariables.Remove(pName);
+                }
+            }
+        }
+
+        public override SyntaxNode? VisitDeclarationExpression(DeclarationExpressionSyntax node)
+        {
+            foreach (var svd in node.DescendantNodesAndSelf().OfType<SingleVariableDesignationSyntax>())
+            {
+                var varName = svd.Identifier.ValueText;
+                if (!string.IsNullOrEmpty(varName))
+                {
+                    _localVariables.Add(varName);
+                }
+            }
+            return node;
+        }
+
+        public override SyntaxNode? VisitSingleVariableDesignation(SingleVariableDesignationSyntax node)
+        {
+            var varName = node.Identifier.ValueText;
+            if (!string.IsNullOrEmpty(varName))
+            {
+                _localVariables.Add(varName);
+            }
+            return base.VisitSingleVariableDesignation(node);
         }
 
         public override SyntaxNode? VisitMemberAccessExpression(MemberAccessExpressionSyntax node)
@@ -332,8 +425,49 @@ public sealed class PredicateNormalizer
         {
             var name = node.Identifier.ValueText;
 
-            // In helper definition context inside an instance class:
-            // Unqualified member access that is not a parameter is implicitly `this.Member`!
+            // Preserve type identifiers, member bindings, named argument labels, and object initializer properties
+            if (IsTypeOrMemberNameContext(node))
+            {
+                return node;
+            }
+
+            // Local variables declared within the condition (e.g. lambda parameters or pattern variables)
+            if (_localVariables.Contains(name))
+            {
+                return node;
+            }
+
+            // If we are normalizing a helper declaration with known parameters:
+            if (_hasKnownParameters)
+            {
+                if (_knownParameterSet.Contains(name))
+                {
+                    return SyntaxFactory.IdentifierName(_variableMap[name]);
+                }
+
+                // In instance member context, unqualified identifiers not in parameters are $this.Member
+                if (_isInstanceMemberContext && !RuntimeStaticTypes.Contains(name))
+                {
+                    return SyntaxFactory.MemberAccessExpression(
+                        SyntaxKind.SimpleMemberAccessExpression,
+                        SyntaxFactory.IdentifierName("$this"),
+                        node);
+                }
+
+                // In static member context, unqualified identifiers not in parameters are static members/constants
+                // of the declaring type. They MUST NOT be turned into parameter slots ($n) because they are NOT parameters!
+                if (!string.IsNullOrEmpty(_declaringTypeName) && !RuntimeStaticTypes.Contains(name))
+                {
+                    return SyntaxFactory.MemberAccessExpression(
+                        SyntaxKind.SimpleMemberAccessExpression,
+                        SyntaxFactory.IdentifierName(_declaringTypeName),
+                        node);
+                }
+
+                return node;
+            }
+
+            // In helper definition context inside an instance class without known parameters (legacy fallback):
             if (_isInstanceMemberContext && !_knownParameterSet.Contains(name) && !RuntimeStaticTypes.Contains(name))
             {
                 return SyntaxFactory.MemberAccessExpression(
@@ -362,6 +496,104 @@ public sealed class PredicateNormalizer
             // Preserve exact literal values (numbers, strings, characters, booleans, null)
             // so conditions with different literals are not falsely merged into identical clones.
             return node;
+        }
+
+        private bool IsTypeOrMemberNameContext(IdentifierNameSyntax node)
+        {
+            var parent = node.Parent;
+            if (parent == null)
+            {
+                return false;
+            }
+
+            if (parent is MemberBindingExpressionSyntax)
+            {
+                return true;
+            }
+
+            if (parent is NameColonSyntax nc && nc.Name == node)
+            {
+                return true;
+            }
+
+            if (parent is NameEqualsSyntax ne && ne.Name == node)
+            {
+                return true;
+            }
+
+            if (parent is DeclarationExpressionSyntax decl && decl.Type == node)
+            {
+                return true;
+            }
+
+            if (parent is TypePatternSyntax)
+            {
+                return true;
+            }
+
+            if (parent is RecursivePatternSyntax rec && rec.Type == node)
+            {
+                return true;
+            }
+
+            if (parent is DeclarationPatternSyntax declPat && declPat.Type == node)
+            {
+                return true;
+            }
+
+            if (parent is CastExpressionSyntax cast && cast.Type == node)
+            {
+                return true;
+            }
+
+            if (parent is BinaryExpressionSyntax bin &&
+                (bin.IsKind(SyntaxKind.AsExpression) || bin.IsKind(SyntaxKind.IsExpression)) &&
+                bin.Right == node)
+            {
+                return true;
+            }
+
+            if (parent is TypeOfExpressionSyntax or
+                         DefaultExpressionSyntax or
+                         SizeOfExpressionSyntax or
+                         TypeArgumentListSyntax or
+                         ArrayTypeSyntax or
+                         NullableTypeSyntax or
+                         RefTypeSyntax or
+                         PointerTypeSyntax or
+                         TupleElementSyntax)
+            {
+                return true;
+            }
+
+            if (parent is ObjectCreationExpressionSyntax create && create.Type == node)
+            {
+                return true;
+            }
+
+            if (parent is QualifiedNameSyntax qn && qn.Right == node)
+            {
+                return true;
+            }
+
+            if (parent is AliasQualifiedNameSyntax aqn && aqn.Name == node)
+            {
+                return true;
+            }
+
+            if (parent is AssignmentExpressionSyntax assign &&
+                assign.Left == node &&
+                assign.Parent is InitializerExpressionSyntax { RawKind: (int)SyntaxKind.ObjectInitializerExpression })
+            {
+                return true;
+            }
+
+            if (parent is InvocationExpressionSyntax inv && inv.Expression == node && !_isInstanceMemberContext)
+            {
+                return true;
+            }
+
+            return false;
         }
 
         private IdentifierNameSyntax RegisterArgument(string expressionText)

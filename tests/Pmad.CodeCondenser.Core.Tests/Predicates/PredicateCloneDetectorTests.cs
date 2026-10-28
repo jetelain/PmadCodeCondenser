@@ -59,7 +59,7 @@ public class PredicateCloneDetectorTests
         Assert.Equal("Consumer.cs", group.InlineOccurrences[0].FilePath);
 
         var usage = group.GenerateTypicalUsage(group.InlineOccurrences[0]);
-        Assert.Equal("IsAutonomousTask(taskId, stageId)", usage);
+        Assert.Equal("TaskHelper.IsAutonomousTask(taskId, stageId)", usage);
     }
 
     [Fact]
@@ -324,7 +324,7 @@ public class PredicateCloneDetectorTests
         Assert.Equal("IsInvalid", group.SuggestedHelperName);
 
         var usage = group.GenerateTypicalUsage(group.InlineOccurrences[0]);
-        Assert.Equal("!IsInvalid(taskId, stageId)", usage);
+        Assert.Equal("!Validator.IsInvalid(taskId, stageId)", usage);
     }
 
     [Fact]
@@ -849,7 +849,7 @@ public class PredicateCloneDetectorTests
         // !(A && B) is equivalent to IsInvalidTask (!A || !B), so double negation cancels out
         Assert.False(group.InlineOccurrences[0].IsNegatedAtCallSite);
         var usage = group.GenerateTypicalUsage(group.InlineOccurrences[0]);
-        Assert.Equal("IsInvalidTask(taskId, stageId)", usage);
+        Assert.Equal("TaskHelper.IsInvalidTask(taskId, stageId)", usage);
     }
 
     [Fact]
@@ -884,4 +884,212 @@ public class PredicateCloneDetectorTests
         Assert.Equal("IsAboveThreshold", group.SuggestedHelperName);
         Assert.Single(group.InlineOccurrences);
     }
+
+    [Fact]
+    public void GroupPredicates_ExistingHelperWithNullConditional_MatchesCallSiteCleanly()
+    {
+        var helperCode = """
+            namespace MyNamespace;
+
+            public class HelperService
+            {
+                public bool IsHelperPrivate => ExistingHelper?.IsPrivate ?? false;
+
+                public void Check(HelperService service)
+                {
+                    if (service.ExistingHelper?.IsPrivate ?? false)
+                    {
+                        Process();
+                    }
+                }
+            }
+            """;
+
+        var occurrences = _detector.ExtractPredicates(CSharpSyntaxTree.ParseText(helperCode), "HelperService.cs", _settings);
+        var groups = _detector.GroupPredicates(occurrences, _settings);
+
+        Assert.Single(groups);
+        var group = groups[0];
+        Assert.True(group.HasExistingHelper);
+        Assert.Equal("IsHelperPrivate", group.SuggestedHelperName);
+        Assert.Single(group.InlineOccurrences);
+    }
+
+    [Fact]
+    public void GroupPredicates_ShortConditionWithoutExistingHelper_BelowPredicateLengthThreshold_NotGrouped()
+    {
+        var settings = new CodeCondenserSettings(); // default PredicateLengthThreshold = 100
+        var codeA = """
+            namespace MyNamespace;
+            public class ServiceA
+            {
+                public void Route(RoutingTarget target)
+                {
+                    if (target == RoutingTarget.Cloud) { Process(); }
+                }
+            }
+            """;
+        var codeB = """
+            namespace MyNamespace;
+            public class ServiceB
+            {
+                public void Route(RoutingTarget target)
+                {
+                    if (target == RoutingTarget.Cloud) { Process(); }
+                }
+            }
+            """;
+
+        var occurrences = new List<PredicateOccurrence>();
+        occurrences.AddRange(_detector.ExtractPredicates(CSharpSyntaxTree.ParseText(codeA), "ServiceA.cs", settings));
+        occurrences.AddRange(_detector.ExtractPredicates(CSharpSyntaxTree.ParseText(codeB), "ServiceB.cs", settings));
+
+        var groups = _detector.GroupPredicates(occurrences, settings);
+
+        // Since target == RoutingTarget.Cloud (27 chars) is < 100 and no existing helper exists, it must NOT form a clone group
+        Assert.Empty(groups);
+    }
+
+    [Fact]
+    public void GroupPredicates_ShortConditionWithExistingHelper_AboveExistingHelperThreshold_MatchesHelper()
+    {
+        var settings = new CodeCondenserSettings(); // default PredicateLengthThreshold = 100, ExistingHelperPredicateLengthThreshold = 20
+        var helperCode = """
+            namespace MyNamespace;
+            public static class TargetExtensions
+            {
+                public static bool IsCloud(RoutingTarget target) => target == RoutingTarget.Cloud;
+            }
+            """;
+        var callerCode = """
+            namespace MyNamespace;
+            public class Service
+            {
+                public void Route(RoutingTarget target)
+                {
+                    if (target == RoutingTarget.Cloud) { Process(); }
+                }
+            }
+            """;
+
+        var occurrences = new List<PredicateOccurrence>();
+        occurrences.AddRange(_detector.ExtractPredicates(CSharpSyntaxTree.ParseText(helperCode), "TargetExtensions.cs", settings));
+        occurrences.AddRange(_detector.ExtractPredicates(CSharpSyntaxTree.ParseText(callerCode), "Service.cs", settings));
+
+        var groups = _detector.GroupPredicates(occurrences, settings);
+
+        // target == RoutingTarget.Cloud (27 chars) is >= 20, so when an existing helper exists, it matches the helper!
+        Assert.Single(groups);
+        var group = groups[0];
+        Assert.True(group.HasExistingHelper);
+        Assert.Equal("IsCloud", group.SuggestedHelperName);
+        Assert.Single(group.InlineOccurrences);
+    }
+
+    [Fact]
+    public void GroupPredicates_StaticHelperWithInternalConstant_DoesNotMatchCallSiteWithTwoVariables()
+    {
+        var settings = new CodeCondenserSettings();
+        var helperCode = """
+            namespace NightCodeForge.Core.Domain;
+            public static class WorkerStatusConstants
+            {
+                public const string Running = "Running";
+                public static bool IsRunning(string? status) =>
+                    string.Equals(status, Running, StringComparison.OrdinalIgnoreCase);
+            }
+            """;
+        var callerCode = """
+            namespace NightCodeForge.Agents;
+            public class IdeationService
+            {
+                public void ParseProposals(string d, string prevTitle)
+                {
+                    if (string.Equals(d, prevTitle, StringComparison.OrdinalIgnoreCase))
+                    {
+                        Process();
+                    }
+                }
+            }
+            """;
+
+        var occurrences = new List<PredicateOccurrence>();
+        occurrences.AddRange(_detector.ExtractPredicates(CSharpSyntaxTree.ParseText(helperCode), "WorkerStatusConstants.cs", settings));
+        occurrences.AddRange(_detector.ExtractPredicates(CSharpSyntaxTree.ParseText(callerCode), "IdeationService.cs", settings));
+
+        var groups = _detector.GroupPredicates(occurrences, settings);
+
+        // string.Equals(d, prevTitle, ...) has 2 arguments and must NOT match IsRunning which accepts only 1 parameter
+        Assert.Empty(groups);
+    }
+
+    [Fact]
+    public void GroupPredicates_StaticHelperWithInternalConstant_MatchesCallSiteWithConstantAndIncludesClassName()
+    {
+        var settings = new CodeCondenserSettings();
+        var helperCode = """
+            namespace NightCodeForge.Core.Domain;
+            public static class WorkerStatusConstants
+            {
+                public const string Running = "Running";
+                public static bool IsRunning(string? status) =>
+                    string.Equals(status, Running, StringComparison.OrdinalIgnoreCase);
+            }
+            """;
+        var callerCode = """
+            namespace NightCodeForge.Agents;
+            public class IdeationService
+            {
+                public void Check(string? status)
+                {
+                    if (string.Equals(status, WorkerStatusConstants.Running, StringComparison.OrdinalIgnoreCase))
+                    {
+                        Process();
+                    }
+                }
+            }
+            """;
+
+        var occurrences = new List<PredicateOccurrence>();
+        occurrences.AddRange(_detector.ExtractPredicates(CSharpSyntaxTree.ParseText(helperCode), "WorkerStatusConstants.cs", settings));
+        occurrences.AddRange(_detector.ExtractPredicates(CSharpSyntaxTree.ParseText(callerCode), "IdeationService.cs", settings));
+
+        var groups = _detector.GroupPredicates(occurrences, settings);
+
+        Assert.Single(groups);
+        var group = groups[0];
+        Assert.True(group.HasExistingHelper);
+        Assert.Equal("IsRunning", group.SuggestedHelperName);
+        Assert.Single(group.InlineOccurrences);
+
+        var usage = group.GenerateTypicalUsage(group.InlineOccurrences[0]);
+        Assert.Equal("WorkerStatusConstants.IsRunning(status)", usage);
+    }
+
+    [Fact]
+    public void ExtractPredicates_IgnoresStandaloneAwaitExpressions()
+    {
+        var code = """
+            namespace MyNamespace;
+
+            public class Repository
+            {
+                public async Task ProcessAsync(string commit1, string commit2, CancellationToken ct)
+                {
+                    if (await IsCommitReachableAsync(commit1, commit2, ct).ConfigureAwait(false))
+                    {
+                        return;
+                    }
+                }
+
+                public async Task<bool> IsCommitReachableAsync(string c1, string c2, CancellationToken ct) => true;
+            }
+            """;
+
+        var occurrences = _detector.ExtractPredicates(CSharpSyntaxTree.ParseText(code), "Repository.cs", _settings);
+        var inlineOccurrences = occurrences.Where(o => !o.IsHelperDeclaration).ToList();
+
+        Assert.Empty(inlineOccurrences);
+    }
 }
+

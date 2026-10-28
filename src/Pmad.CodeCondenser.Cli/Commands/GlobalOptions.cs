@@ -251,7 +251,7 @@ public sealed class GlobalOptions
 
     public Option<int?> ThresholdPredicateLengthOption { get; } = new("--threshold-predicates", "-tpred", "--predicate-length-threshold", "--threshold-predicate-length")
     {
-        Description = "Minimum character length for boolean predicate clone detection (default: 25)",
+        Description = "Minimum character length for boolean predicate clone detection (default: 100)",
         Recursive = true
     };
 

@@ -97,29 +97,47 @@ public sealed class PredicateCloneDetector : IPredicateCloneDetector
             matchedInlines.Add(originalInline);
         }
 
-        static bool CanAccessHelper(PredicateOccurrence helperDecl, PredicateOccurrence callSite)
+        static bool CanAccessHelper(PredicateOccurrence helperDecl, PredicateOccurrence callSite, bool isInstance)
         {
-            if (helperDecl.HelperInfo?.IsPrivate != true)
+            if (helperDecl.HelperInfo?.IsPrivate == true)
             {
-                return true;
+                // Private helpers can only be accessed within the same declaring type
+                bool sameType = callSite.EnclosingTypeName != null &&
+                       string.Equals(helperDecl.HelperInfo.DeclaringTypeName, callSite.EnclosingTypeName, StringComparison.Ordinal) &&
+                       string.Equals(helperDecl.Namespace, callSite.Namespace, StringComparison.Ordinal);
+                if (!sameType) return false;
             }
 
-            // Private helpers can only be accessed within the same declaring type
-            return callSite.EnclosingTypeName != null &&
-                   string.Equals(helperDecl.HelperInfo.DeclaringTypeName, callSite.EnclosingTypeName, StringComparison.Ordinal) &&
-                   string.Equals(helperDecl.Namespace, callSite.Namespace, StringComparison.Ordinal);
+            // Parameter count check: call site arguments must match helper parameter count
+            if (helperDecl.HelperInfo != null)
+            {
+                int expectedArgs = helperDecl.HelperInfo.IsProperty ? 0 : helperDecl.HelperInfo.Parameters.Count;
+                int actualArgs = isInstance
+                    ? callSite.InstanceArgumentExpressions.Count
+                    : (callSite.StaticArgumentExpressions.Count > 0
+                        ? callSite.StaticArgumentExpressions.Count
+                        : callSite.ArgumentExpressions.Count);
+
+                if (actualArgs != expectedArgs)
+                {
+                    return false;
+                }
+            }
+
+            return true;
         }
 
         static PredicateOccurrence? FindAccessibleHelper(
             List<PredicateOccurrence>? candidates,
-            PredicateOccurrence callSite)
+            PredicateOccurrence callSite,
+            bool isInstance)
         {
             if (candidates == null || candidates.Count == 0) return null;
 
             PredicateOccurrence? fallback = null;
             foreach (var candidate in candidates)
             {
-                if (CanAccessHelper(candidate, callSite))
+                if (CanAccessHelper(candidate, callSite, isInstance))
                 {
                     // Prioritize exact declaring type match (e.g. private helper in same class)
                     if (string.Equals(candidate.EnclosingTypeName, callSite.EnclosingTypeName, StringComparison.Ordinal) &&
@@ -139,7 +157,7 @@ public sealed class PredicateCloneDetector : IPredicateCloneDetector
             // 1. Instance helper direct match
             if (inline.InstanceNormalizedSignature != null &&
                 instanceHelperMap.TryGetValue(inline.InstanceNormalizedSignature, out var instCandidates) &&
-                FindAccessibleHelper(instCandidates, inline) is { } instHelper)
+                FindAccessibleHelper(instCandidates, inline, isInstance: true) is { } instHelper)
             {
                 bool neg = instHelper.HelperInfo?.IsBodyNegated == true ? !inline.IsNegatedAtCallSite : inline.IsNegatedAtCallSite;
                 AddMatch(instHelper, inline with { IsNegatedAtCallSite = neg }, inline);
@@ -149,7 +167,7 @@ public sealed class PredicateCloneDetector : IPredicateCloneDetector
             // 2. Instance helper De Morgan negated match
             if (inline.NegatedInstanceNormalizedSignature != null &&
                 instanceHelperMap.TryGetValue(inline.NegatedInstanceNormalizedSignature, out var negInstCandidates) &&
-                FindAccessibleHelper(negInstCandidates, inline) is { } negInstHelper)
+                FindAccessibleHelper(negInstCandidates, inline, isInstance: true) is { } negInstHelper)
             {
                 bool isHelperNegated = negInstHelper.HelperInfo?.IsBodyNegated == true;
                 bool neg = isHelperNegated == inline.IsNegatedAtCallSite;
@@ -159,7 +177,7 @@ public sealed class PredicateCloneDetector : IPredicateCloneDetector
 
             // 3. Static helper direct match
             if (staticHelperMap.TryGetValue(inline.NormalizedSignature, out var staticCandidates) &&
-                FindAccessibleHelper(staticCandidates, inline) is { } staticHelper)
+                FindAccessibleHelper(staticCandidates, inline, isInstance: false) is { } staticHelper)
             {
                 bool neg = staticHelper.HelperInfo?.IsBodyNegated == true ? !inline.IsNegatedAtCallSite : inline.IsNegatedAtCallSite;
                 AddMatch(staticHelper, inline with { IsNegatedAtCallSite = neg }, inline);
@@ -169,7 +187,7 @@ public sealed class PredicateCloneDetector : IPredicateCloneDetector
             // 4. Static helper De Morgan negated match
             if (inline.NegatedNormalizedSignature != null &&
                 staticHelperMap.TryGetValue(inline.NegatedNormalizedSignature, out var negStaticCandidates) &&
-                FindAccessibleHelper(negStaticCandidates, inline) is { } negStaticHelper)
+                FindAccessibleHelper(negStaticCandidates, inline, isInstance: false) is { } negStaticHelper)
             {
                 bool isHelperNegated = negStaticHelper.HelperInfo?.IsBodyNegated == true;
                 bool neg = isHelperNegated == inline.IsNegatedAtCallSite;
@@ -213,6 +231,11 @@ public sealed class PredicateCloneDetector : IPredicateCloneDetector
         {
             var rawList = group.ToList();
             if (rawList.Count < minOccurrences)
+            {
+                continue;
+            }
+
+            if (rawList.All(o => o.ExpressionText.Length < settings.PredicateLengthThreshold))
             {
                 continue;
             }

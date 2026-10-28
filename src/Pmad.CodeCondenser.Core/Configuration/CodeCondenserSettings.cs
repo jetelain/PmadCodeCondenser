@@ -256,9 +256,9 @@ public sealed class CodeCondenserSettings
 
     /// <summary>
     /// Minimum character length of a condition expression to be considered for predicate clone analysis.
-    /// Default is 25 characters.
+    /// Default is 100 characters.
     /// </summary>
-    public int PredicateLengthThreshold { get; set; } = 25;
+    public int PredicateLengthThreshold { get; set; } = 100;
 
     /// <summary>
     /// Alias for <see cref="PredicateLengthThreshold"/>.

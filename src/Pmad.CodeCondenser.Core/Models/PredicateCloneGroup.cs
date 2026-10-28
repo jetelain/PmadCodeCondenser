@@ -84,7 +84,10 @@ public sealed record PredicateCloneGroup
 
         if (occurrence == null)
         {
-            return isProperty ? SuggestedHelperName : $"{SuggestedHelperName}()";
+            string staticPrefix = HasExistingHelper && ExistingHelper != null && ExistingHelper.IsStatic && !string.IsNullOrEmpty(ExistingHelper.DeclaringTypeName)
+                ? $"{ExistingHelper.DeclaringTypeName}."
+                : string.Empty;
+            return isProperty ? $"{staticPrefix}{SuggestedHelperName}" : $"{staticPrefix}{SuggestedHelperName}()";
         }
 
         bool isInstanceReceiverHelper = HasExistingHelper && ExistingHelper != null && !ExistingHelper.IsStatic
@@ -103,6 +106,12 @@ public sealed record PredicateCloneGroup
         }
         else
         {
+            if (HasExistingHelper && ExistingHelper != null && ExistingHelper.IsStatic &&
+                !string.IsNullOrEmpty(ExistingHelper.DeclaringTypeName))
+            {
+                prefix = $"{ExistingHelper.DeclaringTypeName}.";
+            }
+
             argsList = occurrence.StaticArgumentExpressions.Count > 0
                 ? occurrence.StaticArgumentExpressions
                 : occurrence.ArgumentExpressions;

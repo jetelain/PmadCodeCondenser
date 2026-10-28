@@ -225,7 +225,7 @@ public sealed class PredicateExtractor : IPredicateExtractor
             }
 
             var text = condition.ToString();
-            var minThreshold = _settings.PredicateLengthThreshold;
+            var minThreshold = Math.Min(_settings.PredicateLengthThreshold, _settings.ExistingHelperPredicateLengthThreshold);
             if (text.Length < minThreshold)
             {
                 return;
@@ -328,7 +328,8 @@ public sealed class PredicateExtractor : IPredicateExtractor
             var normResult = PredicateNormalizer.Normalize(
                 bodyExpr,
                 knownParameters: parameters,
-                isInstanceMemberContext: !isStatic);
+                isInstanceMemberContext: !isStatic,
+                declaringTypeName: declaringTypeName);
 
             var helperInfo = new PredicateHelperInfo
             {
@@ -395,7 +396,8 @@ public sealed class PredicateExtractor : IPredicateExtractor
             var normResult = PredicateNormalizer.Normalize(
                 bodyExpr,
                 knownParameters: [],
-                isInstanceMemberContext: !isStatic);
+                isInstanceMemberContext: !isStatic,
+                declaringTypeName: declaringTypeName);
 
             var helperInfo = new PredicateHelperInfo
             {
@@ -458,6 +460,18 @@ public sealed class PredicateExtractor : IPredicateExtractor
             // Single negation of identifier: if (!isValid)
             if (unwrapped is PrefixUnaryExpressionSyntax { RawKind: (int)SyntaxKind.LogicalNotExpression } notExpr &&
                 PredicateNormalizer.UnwrapParentheses(notExpr.Operand) is IdentifierNameSyntax)
+            {
+                return true;
+            }
+
+            // Standalone await expression: if (await IsValidAsync()) or if (!await IsValidAsync())
+            if (unwrapped is AwaitExpressionSyntax)
+            {
+                return true;
+            }
+
+            if (unwrapped is PrefixUnaryExpressionSyntax { RawKind: (int)SyntaxKind.LogicalNotExpression } notAwait &&
+                PredicateNormalizer.UnwrapParentheses(notAwait.Operand) is AwaitExpressionSyntax)
             {
                 return true;
             }

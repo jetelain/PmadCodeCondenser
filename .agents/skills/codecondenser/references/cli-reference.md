@@ -53,7 +53,7 @@ codecondenser [command] [path] [options]
 | `--enable-strings` | | `switch` | `true` | Explicitly enable repeated inline string detection |
 | `--no-predicates` | | `switch` | `false` | Disable boolean condition / predicate clone detection |
 | `--enable-predicates` | | `switch` | `true` | Explicitly enable boolean condition / predicate clone detection |
-| `--threshold-predicates <n>` | `-tpred` | `int` | `25` | Minimum character length for predicate clone detection |
+| `--threshold-predicates <n>` | `-tpred` | `int` | `100` | Minimum character length for predicate clone detection |
 | `--threshold-existing-helpers <n>` | `-thelp` | `int` | `20` | Minimum character length when matching against existing predicate helpers |
 | `--predicate-occurrences <n>` | `-po` | `int` | `2` | Minimum occurrences for predicate clone detection |
 | `--predicate-tolerance <n>` | `-pt` | `int` | `null` | Maximum new predicate clone clusters tolerated in incremental mode |

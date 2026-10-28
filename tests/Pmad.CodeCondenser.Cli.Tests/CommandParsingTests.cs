@@ -361,4 +361,19 @@ public class CommandParsingTests
         options.PredicateMinOccurrences.Should().Be(2);
         options.PredicateTolerance.Should().Be(1);
     }
+
+    [Fact]
+    public void Parse_PredicateDefaults_UsesExpectedDefaultSettings()
+    {
+        var settings = new Pmad.CodeCondenser.Core.Configuration.CodeCondenserSettings();
+        settings.PredicateLengthThreshold.Should().Be(100);
+        settings.ExistingHelperPredicateLengthThreshold.Should().Be(20);
+        settings.PredicateMinOccurrences.Should().Be(2);
+
+        var (root, globals) = CreateRoot();
+        var parseResult = root.Parse(["analyze"]);
+        var options = globals.BindCliOptions(parseResult, CliOptions.CommandAnalyze, ".");
+        options.PredicateLengthThreshold.Should().BeNull();
+        options.ExistingHelperPredicateLengthThreshold.Should().BeNull();
+    }
 }

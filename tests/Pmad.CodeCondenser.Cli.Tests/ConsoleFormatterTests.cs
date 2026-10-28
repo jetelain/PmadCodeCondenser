@@ -1059,4 +1059,65 @@ public class ConsoleFormatterTests
         output.Should().Contain("src/A.cs:10:15");
         output.Should().Contain("codecondenser:ignore-predicate");
     }
+
+    [Fact]
+    public void PrintAiActionableIncrementalFeedback_WithPredicateViolationAndToleratedLoc_DisplaysPredicateBanner()
+    {
+        var formatter = new ConsoleFormatter(enableColor: false);
+        using var writer = new StringWriter();
+
+        var occ = new PredicateOccurrence
+        {
+            FilePath = "src/A.cs",
+            StartLine = 10,
+            EndLine = 10,
+            StartColumn = 15,
+            EndColumn = 60,
+            ExpressionText = "a > 0 && b < 100",
+            NormalizedSignature = "$0 > CONST && $1 < CONST",
+            NormalizedHash = 55555,
+            ArgumentExpressions = ["a", "b"]
+        };
+
+        var group = new PredicateCloneGroup
+        {
+            NormalizedSignature = "$0 > CONST && $1 < CONST",
+            Occurrences = [occ],
+            Category = CloneCategory.Production,
+            SuggestedHelperName = "IsValidRange",
+            SuggestedClassName = "PredicateHelpers"
+        };
+
+        var locViolation = new LinesOfCodeViolation
+        {
+            FilePath = "src/LongMethod.cs",
+            Identifier = "Process",
+            Kind = LinesOfCodeKind.Method,
+            LinesOfCode = 160,
+            Threshold = 150,
+            StartLine = 1,
+            EndLine = 180,
+            Category = FileCategory.Production
+        };
+
+        // LOC count is 1, but tolerance is 5, so hasLinesOfCodeViolation is false.
+        formatter.PrintAiActionableIncrementalFeedback(
+            writer,
+            cloneGroups: [],
+            subMethodGroups: [],
+            verboseComments: [],
+            baseDirectory: ".",
+            duplicationTolerance: 0,
+            hasDuplicationViolation: false,
+            linesOfCodeViolations: [locViolation],
+            linesOfCodeTolerance: 5,
+            hasLinesOfCodeViolation: false,
+            predicateGroups: [group],
+            predicateTolerance: 0,
+            hasPredicateViolation: true);
+
+        var output = writer.ToString();
+        output.Should().Contain("[AI AGENT ACTION REQUIRED] Predicate Clone Policy Violation (Exit Code: 2)");
+        output.Should().Contain("Incremental analysis detected 1 new predicate clone cluster(s)");
+    }
 }

@@ -14,7 +14,7 @@ description: >-
 3. **Condense Verbose Comments**: Shortens oversized single-line, multi-line, and XML documentation comments into clean, concise summaries formatted to 120 columns using an LLM.
 4. **Enforce Single Type Per File**: Automatically ensures each class, interface, struct, enum, record, or delegate has its own `.cs` file matching its type name (with line tolerance for small inline types like 1-line delegates) to optimize AI agent context window loading.
 5. **Detect Lines of Code Limits**: Flags methods (> 150 LOC) and classes/records (> 1500 LOC) exceeding maintainability thresholds, excluding comments and blank lines (report-only, no auto-fix).
-6. **Detect Predicate / Boolean Condition Clones**: Identifies duplicate complex boolean conditions across `if`, ternary, `while`, `do`, `return`, and LINQ calls (e.g. `.Where(...)`, `.Any(...)`) with >= 25 characters. Automatically matches conditions against existing static or instance helper methods/properties (>= 20 characters), handling receiver binding (`slot.IsOnline(...)`), parameter reordering, constant/enum folding, and De Morgan logical negations (`!slot.IsOnline(...)`).
+6. **Detect Predicate / Boolean Condition Clones**: Identifies duplicate complex boolean conditions across `if`, ternary, `while`, `do`, `return`, and LINQ calls (e.g. `.Where(...)`, `.Any(...)`) with >= 100 characters. Automatically matches conditions against existing static or instance helper methods/properties (>= 20 characters), handling receiver binding (`slot.IsOnline(...)`), parameter reordering, constant/enum folding, and De Morgan logical negations (`!slot.IsOnline(...)`).
 7. **Enforce Guardrails in CI**: Compares changes incrementally against a baseline snapshot and exits with code `2` when new duplication, repeated strings, type violations, lines of code violations, or predicate clones are introduced.
 
 ---
@@ -278,7 +278,7 @@ When an inline condition matches an existing helper method or property (e.g., `s
 - Supports instance receiver binding (`$this`), static parameters, and De Morgan negations (`!slot.IsOnlineWithinTtl(...)`).
 
 #### Duplicate Condition Extraction Pattern (CC010)
-When duplicate conditions exist without an existing helper (>= 25 characters, configurable via `--threshold-predicates` / `-tpred`):
+When duplicate conditions exist without an existing helper (>= 100 characters, configurable via `--threshold-predicates` / `-tpred`):
 - CodeCondenser recommends extracting the condition into a shared helper method (e.g., in a shared static helper class `PredicateHelpers`).
 
 ---

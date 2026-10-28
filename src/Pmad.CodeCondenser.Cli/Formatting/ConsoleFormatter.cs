@@ -980,7 +980,7 @@ public sealed class ConsoleFormatter : IConsoleFormatter
         bool hasPredicates = predicateGroups.Count > 0;
         int totalCloneCount = cloneGroups.Count + subMethodGroups.Count;
 
-        if (hasPredicateViolation && !hasDuplicationViolation && !hasComments && !hasStrings && !hasTypeViolation && !hasLocViolations)
+        if (hasPredicateViolation && !hasDuplicationViolation && !hasComments && !hasStrings && !hasTypeViolation && !hasLinesOfCodeViolation)
         {
             writer.WriteLine();
             writer.WriteLine(Red(Bold("========================================================================")));
@@ -1049,7 +1049,7 @@ public sealed class ConsoleFormatter : IConsoleFormatter
             return;
         }
 
-        if (hasTypeViolation && !hasDuplicationViolation && !hasComments && !hasStrings && !hasLocViolations && !hasPredicateViolation)
+        if (hasTypeViolation && !hasDuplicationViolation && !hasComments && !hasStrings && !hasLinesOfCodeViolation && !hasPredicateViolation)
         {
             writer.WriteLine();
             writer.WriteLine(Red(Bold("========================================================================")));
@@ -1103,7 +1103,7 @@ public sealed class ConsoleFormatter : IConsoleFormatter
             return;
         }
 
-        if (hasRepeatedStringViolation && !hasDuplicationViolation && !hasComments && !hasTypeIssues && !hasLocViolations && !hasPredicateViolation)
+        if (hasRepeatedStringViolation && !hasDuplicationViolation && !hasComments && !hasTypeIssues && !hasLinesOfCodeViolation && !hasPredicateViolation)
         {
             writer.WriteLine();
             writer.WriteLine(Red(Bold("========================================================================")));
@@ -1155,13 +1155,13 @@ public sealed class ConsoleFormatter : IConsoleFormatter
             return;
         }
 
-        if (hasDuplicationViolation && !hasComments && !hasStrings && !hasTypeViolation && !hasLocViolations && !hasPredicateViolation)
+        if (hasDuplicationViolation && !hasComments && !hasStrings && !hasTypeViolation && !hasLinesOfCodeViolation && !hasPredicateViolation)
         {
             PrintAiActionableDuplicationFeedback(writer, cloneGroups, subMethodGroups, baseDirectory, duplicationTolerance);
             return;
         }
 
-        if (!hasDuplicationViolation && hasComments && !hasStrings && !hasTypeViolation && !hasLocViolations && !hasPredicateViolation)
+        if (!hasDuplicationViolation && hasComments && !hasStrings && !hasTypeViolation && !hasLinesOfCodeViolation && !hasPredicateViolation)
         {
             writer.WriteLine();
             writer.WriteLine(Red(Bold("========================================================================")));
