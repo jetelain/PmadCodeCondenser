@@ -50,18 +50,28 @@ public sealed class ApplyCommand : ICommand
         ArgumentNullException.ThrowIfNull(formatter);
         ArgumentNullException.ThrowIfNull(output);
 
-        if (settings.EnableTypeSplitting && settings.GetEffectiveSummaryMode() != Core.Configuration.SummaryMode.Disabled)
+        var operations = new List<string>(3);
+        if (settings.EnableTypeSplitting)
         {
-            formatter.PrintInfo(output, $"Applying single-type file splits and comment summaries to target: {Path.GetFullPath(options.TargetPath)}");
+            operations.Add("single-type file splits");
         }
-        else if (settings.EnableTypeSplitting)
+        if (settings.EnablePatternCondensation)
         {
-            formatter.PrintInfo(output, $"Applying single-type file splits to target: {Path.GetFullPath(options.TargetPath)}");
+            operations.Add("condensation patterns");
         }
-        else
+        if (settings.GetEffectiveSummaryMode() != Core.Configuration.SummaryMode.Disabled)
         {
-            formatter.PrintInfo(output, $"Applying comment summaries to target: {Path.GetFullPath(options.TargetPath)}");
+            operations.Add("comment summaries");
         }
+
+        string message = operations.Count switch
+        {
+            0 => $"Applying changes to target: {Path.GetFullPath(options.TargetPath)}",
+            1 => $"Applying {operations[0]} to target: {Path.GetFullPath(options.TargetPath)}",
+            2 => $"Applying {operations[0]} and {operations[1]} to target: {Path.GetFullPath(options.TargetPath)}",
+            _ => $"Applying {string.Join(", ", operations.Take(operations.Count - 1))}, and {operations.Last()} to target: {Path.GetFullPath(options.TargetPath)}"
+        };
+        formatter.PrintInfo(output, message);
         output.WriteLine();
 
         var progress = new Progress<Pmad.CodeCondenser.Core.Comments.CommentSummarizationProgress>(p =>
@@ -97,6 +107,7 @@ public sealed class ApplyCommand : ICommand
         bool isTypeAnalyzed = settings.EnableTypeSplitting;
         bool isLocAnalyzed = settings.EnableLinesOfCodeDetection;
         bool isPredicatesAnalyzed = settings.EnablePredicateCloneDetection;
+        bool isPatternsAnalyzed = settings.EnablePatternCondensation;
         bool isCommentsAnalyzed = settings.GetEffectiveSummaryMode() != SummaryMode.Disabled && settings.EnableCommentSummarization;
 
         if (isDuplicationAnalyzed)
@@ -170,6 +181,16 @@ public sealed class ApplyCommand : ICommand
                 totalTestCount: totalTest);
         }
 
+        if (isPatternsAnalyzed && displayed.CondensationCandidates.Count > 0)
+        {
+            formatter.PrintCondensationCandidates(
+                output,
+                displayed.CondensationCandidates,
+                baseDirectory,
+                estimator,
+                totalCount: result.CondensationCandidates.Count);
+        }
+
         var modifiedFiles = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         if (engine is CodeCondenserEngine cce)
         {
@@ -188,6 +209,10 @@ public sealed class ApplyCommand : ICommand
             try
             {
                 await cce.ApplySummariesWithModifiedFilesAsync(result, settings, cancellationToken).ConfigureAwait(false);
+                if (settings.EnablePatternCondensation)
+                {
+                    await cce.ApplyPatternsAsync(result, settings, cancellationToken).ConfigureAwait(false);
+                }
                 if (settings.EnableTypeSplitting)
                 {
                     await cce.ApplyTypeSplitsWithModifiedFilesAsync(result, settings, cancellationToken).ConfigureAwait(false);
@@ -206,6 +231,10 @@ public sealed class ApplyCommand : ICommand
         else
         {
             await engine.ApplySummariesAsync(result, settings, cancellationToken).ConfigureAwait(false);
+            if (settings.EnablePatternCondensation)
+            {
+                await engine.ApplyPatternsAsync(result, settings, cancellationToken).ConfigureAwait(false);
+            }
             if (settings.EnableTypeSplitting)
             {
                 await engine.ApplyTypeSplitsAsync(result, settings, cancellationToken).ConfigureAwait(false);
@@ -243,6 +272,10 @@ public sealed class ApplyCommand : ICommand
         int? predicateGroupsCount = isPredicatesAnalyzed ? result.PredicateCloneGroups.Count : null;
         int? predicateGainChars = (isPredicatesAnalyzed && result.PredicateCloneGroups.Count > 0) ? result.TotalPredicateGainCharacters : null;
         int? predicateGainTokens = (isPredicatesAnalyzed && result.PredicateCloneGroups.Count > 0) ? result.TotalPredicateGainTokens : null;
+
+        int? patternsCount = isPatternsAnalyzed ? result.CondensationCandidates.Count : null;
+        int? patternGainChars = (isPatternsAnalyzed && result.CondensationCandidates.Count > 0) ? result.TotalPatternGainCharacters : null;
+        int? patternGainTokens = (isPatternsAnalyzed && result.CondensationCandidates.Count > 0) ? result.TotalPatternGainTokens : null;
         int? verboseCommentsCount = isCommentsAnalyzed ? result.VerboseComments.Count : null;
 
         formatter.PrintSummary(
@@ -269,7 +302,10 @@ public sealed class ApplyCommand : ICommand
             linesOfCodeViolationsCount: linesOfCodeViolationsCount,
             predicateGroupsCount: predicateGroupsCount,
             predicateGainChars: predicateGainChars,
-            predicateGainTokens: predicateGainTokens);
+            predicateGainTokens: predicateGainTokens,
+            modernizationsCount: patternsCount,
+            modernizationGainChars: patternGainChars,
+            modernizationGainTokens: patternGainTokens);
 
         if (options.Incremental)
         {

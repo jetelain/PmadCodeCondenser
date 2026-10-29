@@ -18,6 +18,7 @@ public sealed class LimitedDisplayItems
     public IReadOnlyList<VerboseComment> VerboseComments { get; init; } = [];
     public IReadOnlyList<TypeFileAnalysis> TypeFileIssues { get; init; } = [];
     public IReadOnlyList<LinesOfCodeViolation> LinesOfCodeViolations { get; init; } = [];
+    public IReadOnlyList<CondensationCandidate> CondensationCandidates { get; init; } = [];
 
     public int TotalItemCount { get; init; }
     public int DisplayedItemCount { get; init; }
@@ -48,6 +49,7 @@ public static class DisplayedItemLimiter
         bool isCommentsAnalyzed = includeComments && settings.GetEffectiveSummaryMode() != SummaryMode.Disabled && settings.EnableCommentSummarization;
         bool isTypeAnalyzed = settings.EnableTypeSplitting;
         bool isLocAnalyzed = settings.EnableLinesOfCodeDetection;
+        bool isPatternsAnalyzed = settings.EnablePatternCondensation;
 
         var candidateCloneGroups = isDuplicationAnalyzed ? result.CloneGroups : [];
         var candidateSubMethodGroups = isSubMethodAnalyzed ? result.SubMethodCloneGroups : [];
@@ -56,6 +58,7 @@ public static class DisplayedItemLimiter
         var candidateComments = isCommentsAnalyzed ? result.VerboseComments : [];
         var candidateTypeIssues = isTypeAnalyzed ? result.TypeFileIssues.Where(i => i.HasViolation).ToList() : [];
         var candidateLocViolations = isLocAnalyzed ? result.LinesOfCodeViolations : [];
+        var candidatePatterns = isPatternsAnalyzed ? result.CondensationCandidates : [];
 
         int totalCount = candidateCloneGroups.Count
             + candidateSubMethodGroups.Count
@@ -63,7 +66,8 @@ public static class DisplayedItemLimiter
             + candidatePredicateGroups.Count
             + candidateComments.Count
             + candidateTypeIssues.Count
-            + candidateLocViolations.Count;
+            + candidateLocViolations.Count
+            + candidatePatterns.Count;
 
         int? limit = settings.Limit;
         bool isLimited = limit.HasValue && limit.Value >= 0 && limit.Value < totalCount;
@@ -113,6 +117,12 @@ public static class DisplayedItemLimiter
             allCandidates.Add((item, GetLocViolationBenefit(item), 7, i));
         }
 
+        for (int i = 0; i < candidatePatterns.Count; i++)
+        {
+            var item = candidatePatterns[i];
+            allCandidates.Add((item, GetPatternBenefit(item, effEstimator), 8, i));
+        }
+
         var sorted = allCandidates
             .OrderByDescending(c => c.Benefit)
             .ThenBy(c => c.CategoryPriority)
@@ -129,6 +139,7 @@ public static class DisplayedItemLimiter
         var selectedComments = chosenItems.Where(t => t.Item is VerboseComment).Select(t => (VerboseComment)t.Item).ToList();
         var selectedTypes = chosenItems.Where(t => t.Item is TypeFileAnalysis).Select(t => (TypeFileAnalysis)t.Item).ToList();
         var selectedLocs = chosenItems.Where(t => t.Item is LinesOfCodeViolation).Select(t => (LinesOfCodeViolation)t.Item).ToList();
+        var selectedPatterns = chosenItems.Where(t => t.Item is CondensationCandidate).Select(t => (CondensationCandidate)t.Item).ToList();
 
         int displayedCount = chosenItems.Count;
 
@@ -141,10 +152,19 @@ public static class DisplayedItemLimiter
             VerboseComments = selectedComments,
             TypeFileIssues = selectedTypes,
             LinesOfCodeViolations = selectedLocs,
+            CondensationCandidates = selectedPatterns,
             TotalItemCount = totalCount,
             DisplayedItemCount = displayedCount,
             IsLimited = isLimited
         };
+    }
+
+    public static int GetPatternBenefit(CondensationCandidate candidate, HeuristicTokenEstimator estimator)
+    {
+        ArgumentNullException.ThrowIfNull(candidate);
+        int gain = candidate.EstimateGainTokens(estimator);
+        if (gain > 0) return gain;
+        return Math.Max(1, candidate.CharacterGain / 4);
     }
 
     public static int GetCloneBenefit(

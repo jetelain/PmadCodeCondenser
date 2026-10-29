@@ -18,9 +18,16 @@ public sealed class ProjectLocator : IProjectLocator
     /// <inheritdoc />
     public string LocateProjectId(string filePath, string? rootDirectory = null)
     {
+        var csproj = LocateProjectFilePath(filePath, rootDirectory);
+        return !string.IsNullOrEmpty(csproj) ? Path.GetFileNameWithoutExtension(csproj) : "Default";
+    }
+
+    /// <inheritdoc />
+    public string? LocateProjectFilePath(string filePath, string? rootDirectory = null)
+    {
         if (string.IsNullOrWhiteSpace(filePath))
         {
-            return "Default";
+            return null;
         }
 
         string? currentDir;
@@ -33,12 +40,12 @@ public sealed class ProjectLocator : IProjectLocator
         }
         catch
         {
-            return "Default";
+            return null;
         }
 
         if (string.IsNullOrEmpty(currentDir))
         {
-            return "Default";
+            return null;
         }
 
         string? normalizedRoot = null;
@@ -109,12 +116,7 @@ public sealed class ProjectLocator : IProjectLocator
             _cache.TryAdd(dir, foundCsproj);
         }
 
-        if (!string.IsNullOrEmpty(foundCsproj))
-        {
-            return Path.GetFileNameWithoutExtension(foundCsproj);
-        }
-
-        return "Default";
+        return foundCsproj;
     }
 
     private static string NormalizeDirectory(string path)

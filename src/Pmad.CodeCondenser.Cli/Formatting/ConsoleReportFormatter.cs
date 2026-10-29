@@ -39,6 +39,7 @@ public sealed class ConsoleReportFormatter : IReportFormatter
         bool isTypeAnalyzed = settings.EnableTypeSplitting;
         bool isLocAnalyzed = settings.EnableLinesOfCodeDetection;
         bool isPredicatesAnalyzed = settings.EnablePredicateCloneDetection;
+        bool isPatternsAnalyzed = settings.EnablePatternCondensation;
         bool isCommentsAnalyzed = settings.GetEffectiveSummaryMode() != SummaryMode.Disabled && settings.EnableCommentSummarization;
 
         if (isDuplicationAnalyzed)
@@ -112,6 +113,16 @@ public sealed class ConsoleReportFormatter : IReportFormatter
                 totalTestCount: totalTest);
         }
 
+        if (isPatternsAnalyzed && displayed.CondensationCandidates.Count > 0)
+        {
+            _consoleFormatter.PrintCondensationCandidates(
+                output,
+                displayed.CondensationCandidates,
+                baseDirectory,
+                estimator,
+                totalCount: result.CondensationCandidates.Count);
+        }
+
         if (isCommentsAnalyzed)
         {
             _consoleFormatter.PrintVerboseComments(
@@ -149,6 +160,10 @@ public sealed class ConsoleReportFormatter : IReportFormatter
         int? predicateGainChars = (isPredicatesAnalyzed && result.PredicateCloneGroups.Count > 0) ? result.TotalPredicateGainCharacters : null;
         int? predicateGainTokens = (isPredicatesAnalyzed && result.PredicateCloneGroups.Count > 0) ? result.TotalPredicateGainTokens : null;
 
+        int? patternsCount = isPatternsAnalyzed ? result.CondensationCandidates.Count : null;
+        int? patternGainChars = (isPatternsAnalyzed && result.CondensationCandidates.Count > 0) ? result.TotalPatternGainCharacters : null;
+        int? patternGainTokens = (isPatternsAnalyzed && result.CondensationCandidates.Count > 0) ? result.TotalPatternGainTokens : null;
+
         _consoleFormatter.PrintSummary(
             output,
             result.AnalyzedFilesCount,
@@ -173,7 +188,10 @@ public sealed class ConsoleReportFormatter : IReportFormatter
             linesOfCodeViolationsCount: linesOfCodeViolationsCount,
             predicateGroupsCount: predicateGroupsCount,
             predicateGainChars: predicateGainChars,
-            predicateGainTokens: predicateGainTokens);
+            predicateGainTokens: predicateGainTokens,
+            modernizationsCount: patternsCount,
+            modernizationGainChars: patternGainChars,
+            modernizationGainTokens: patternGainTokens);
 
         return Task.CompletedTask;
     }

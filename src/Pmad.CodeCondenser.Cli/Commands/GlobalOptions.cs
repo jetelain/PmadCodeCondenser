@@ -273,6 +273,31 @@ public sealed class GlobalOptions
         Recursive = true
     };
 
+    // Condensation patterns options
+    public Option<bool> NoPatternsOption { get; } = new("--no-patterns", "--disable-patterns")
+    {
+        Description = "Disable condensation pattern detection",
+        Recursive = true
+    };
+
+    public Option<bool> EnablePatternsOption { get; } = new("--enable-patterns")
+    {
+        Description = "Explicitly enable condensation pattern detection",
+        Recursive = true
+    };
+
+    public Option<string?> TargetTfmOption { get; } = new("--patterns-tfm", "--target-tfm")
+    {
+        Description = "Override target .NET framework version for condensation patterns (e.g. net8.0, 10.0)",
+        Recursive = true
+    };
+
+    public Option<string?> PatternRulesOption { get; } = new("--pattern-rules", "--condensation-rules")
+    {
+        Description = "Comma-separated list of condensation pattern rule IDs to evaluate",
+        Recursive = true
+    };
+
     public Option<int?> PredicateOccurrencesOption { get; } = new("--predicate-occurrences", "-po", "--predicate-min-occurrences")
     {
         Description = "Minimum occurrences for predicate clone detection (default: 2)",
@@ -434,6 +459,11 @@ public sealed class GlobalOptions
         root.Add(ContextSizeOption);
         root.Add(MaxRetriesOption);
         root.Add(TokenEstimatorOption);
+
+        root.Add(NoPatternsOption);
+        root.Add(EnablePatternsOption);
+        root.Add(TargetTfmOption);
+        root.Add(PatternRulesOption);
     }
 
     public CliOptions BindCliOptions(ParseResult pr, string commandName, string targetPath)
@@ -562,6 +592,29 @@ public sealed class GlobalOptions
         else if (pr.GetResult(EnablePredicatesOption) is { Implicit: false } && pr.GetValue(EnablePredicatesOption))
         {
             options.EnablePredicateCloneDetection = true;
+        }
+
+        if (pr.GetResult(NoPatternsOption) is { Implicit: false } && pr.GetValue(NoPatternsOption))
+        {
+            options.EnablePatternCondensation = false;
+        }
+        else if (pr.GetResult(EnablePatternsOption) is { Implicit: false } && pr.GetValue(EnablePatternsOption))
+        {
+            options.EnablePatternCondensation = true;
+        }
+
+        var targetTfm = pr.GetValue(TargetTfmOption);
+        if (!string.IsNullOrWhiteSpace(targetTfm))
+        {
+            options.TargetDotNetVersion = targetTfm;
+        }
+
+        var patternRules = pr.GetValue(PatternRulesOption);
+        if (!string.IsNullOrWhiteSpace(patternRules))
+        {
+            options.CondensationRules = patternRules
+                .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+                .ToList();
         }
 
         var summary = pr.GetValue(SummaryOption);

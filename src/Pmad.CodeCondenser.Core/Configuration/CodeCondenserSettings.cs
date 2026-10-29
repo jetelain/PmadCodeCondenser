@@ -557,8 +557,55 @@ public sealed class CodeCondenserSettings
         set => Limit = value;
     }
 
+    /// <summary>
+    /// When true, enables detection of legacy code patterns that can be condensed using modern framework methods or language idioms.
+    /// Default is true.
+    /// </summary>
+    public bool EnablePatternCondensation { get; set; } = true;
 
     /// <summary>
+    /// Alias for <see cref="EnablePatternCondensation"/>.
+    /// </summary>
+    public bool? EnableCondensationPatterns
+    {
+        get => EnablePatternCondensation;
+        set { if (value.HasValue) EnablePatternCondensation = value.Value; }
+    }
+
+    /// <summary>
+    /// Alias for <see cref="EnablePatternCondensation"/>.
+    /// </summary>
+    public bool? CondensationPatterns
+    {
+        get => EnablePatternCondensation;
+        set { if (value.HasValue) EnablePatternCondensation = value.Value; }
+    }
+
+    /// <summary>
+    /// Optional whitelist of pattern rule IDs to enable (e.g., ["PCC401", "PCC402"]).
+    /// When null or empty, all registered rules are evaluated.
+    /// </summary>
+    public List<string>? CondensationRules { get; set; }
+
+    /// <summary>
+    /// Optional blacklist of pattern rule IDs to disable.
+    /// </summary>
+    public List<string>? DisabledCondensationRules { get; set; }
+
+    /// <summary>
+    /// Optional target framework version override (e.g. "10.0", "net8.0", "6.0").
+    /// If null, automatically inferred from project file.
+    /// </summary>
+    public string? TargetDotNetVersion { get; set; }
+
+    /// <summary>
+    /// Parses the <see cref="TargetDotNetVersion"/> into a <see cref="Version"/> object, or null if unspecified or invalid.
+    /// </summary>
+    public Version? GetParsedTargetDotNetVersion()
+    {
+        return Patterns.ProjectTargetFrameworkResolver.ParseTfmVersion(TargetDotNetVersion);
+    }
+
     /// When true, includes XML documentation comments (///) in addition to single-line (//) and multi-line (/* */) comments.
     /// Default is true.
     /// </summary>
@@ -944,7 +991,11 @@ public sealed class CodeCondenserSettings
             ClassLinesOfCodeThreshold = ClassLinesOfCodeThreshold,
             LinesOfCodeTolerance = LinesOfCodeTolerance,
             LinesOfCodeExitCode = LinesOfCodeExitCode,
-            Limit = Limit
+            Limit = Limit,
+            EnablePatternCondensation = EnablePatternCondensation,
+            CondensationRules = CondensationRules != null ? new List<string>(CondensationRules) : null,
+            DisabledCondensationRules = DisabledCondensationRules != null ? new List<string>(DisabledCondensationRules) : null,
+            TargetDotNetVersion = TargetDotNetVersion
         };
     }
 }

@@ -379,3 +379,43 @@ public void ProcessTask(int? taskId, string? stageId)
 - `[SuppressMessage("CodeCondenser", "PredicateClone")]`
 - `[PredicateIgnore]`
 - `[CodeCondenserIgnore]`
+
+---
+
+## 7. Condensation Pattern Suppressions
+
+Condensation pattern analysis flags verbose legacy code patterns and suggests modern C# / .NET idioms (PCC401 through PCC409).
+
+### A. Comment Marker
+Place `// codecondenser:ignore-pattern` (optionally targeting specific rule IDs like `:PCC401` or `:PCC401,PCC402`), `// codecondenser:ignore`, or `// nocondense` on the line directly preceding the target statement or expression:
+
+```csharp
+// codecondenser:ignore-pattern:PCC409
+var value = a != null ? a : fallback;
+```
+
+*Supported comment markers*:
+- `codecondenser:ignore-pattern` (e.g. `// codecondenser:ignore-pattern:PCC401, PCC402`)
+- `codecondenser:ignore-condensation`
+- `codecondenser:ignore-modernization`
+- `codecondenser:ignore`
+- `nocondense`
+
+### B. Suppression Attribute
+Apply `[SuppressMessage]` to the enclosing member or class declaration:
+
+```csharp
+[SuppressMessage("CodeCondenser", "PCC401", Justification = "Preserves legacy newline behavior")]
+public void ProcessInput(string text)
+{
+    // ...
+}
+```
+
+*Supported attributes*:
+- `[SuppressMessage("CodeCondenser", "<ruleId>")]` (e.g. `PCC401`, `PCC402`, etc.)
+- `[CodeCondenserIgnore]`
+- `[IgnorePattern]`
+- `[NoCondense]`
+- `[SuppressCondensation]`
+

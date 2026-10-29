@@ -12,8 +12,9 @@ A static analysis developer utility and .NET tool built on **.NET 10** and Rosly
 3. **Condense Verbose Comments**: Scan overly verbose regular comments (`//`, `/* */`) and XML documentation comments (`/// <summary>`, `<remarks>`, `<param>`) and condense them into clear, concise summaries using local or cloud LLMs via `Microsoft.Extensions.AI` and Ollama.
 4. **Enforce Single Type Per File (Automatic Splitting & Renaming)**: Keep each class, interface, struct, enum, record, or delegate in its own `.cs` file matching its type name (allowing small inline types like 1-line delegates via configurable line tolerance) to optimize AI agent context window loading and codebase modularity.
 5. **Detect Lines of Code Limits**: Automatically flag methods (> 150 LOC) and classes/records (> 1500 LOC) exceeding maintainability thresholds, excluding comments and blank lines (report-only, no auto-fix).
-6. **WYSIWYG Guarantee & Incremental Snapshots**: Cache generated comment summaries and AST hashes so that dry-run reviews match applied code without LLM drift, while incremental runs only analyze changed code.
-7. **CI/CD & AI Agent Guardrails**: Enforce strict duplication, repeated string, single-type-per-file, and lines-of-code tolerance in CI pipelines and AI coding agent workflows (exit code `2` on new violations).
+6. **Modernize High-Impact Condensation Patterns**: Identify verbose legacy framework calls and C# idioms (e.g. `s.ReplaceLineEndings()`, `string.IsNullOrWhiteSpace()`, `??`, `MinBy`/`MaxBy`, `ArgumentNullException.ThrowIfNull`) and automatically rewrite them with `codecondenser apply`.
+7. **WYSIWYG Guarantee & Incremental Snapshots**: Cache generated comment summaries and AST hashes so that dry-run reviews match applied code without LLM drift, while incremental runs only analyze changed code.
+8. **CI/CD & AI Agent Guardrails**: Enforce strict duplication, repeated string, single-type-per-file, and lines-of-code tolerance in CI pipelines and AI coding agent workflows (exit code `2` on new violations).
 
 ---
 
@@ -156,7 +157,40 @@ codecondenser apply ./src
 - **SDK Compatibility**: SDK-style `.csproj` projects automatically glob newly created `.cs` files without project file edits.
 - **Opt-out**: Pass `--no-type-split` to disable splitting or `--no-type-rename` to disable file renaming.
 
-### Scenario F: Incremental Analysis (Modified Files Only)
+### Scenario F: High-Impact Condensation Patterns (Legacy & LLM Code Modernization)
+
+Developers and LLMs frequently generate verbose, legacy idioms because they are unaware of modern .NET framework methods or modern C# syntax. CodeCondenser identifies these patterns, estimates character and token savings, and can automatically rewrite them in-place with `codecondenser apply`:
+
+```bash
+# Dry run: view condensation candidates with token and character savings
+codecondenser report ./src
+
+# Apply: rewrite all safe condensation patterns automatically in source code
+codecondenser apply ./src
+
+# Target a specific target framework version (e.g. net6.0, net8.0, net10.0)
+codecondenser report ./src --patterns-tfm 8.0
+
+# Disable pattern checks entirely or selectively
+codecondenser report ./src --no-patterns
+codecondenser report ./src --pattern-rules PCC401,PCC402,PCC405
+```
+
+#### Built-in Condensation Patterns
+
+| Rule ID | Rule Name | Category | Min .NET | Legacy / Verbose Pattern | Condensed Replacement |
+| :--- | :--- | :--- | :---: | :--- | :--- |
+| **`PCC401`** | Use ReplaceLineEndings | Text | .NET 6.0 | `s.Replace("\r\n", "\n").Replace("\r", "\n")` | `s.ReplaceLineEndings("\n")` |
+| **`PCC402`** | Use IsNullOrWhiteSpace | Predicate | .NET 4.0 | `string.IsNullOrEmpty(s.Trim())` | `string.IsNullOrWhiteSpace(s)` |
+| **`PCC403`** | Simplify LINQ Where Predicate | Linq | Any | `items.Where(p).Any()` / `.Count()` | `items.Any(p)` / `items.Count(p)` |
+| **`PCC404`** | Use ArgumentNullException.ThrowIfNull | Guard | .NET 6.0 | `if (arg == null) throw new ArgumentNullException(nameof(arg));` | `ArgumentNullException.ThrowIfNull(arg);` |
+| **`PCC405`** | Use ArgumentException Throw Helpers | Guard | .NET 8.0 | `if (string.IsNullOrWhiteSpace(arg)) throw new ArgumentException(...);` | `ArgumentException.ThrowIfNullOrWhiteSpace(arg);` |
+| **`PCC406`** | Use String.Contains | Text | Any / .NET 6+ | `s.IndexOf("abc", StringComparison.OrdinalIgnoreCase) >= 0` | `s.Contains("abc", StringComparison.OrdinalIgnoreCase)` |
+| **`PCC407`** | Use MinBy or MaxBy | Linq | .NET 6.0 | `items.OrderBy(x => x.Price).FirstOrDefault()` | `items.MinBy(x => x.Price)` |
+| **`PCC408`** | Simplify Redundant Null Check Before Is | Predicate | Any | `x != null && x is Widget` | `x is Widget` |
+| **`PCC409`** | Use Null-Coalescing Operator | Language | Any | `x != null ? x : fallback` | `x ?? fallback` |
+
+### Scenario G: Incremental Analysis (Modified Files Only)
 
 Analyze only files that were added or modified since the last snapshot baseline:
 
@@ -166,7 +200,7 @@ codecondenser analyze ./src --incremental
 
 In incremental mode, if new duplication, verbose comments, or type violations are detected, CodeCondenser outputs unified **actionable feedback only once at the end**, complete with suppression instructions (`condense="no"`, `// codecondenser:ignore`, `// codecondenser:ignore-type-split`, or `[SuppressMessage]`).
 
-### Scenario G: Refresh Snapshot Baseline
+### Scenario H: Refresh Snapshot Baseline
 
 Update or create the baseline snapshot stored in `.codecondenser/snapshot.json`:
 
@@ -174,7 +208,7 @@ Update or create the baseline snapshot stored in `.codecondenser/snapshot.json`:
 codecondenser snapshot ./src
 ```
 
-### Scenario H: Install or Update Workspace AI Agent Skills
+### Scenario I: Install or Update Workspace AI Agent Skills
 
 Install or synchronize the bundled AI agent skills into a workspace's `.agents/skills` directory so AI coding agents understand how to use `Pmad.CodeCondenser`:
 

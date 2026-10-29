@@ -222,6 +222,21 @@ public sealed class CliOptions
     public bool? EnablePredicateCloneDetection { get; set; }
 
     /// <summary>
+    /// Explicitly enable or disable condensation pattern detection.
+    /// </summary>
+    public bool? EnablePatternCondensation { get; set; }
+
+    /// <summary>
+    /// Explicit override for target .NET framework version (e.g. "net8.0", "10.0").
+    /// </summary>
+    public string? TargetDotNetVersion { get; set; }
+
+    /// <summary>
+    /// Optional whitelist of condensation pattern rule IDs.
+    /// </summary>
+    public List<string>? CondensationRules { get; set; }
+
+    /// <summary>
     /// Override minimum character length for boolean predicate clone detection (default: 25).
     /// </summary>
     public int? PredicateLengthThreshold { get; set; }

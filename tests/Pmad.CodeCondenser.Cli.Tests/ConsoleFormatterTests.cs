@@ -226,6 +226,68 @@ public class ConsoleFormatterTests
     }
 
     [Fact]
+    public void PrintSummary_WithModernizations_OutputsModernizationsAndGain()
+    {
+        var formatter = new ConsoleFormatter(enableColor: false);
+        using var writer = new StringWriter();
+
+        formatter.PrintSummary(
+            writer,
+            filesAnalyzed: 5,
+            methodsScanned: 12,
+            cloneGroupsCount: 0,
+            verboseCommentsCount: 0,
+            mode: "Dry-Run",
+            modernizationsCount: 4,
+            modernizationGainChars: 120,
+            modernizationGainTokens: 30);
+
+        var output = writer.ToString();
+        output.Should().Contain("Modernizations:    4");
+        output.Should().Contain("Modernization Gain: +120 chars, ~30 tokens");
+    }
+
+    [Fact]
+    public void PrintSummary_WhenModernizationsZero_OutputsZeroAndNoGain()
+    {
+        var formatter = new ConsoleFormatter(enableColor: false);
+        using var writer = new StringWriter();
+
+        formatter.PrintSummary(
+            writer,
+            filesAnalyzed: 5,
+            methodsScanned: 12,
+            cloneGroupsCount: 0,
+            verboseCommentsCount: 0,
+            mode: "Dry-Run",
+            modernizationsCount: 0);
+
+        var output = writer.ToString();
+        output.Should().Contain("Modernizations:    0");
+        output.Should().NotContain("Modernization Gain:");
+    }
+
+    [Fact]
+    public void PrintSummary_WhenModernizationsNotAnalyzed_DoesNotPrintModernizationsOrGain()
+    {
+        var formatter = new ConsoleFormatter(enableColor: false);
+        using var writer = new StringWriter();
+
+        formatter.PrintSummary(
+            writer,
+            filesAnalyzed: 5,
+            methodsScanned: 12,
+            cloneGroupsCount: 0,
+            verboseCommentsCount: 0,
+            mode: "Dry-Run",
+            modernizationsCount: null);
+
+        var output = writer.ToString();
+        output.Should().NotContain("Modernizations:");
+        output.Should().NotContain("Modernization Gain:");
+    }
+
+    [Fact]
     public void PrintCloneGroups_WithEstimatorAndBaseDirectory_OutputsPotentialGain()
     {
         var tempDir = Path.Combine(Path.GetTempPath(), "CFTests_" + Guid.NewGuid().ToString("N"));

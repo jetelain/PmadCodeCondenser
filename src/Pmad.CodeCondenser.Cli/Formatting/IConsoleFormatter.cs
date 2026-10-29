@@ -65,6 +65,13 @@ public interface IConsoleFormatter
         int? totalProductionCount = null,
         int? totalTestCount = null);
 
+    void PrintCondensationCandidates(
+        TextWriter writer,
+        IReadOnlyList<CondensationCandidate> candidates,
+        string baseDirectory,
+        HeuristicTokenEstimator? estimator = null,
+        int? totalCount = null);
+
     void PrintSummary(
         TextWriter writer,
         int filesAnalyzed,
@@ -89,7 +96,10 @@ public interface IConsoleFormatter
         int? linesOfCodeViolationsCount = null,
         int? predicateGroupsCount = null,
         int? predicateGainChars = null,
-        int? predicateGainTokens = null);
+        int? predicateGainTokens = null,
+        int? modernizationsCount = null,
+        int? modernizationGainChars = null,
+        int? modernizationGainTokens = null);
 
     void PrintFileApplied(TextWriter writer, string filePath, string baseDirectory);
 

@@ -13,4 +13,13 @@ public interface IProjectLocator
     /// <param name="rootDirectory">Optional root directory boundary.</param>
     /// <returns>The inferred project identifier or "Default".</returns>
     string LocateProjectId(string filePath, string? rootDirectory = null);
+
+    /// <summary>
+    /// Locates the absolute path to the enclosing *.csproj file for the specified file, or null if none found.
+    /// </summary>
+    /// <param name="filePath">Path to the source file.</param>
+    /// <param name="rootDirectory">Optional root directory boundary.</param>
+    /// <returns>The absolute path to the enclosing project file, or null.</returns>
+    string? LocateProjectFilePath(string filePath, string? rootDirectory = null) => null;
+
 }

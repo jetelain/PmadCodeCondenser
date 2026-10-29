@@ -11,6 +11,7 @@ using Pmad.CodeCondenser.Core.Lines;
 using Pmad.CodeCondenser.Core.Predicates;
 using Pmad.CodeCondenser.Core.Strings;
 using Pmad.CodeCondenser.Core.Types;
+using Pmad.CodeCondenser.Core.Patterns;
 
 namespace Pmad.CodeCondenser.Core.Engine;
 
@@ -35,6 +36,8 @@ public sealed class CodeCondenserEngine : ICodeCondenserEngine
     private readonly IPredicateCloneDetector _predicateCloneDetector;
     private readonly ITypeFileSplitter _typeFileSplitter;
     private readonly ILinesOfCodeDetector _linesOfCodeDetector;
+    private readonly IPatternDetector _patternDetector;
+    private readonly IPatternRewriter _patternRewriter;
     private string? _lastBaseDirectory;
 
     /// <summary>
@@ -68,7 +71,9 @@ public sealed class CodeCondenserEngine : ICodeCondenserEngine
         IRepeatedStringDetector? repeatedStringDetector = null,
         IPredicateCloneDetector? predicateCloneDetector = null,
         ITypeFileSplitter? typeFileSplitter = null,
-        ILinesOfCodeDetector? linesOfCodeDetector = null)
+        ILinesOfCodeDetector? linesOfCodeDetector = null,
+        IPatternDetector? patternDetector = null,
+        IPatternRewriter? patternRewriter = null)
     {
         _cloneDetector = cloneDetector ?? new CloneDetector();
         _commentExtractor = commentExtractor ?? new VerboseCommentExtractor();
@@ -85,6 +90,8 @@ public sealed class CodeCondenserEngine : ICodeCondenserEngine
         _predicateCloneDetector = predicateCloneDetector ?? new PredicateCloneDetector();
         _typeFileSplitter = typeFileSplitter ?? new TypeFileSplitter();
         _linesOfCodeDetector = linesOfCodeDetector ?? new LinesOfCodeDetector();
+        _patternDetector = patternDetector ?? new PatternDetector();
+        _patternRewriter = patternRewriter ?? new PatternRewriter();
     }
 
     /// <inheritdoc />
@@ -227,10 +234,10 @@ public sealed class CodeCondenserEngine : ICodeCondenserEngine
             filesToScan = discoveredFiles;
         }
 
-        // 5. Parse syntax trees and extract comments, methods, strings, predicates, types, and lines of code in parallel (if features are enabled)
-        var fileResults = new (List<VerboseComment> Comments, List<MethodCloneInfo> Methods, List<SubMethodBlock> SubMethodBlocks, List<RepeatedStringOccurrence> StringOccurrences, List<PredicateOccurrence> PredicateOccurrences, TypeFileAnalysis? TypeIssue, IReadOnlyList<LinesOfCodeViolation> LocViolations)[filesToScan.Count];
+        // 5. Parse syntax trees and extract comments, methods, strings, predicates, types, lines of code, and patterns in parallel (if features are enabled)
+        var fileResults = new (List<VerboseComment> Comments, List<MethodCloneInfo> Methods, List<SubMethodBlock> SubMethodBlocks, List<RepeatedStringOccurrence> StringOccurrences, List<PredicateOccurrence> PredicateOccurrences, TypeFileAnalysis? TypeIssue, IReadOnlyList<LinesOfCodeViolation> LocViolations, IReadOnlyList<CondensationCandidate> PatternCandidates)[filesToScan.Count];
 
-        if (effectiveSummaryMode != SummaryMode.Disabled || effectiveSettings.EnableDuplicationDetection || effectiveSettings.EnableSubMethodCloneDetection || effectiveSettings.EnableRepeatedStringDetection || effectiveSettings.EnablePredicateCloneDetection || effectiveSettings.EnableTypeSplitting || effectiveSettings.EnableLinesOfCodeDetection)
+        if (effectiveSummaryMode != SummaryMode.Disabled || effectiveSettings.EnableDuplicationDetection || effectiveSettings.EnableSubMethodCloneDetection || effectiveSettings.EnableRepeatedStringDetection || effectiveSettings.EnablePredicateCloneDetection || effectiveSettings.EnableTypeSplitting || effectiveSettings.EnableLinesOfCodeDetection || effectiveSettings.EnablePatternCondensation)
         {
             await Parallel.ForEachAsync(
                 filesToScan.Select((f, idx) => (f, idx)),
@@ -272,7 +279,12 @@ public sealed class CodeCondenserEngine : ICodeCondenserEngine
                         ? _linesOfCodeDetector.DetectViolations(syntaxTree, normalizedRelPath, effectiveSettings, fileCat)
                         : [];
 
-                    fileResults[item.idx] = (comments, methods, subMethodBlocks, stringOccurrences, predicateOccurrences, typeIssue, locViolations);
+                    var tfmVersion = ProjectTargetFrameworkResolver.ResolveTargetFrameworkForFile(file, _projectLocator, baseDirectory);
+                    var patternCandidates = effectiveSettings.EnablePatternCondensation
+                        ? _patternDetector.DetectCandidates(syntaxTree, normalizedRelPath, effectiveSettings, tfmVersion, projectId)
+                        : [];
+
+                    fileResults[item.idx] = (comments, methods, subMethodBlocks, stringOccurrences, predicateOccurrences, typeIssue, locViolations, patternCandidates);
                 }).ConfigureAwait(false);
         }
 
@@ -282,8 +294,9 @@ public sealed class CodeCondenserEngine : ICodeCondenserEngine
         var allPredicateOccurrences = new List<PredicateOccurrence>();
         var allTypeIssues = new List<TypeFileAnalysis>();
         var allLocViolations = new List<LinesOfCodeViolation>();
+        var allPatternCandidates = new List<CondensationCandidate>();
 
-        foreach (var (comments, methods, _, stringOccurrences, predicateOccurrences, typeIssue, locViolations) in fileResults)
+        foreach (var (comments, methods, _, stringOccurrences, predicateOccurrences, typeIssue, locViolations, patternCandidates) in fileResults)
         {
             if (comments != null) allExtractedComments.AddRange(comments);
             if (methods != null) allAnalyzedMethods.AddRange(methods);
@@ -291,6 +304,7 @@ public sealed class CodeCondenserEngine : ICodeCondenserEngine
             if (predicateOccurrences != null) allPredicateOccurrences.AddRange(predicateOccurrences);
             if (typeIssue != null && typeIssue.HasViolation) allTypeIssues.Add(typeIssue);
             if (locViolations != null) allLocViolations.AddRange(locViolations);
+            if (patternCandidates != null) allPatternCandidates.AddRange(patternCandidates);
         }
 
         if (incremental && baseline != null && effectiveSettings.EnablePredicateCloneDetection && fileDiff != null)
@@ -499,7 +513,7 @@ public sealed class CodeCondenserEngine : ICodeCondenserEngine
             {
                 var file = filesToScan[i];
                 var relPath = fileToNormalizedPath[file];
-                var (_, _, blocks, _, _, _, _) = fileResults[i];
+                var blocks = fileResults[i].SubMethodBlocks;
 
                 if (currentFileHashes.TryGetValue(relPath, out var hash))
                 {
@@ -720,6 +734,7 @@ public sealed class CodeCondenserEngine : ICodeCondenserEngine
             PredicateCloneGroups = predicateCloneGroups,
             TypeFileIssues = resultTypeIssues,
             LinesOfCodeViolations = resultLocViolations,
+            CondensationCandidates = allPatternCandidates,
             SummarizedComments = cache.ToDictionary(),
             AnalyzedFilesCount = filesToScan.Count,
             TotalMethodsScanned = allAnalyzedMethods.Count,
@@ -838,6 +853,55 @@ public sealed class CodeCondenserEngine : ICodeCondenserEngine
         CancellationToken cancellationToken = default)
     {
         await ApplySummariesWithModifiedFilesAsync(analysisResult, settings, cancellationToken).ConfigureAwait(false);
+    }
+
+    /// <inheritdoc />
+    public async Task ApplyPatternsAsync(
+        AnalysisResult analysisResult,
+        CodeCondenserSettings settings,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(analysisResult);
+        ArgumentNullException.ThrowIfNull(settings);
+
+        if (analysisResult.CondensationCandidates.Count == 0)
+        {
+            return;
+        }
+
+        var filesToProcess = analysisResult.CondensationCandidates
+            .Where(c => c.CanAutoFix)
+            .GroupBy(c => c.FilePath, StringComparer.OrdinalIgnoreCase);
+
+        foreach (var group in filesToProcess)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+
+            var filePath = group.Key;
+            var fullPath = Path.IsPathRooted(filePath)
+                ? Path.GetFullPath(filePath)
+                : Path.GetFullPath(Path.Combine(_lastBaseDirectory ?? Directory.GetCurrentDirectory(), filePath));
+
+            if (!File.Exists(fullPath))
+            {
+                continue;
+            }
+
+            var originalText = await File.ReadAllTextAsync(fullPath, cancellationToken).ConfigureAwait(false);
+            var tree = CSharpSyntaxTree.ParseText(originalText, path: fullPath, cancellationToken: cancellationToken);
+
+            var ruleIds = group.Select(c => c.RuleId).ToHashSet(StringComparer.OrdinalIgnoreCase);
+            var tfmVersion = ProjectTargetFrameworkResolver.ResolveTargetFrameworkForFile(fullPath, _projectLocator, _lastBaseDirectory);
+
+            var rewrittenTree = _patternRewriter.Rewrite(tree, fullPath, settings, tfmVersion, ruleIds);
+            var newText = rewrittenTree.GetText(cancellationToken).ToString();
+
+            if (!string.Equals(originalText, newText, StringComparison.Ordinal))
+            {
+                await File.WriteAllTextAsync(fullPath, newText, cancellationToken).ConfigureAwait(false);
+                FileApplied?.Invoke(fullPath);
+            }
+        }
     }
 
     /// <summary>

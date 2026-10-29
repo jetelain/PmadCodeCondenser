@@ -20,6 +20,19 @@ public sealed class AnalysisResult
     public IReadOnlyList<PredicateCloneGroup> PredicateCloneGroups { get; init; } = [];
     public IReadOnlyList<TypeFileAnalysis> TypeFileIssues { get; init; } = [];
     public IReadOnlyList<LinesOfCodeViolation> LinesOfCodeViolations { get; init; } = [];
+    public IReadOnlyList<CondensationCandidate> CondensationCandidates { get; init; } = [];
+
+    /// <summary>
+    /// Gets the total character gain achieved by applying condensation patterns.
+    /// </summary>
+    public int TotalPatternGainCharacters =>
+        Pmad.CodeCondenser.Core.Patterns.PatternGainEstimator.EstimateTotalGainCharacters(CondensationCandidates);
+
+    /// <summary>
+    /// Gets the total estimated token gain achieved by applying condensation patterns.
+    /// </summary>
+    public int TotalPatternGainTokens =>
+        Pmad.CodeCondenser.Core.Patterns.PatternGainEstimator.EstimateTotalGainTokens(CondensationCandidates);
 
     /// <summary>
     /// Gets the total character gain achieved by refactoring duplicate conditions into helper methods.
