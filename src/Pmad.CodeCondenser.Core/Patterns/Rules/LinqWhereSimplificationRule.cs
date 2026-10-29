@@ -84,13 +84,13 @@ public sealed class LinqWhereSimplificationRule : CondensationPatternRuleBase<In
             return false;
         }
 
-        var suggestedCode = $"{receiver}.{terminalName}({predicateArg.Expression})";
+        var suggestedCode = $"{receiver}.{outerMemberAccess.Name}({predicateArg.Expression})";
 
         var replacementNode = SyntaxFactory.InvocationExpression(
             SyntaxFactory.MemberAccessExpression(
                 SyntaxKind.SimpleMemberAccessExpression,
                 receiver,
-                SyntaxFactory.IdentifierName(terminalName)),
+                outerMemberAccess.Name),
             SyntaxFactory.ArgumentList(
                 SyntaxFactory.SingletonSeparatedList(predicateArg)));
 

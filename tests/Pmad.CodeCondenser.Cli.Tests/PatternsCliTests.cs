@@ -148,5 +148,63 @@ public class PatternsCliTests
             }
         }
     }
+
+    [Fact]
+    public async Task Apply_WithPatternsAndTypeSplit_ModernizesPatternsInSplitTypes()
+    {
+        var tempDir = Path.Combine(Path.GetTempPath(), "ApplyPatternSplit_" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(tempDir);
+        try
+        {
+            var csprojContent = """
+                <Project Sdk="Microsoft.NET.Sdk">
+                  <PropertyGroup>
+                    <TargetFramework>net8.0</TargetFramework>
+                  </PropertyGroup>
+                </Project>
+                """;
+            await File.WriteAllTextAsync(Path.Combine(tempDir, "TestApp.csproj"), csprojContent);
+
+            var multiTypeContent = """
+                namespace TestNamespace;
+
+                public class ClassA
+                {
+                    public void Run()
+                    {
+                    }
+                }
+
+                public class ClassB
+                {
+                    public void Validate(string name)
+                    {
+                        if (name == null)
+                            throw new System.ArgumentNullException(nameof(name));
+                    }
+                }
+                """;
+            var combinedPath = Path.Combine(tempDir, "ClassA.cs");
+            await File.WriteAllTextAsync(combinedPath, multiTypeContent);
+
+            using var output = new StringWriter();
+            using var error = new StringWriter();
+            var exitCode = await Program.RunAsync(["apply", tempDir, "--no-color", "--no-comments"], output, error);
+
+            exitCode.Should().Be(0);
+
+            var classBPath = Path.Combine(tempDir, "ClassB.cs");
+            File.Exists(classBPath).Should().BeTrue();
+            var classBText = await File.ReadAllTextAsync(classBPath);
+            classBText.Should().Contain("ArgumentNullException.ThrowIfNull(name);");
+        }
+        finally
+        {
+            if (Directory.Exists(tempDir))
+            {
+                Directory.Delete(tempDir, recursive: true);
+            }
+        }
+    }
 }
 

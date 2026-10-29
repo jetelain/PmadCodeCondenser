@@ -50,6 +50,38 @@ public class ProjectTargetFrameworkResolverTests
     }
 
     [Fact]
+    public void ParseTargetFrameworkFromXml_MultiTfm_WithSpacesAndNewlines_ParsesMinimumVersion()
+    {
+        var csproj1 = """
+            <Project Sdk="Microsoft.NET.Sdk">
+              <PropertyGroup>
+                <TargetFrameworks>net8.0; netstandard2.0</TargetFrameworks>
+              </PropertyGroup>
+            </Project>
+            """;
+
+        var ver1 = ProjectTargetFrameworkResolver.ParseTargetFrameworkFromXml(csproj1);
+        Assert.NotNull(ver1);
+        Assert.Equal(new Version(2, 0), ver1);
+
+        var csproj2 = """
+            <Project Sdk="Microsoft.NET.Sdk">
+              <PropertyGroup>
+                <TargetFrameworks>
+                  net10.0;
+                  net8.0;
+                  netstandard2.1
+                </TargetFrameworks>
+              </PropertyGroup>
+            </Project>
+            """;
+
+        var ver2 = ProjectTargetFrameworkResolver.ParseTargetFrameworkFromXml(csproj2);
+        Assert.NotNull(ver2);
+        Assert.Equal(new Version(2, 1), ver2);
+    }
+
+    [Fact]
     public void ParseTargetFrameworkFromXml_WindowsSuffix_ParsesMajorMinor()
     {
         var csproj = """

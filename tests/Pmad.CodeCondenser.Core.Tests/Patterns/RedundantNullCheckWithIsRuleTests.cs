@@ -126,4 +126,51 @@ public class RedundantNullCheckWithIsRuleTests
         Assert.NotNull(match);
         Assert.Equal("item is Widget", match.SuggestedCode);
     }
+
+    [Fact]
+    public void TryMatch_ParenthesizedBinaryExpressions_MatchesAndUnwraps()
+    {
+        var code = "var check = (item != null) && (item is Widget);";
+        var tree = CSharpSyntaxTree.ParseText(code);
+        var root = tree.GetRoot();
+        var context = new CondensationContext
+        {
+            SyntaxTree = tree,
+            FilePath = "Test.cs",
+            Settings = _settings,
+            TargetDotNetVersion = new Version(8, 0)
+        };
+
+        var binary = root.DescendantNodes().OfType<BinaryExpressionSyntax>().First();
+        var matched = _rule.TryMatch(binary, context, out var match);
+
+        Assert.True(matched);
+        Assert.NotNull(match);
+        Assert.Equal("item is Widget", match.SuggestedCode);
+
+        var rewritten = _rule.Rewrite(binary, match);
+        Assert.Equal("item is Widget", rewritten.ToString());
+    }
+
+    [Fact]
+    public void TryMatch_ParenthesizedInvertedOrder_MatchesAndUnwraps()
+    {
+        var code = "var check = (item is Widget) && (item != null);";
+        var tree = CSharpSyntaxTree.ParseText(code);
+        var root = tree.GetRoot();
+        var context = new CondensationContext
+        {
+            SyntaxTree = tree,
+            FilePath = "Test.cs",
+            Settings = _settings,
+            TargetDotNetVersion = new Version(8, 0)
+        };
+
+        var binary = root.DescendantNodes().OfType<BinaryExpressionSyntax>().First();
+        var matched = _rule.TryMatch(binary, context, out var match);
+
+        Assert.True(matched);
+        Assert.NotNull(match);
+        Assert.Equal("item is Widget", match.SuggestedCode);
+    }
 }

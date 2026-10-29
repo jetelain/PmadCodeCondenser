@@ -52,13 +52,13 @@ public sealed class RedundantNullCheckWithIsRule : CondensationPatternRuleBase<B
         if (TryExtractNotNullTarget(binary.Left, out targetA) &&
             TryExtractIsPatternTarget(binary.Right, out targetB))
         {
-            retainedExpression = binary.Right;
+            retainedExpression = StripParens(binary.Right);
         }
         // Case 2: Left is 'is' check, Right is null check
         else if (TryExtractIsPatternTarget(binary.Left, out targetA) &&
                  TryExtractNotNullTarget(binary.Right, out targetB))
         {
-            retainedExpression = binary.Left;
+            retainedExpression = StripParens(binary.Left);
         }
 
         if (targetA == null || targetB == null || retainedExpression == null)
@@ -105,6 +105,7 @@ public sealed class RedundantNullCheckWithIsRule : CondensationPatternRuleBase<B
     private static bool TryExtractNotNullTarget(ExpressionSyntax expr, [NotNullWhen(true)] out ExpressionSyntax? target)
     {
         target = null;
+        expr = StripParens(expr);
 
         if (expr is BinaryExpressionSyntax binary && binary.IsKind(SyntaxKind.NotEqualsExpression))
         {
@@ -136,6 +137,7 @@ public sealed class RedundantNullCheckWithIsRule : CondensationPatternRuleBase<B
     private static bool TryExtractIsPatternTarget(ExpressionSyntax expr, [NotNullWhen(true)] out ExpressionSyntax? target)
     {
         target = null;
+        expr = StripParens(expr);
 
         if (expr is BinaryExpressionSyntax binary && binary.IsKind(SyntaxKind.IsExpression))
         {

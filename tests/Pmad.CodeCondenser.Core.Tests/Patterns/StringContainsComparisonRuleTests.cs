@@ -191,4 +191,30 @@ public class StringContainsComparisonRuleTests
         Assert.False(matched);
         Assert.Null(match);
     }
+
+    [Fact]
+    public void TryMatch_NegatedContains_WithLeadingTrivia_FormatsCleanlyWithoutTrappedSpaces()
+    {
+        var code = "    var missing = text.IndexOf(\"hello\") == -1;";
+        var tree = CSharpSyntaxTree.ParseText(code);
+        var root = tree.GetRoot();
+        var context = new CondensationContext
+        {
+            SyntaxTree = tree,
+            FilePath = "Test.cs",
+            Settings = _settings,
+            TargetDotNetVersion = new Version(8, 0)
+        };
+
+        var binary = root.DescendantNodes().OfType<BinaryExpressionSyntax>().First();
+        var matched = _rule.TryMatch(binary, context, out var match);
+
+        Assert.True(matched);
+        Assert.NotNull(match);
+        Assert.Equal("!text.Contains(\"hello\")", match.SuggestedCode);
+
+        var rewritten = _rule.Rewrite(binary, match);
+        Assert.DoesNotContain("! ", rewritten.ToFullString());
+        Assert.DoesNotContain("!\t", rewritten.ToFullString());
+    }
 }

@@ -157,6 +157,6 @@ public static partial class ProjectTargetFrameworkResolver
     [GeneratedRegex(@"<TargetFramework>\s*([^<\s]+)\s*</TargetFramework>", RegexOptions.IgnoreCase)]
     private static partial Regex TargetFrameworkRegex();
 
-    [GeneratedRegex(@"<TargetFrameworks>\s*([^<\s]+)\s*</TargetFrameworks>", RegexOptions.IgnoreCase)]
+    [GeneratedRegex(@"<TargetFrameworks>\s*([^<]+?)\s*</TargetFrameworks>", RegexOptions.IgnoreCase | RegexOptions.Singleline)]
     private static partial Regex TargetFrameworksRegex();
 }

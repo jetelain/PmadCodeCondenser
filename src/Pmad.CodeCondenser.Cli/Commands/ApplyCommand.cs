@@ -209,13 +209,13 @@ public sealed class ApplyCommand : ICommand
             try
             {
                 await cce.ApplySummariesWithModifiedFilesAsync(result, settings, cancellationToken).ConfigureAwait(false);
-                if (settings.EnableTypeSplitting)
-                {
-                    await cce.ApplyTypeSplitsWithModifiedFilesAsync(result, settings, cancellationToken).ConfigureAwait(false);
-                }
                 if (settings.EnablePatternCondensation)
                 {
                     await cce.ApplyPatternsAsync(result, settings, cancellationToken).ConfigureAwait(false);
+                }
+                if (settings.EnableTypeSplitting)
+                {
+                    await cce.ApplyTypeSplitsWithModifiedFilesAsync(result, settings, cancellationToken).ConfigureAwait(false);
                 }
             }
             finally
@@ -231,13 +231,13 @@ public sealed class ApplyCommand : ICommand
         else
         {
             await engine.ApplySummariesAsync(result, settings, cancellationToken).ConfigureAwait(false);
-            if (settings.EnableTypeSplitting)
-            {
-                await engine.ApplyTypeSplitsAsync(result, settings, cancellationToken).ConfigureAwait(false);
-            }
             if (settings.EnablePatternCondensation)
             {
                 await engine.ApplyPatternsAsync(result, settings, cancellationToken).ConfigureAwait(false);
+            }
+            if (settings.EnableTypeSplitting)
+            {
+                await engine.ApplyTypeSplitsAsync(result, settings, cancellationToken).ConfigureAwait(false);
             }
         }
 

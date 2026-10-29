@@ -109,4 +109,31 @@ public class LinqWhereSimplificationRuleTests
         Assert.False(matched);
         Assert.Null(match);
     }
+
+    [Fact]
+    public void TryMatch_WhereWithGenericTerminalMethod_PreservesGenericTypeArguments()
+    {
+        var code = """
+            var item = items.Where(x => x.Length > 0).FirstOrDefault<string>();
+            """;
+
+        var tree = CSharpSyntaxTree.ParseText(code);
+        var root = tree.GetRoot();
+        var context = new CondensationContext
+        {
+            SyntaxTree = tree,
+            FilePath = "Test.cs",
+            Settings = _settings
+        };
+
+        var outerInvocation = root.DescendantNodes().OfType<InvocationExpressionSyntax>().First();
+        var matched = _rule.TryMatch(outerInvocation, context, out var match);
+
+        Assert.True(matched);
+        Assert.NotNull(match);
+        Assert.Equal("items.FirstOrDefault<string>(x => x.Length > 0)", match.SuggestedCode);
+
+        var rewritten = _rule.Rewrite(outerInvocation, match);
+        Assert.Equal("items.FirstOrDefault<string>(x => x.Length > 0)", rewritten.ToString());
+    }
 }

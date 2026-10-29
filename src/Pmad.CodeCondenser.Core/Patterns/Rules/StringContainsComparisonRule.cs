@@ -111,7 +111,10 @@ public sealed class StringContainsComparisonRule : CondensationPatternRuleBase<B
             }
         }
 
-        var receiver = memberAccess.Expression;
+        var receiver = isPositive.Value
+            ? memberAccess.Expression
+            : memberAccess.Expression.WithoutLeadingTrivia();
+
         var containsInvocation = SyntaxFactory.InvocationExpression(
             SyntaxFactory.MemberAccessExpression(
                 SyntaxKind.SimpleMemberAccessExpression,
@@ -124,9 +127,10 @@ public sealed class StringContainsComparisonRule : CondensationPatternRuleBase<B
             : SyntaxFactory.PrefixUnaryExpression(SyntaxKind.LogicalNotExpression, containsInvocation);
 
         var argsText = string.Join(", ", invocation.ArgumentList.Arguments.Select(a => a.ToString()));
+        var receiverText = isPositive.Value ? receiver.ToString() : receiver.ToString().TrimStart();
         var suggestedCode = isPositive.Value
-            ? $"{receiver}.Contains({argsText})"
-            : $"!{receiver}.Contains({argsText})";
+            ? $"{receiverText}.Contains({argsText})"
+            : $"!{receiverText}.Contains({argsText})";
 
         match = new CondensationMatch
         {
