@@ -148,4 +148,47 @@ public class StringContainsComparisonRuleTests
         Assert.False(matched);
         Assert.Null(match);
     }
+
+    [Fact]
+    public void TryMatch_CharLiteral_Net8_Matches()
+    {
+        var code = """var found = text.IndexOf('a') >= 0;""";
+        var tree = CSharpSyntaxTree.ParseText(code);
+        var root = tree.GetRoot();
+        var context = new CondensationContext
+        {
+            SyntaxTree = tree,
+            FilePath = "Test.cs",
+            Settings = _settings,
+            TargetDotNetVersion = new Version(8, 0)
+        };
+
+        var binary = root.DescendantNodes().OfType<BinaryExpressionSyntax>().First();
+        var matched = _rule.TryMatch(binary, context, out var match);
+
+        Assert.True(matched);
+        Assert.NotNull(match);
+        Assert.Equal("text.Contains('a')", match.SuggestedCode);
+    }
+
+    [Fact]
+    public void TryMatch_CharLiteral_Net48_DoesNotMatch()
+    {
+        var code = """var found = text.IndexOf('a') >= 0;""";
+        var tree = CSharpSyntaxTree.ParseText(code);
+        var root = tree.GetRoot();
+        var context = new CondensationContext
+        {
+            SyntaxTree = tree,
+            FilePath = "Test.cs",
+            Settings = _settings,
+            TargetDotNetVersion = new Version(4, 8)
+        };
+
+        var binary = root.DescendantNodes().OfType<BinaryExpressionSyntax>().First();
+        var matched = _rule.TryMatch(binary, context, out var match);
+
+        Assert.False(matched);
+        Assert.Null(match);
+    }
 }

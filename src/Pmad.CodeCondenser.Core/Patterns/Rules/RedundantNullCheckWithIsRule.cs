@@ -66,7 +66,7 @@ public sealed class RedundantNullCheckWithIsRule : CondensationPatternRuleBase<B
             return false;
         }
 
-        if (!targetA.ToString().Equals(targetB.ToString(), StringComparison.Ordinal))
+        if (!StripParens(targetA).ToString().Equals(StripParens(targetB).ToString(), StringComparison.Ordinal))
         {
             return false;
         }
@@ -90,6 +90,16 @@ public sealed class RedundantNullCheckWithIsRule : CondensationPatternRuleBase<B
     protected override SyntaxNode RewriteNode(BinaryExpressionSyntax node, CondensationMatch match)
     {
         return match.ReplacementNode ?? node;
+    }
+
+    private static ExpressionSyntax StripParens(ExpressionSyntax expr)
+    {
+        while (expr is ParenthesizedExpressionSyntax parenthesized)
+        {
+            expr = parenthesized.Expression;
+        }
+
+        return expr;
     }
 
     private static bool TryExtractNotNullTarget(ExpressionSyntax expr, [NotNullWhen(true)] out ExpressionSyntax? target)

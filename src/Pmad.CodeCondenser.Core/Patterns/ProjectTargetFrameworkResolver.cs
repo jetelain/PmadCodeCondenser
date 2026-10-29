@@ -59,7 +59,7 @@ public static partial class ProjectTargetFrameworkResolver
             return null;
         }
 
-        // Match <TargetFramework>...</TargetFramework> or first item in <TargetFrameworks>...</TargetFrameworks>
+        // Match <TargetFramework>...</TargetFramework> or minimum version across <TargetFrameworks>...</TargetFrameworks>
         var singleMatch = TargetFrameworkRegex().Match(csprojContent);
         if (singleMatch.Success)
         {
@@ -70,14 +70,19 @@ public static partial class ProjectTargetFrameworkResolver
         if (multiMatch.Success)
         {
             var tfms = multiMatch.Groups[1].Value.Split(';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+            Version? minVersion = null;
             foreach (var tfm in tfms)
             {
                 var ver = ParseTfmVersion(tfm);
                 if (ver != null)
                 {
-                    return ver;
+                    if (minVersion == null || ver < minVersion)
+                    {
+                        minVersion = ver;
+                    }
                 }
             }
+            return minVersion;
         }
 
         return null;

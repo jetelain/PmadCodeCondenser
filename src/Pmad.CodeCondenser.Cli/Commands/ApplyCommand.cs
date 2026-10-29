@@ -50,18 +50,28 @@ public sealed class ApplyCommand : ICommand
         ArgumentNullException.ThrowIfNull(formatter);
         ArgumentNullException.ThrowIfNull(output);
 
-        if (settings.EnableTypeSplitting && settings.GetEffectiveSummaryMode() != Core.Configuration.SummaryMode.Disabled)
+        var operations = new List<string>(3);
+        if (settings.EnableTypeSplitting)
         {
-            formatter.PrintInfo(output, $"Applying single-type file splits and comment summaries to target: {Path.GetFullPath(options.TargetPath)}");
+            operations.Add("single-type file splits");
         }
-        else if (settings.EnableTypeSplitting)
+        if (settings.EnablePatternCondensation)
         {
-            formatter.PrintInfo(output, $"Applying single-type file splits to target: {Path.GetFullPath(options.TargetPath)}");
+            operations.Add("condensation patterns");
         }
-        else
+        if (settings.GetEffectiveSummaryMode() != Core.Configuration.SummaryMode.Disabled)
         {
-            formatter.PrintInfo(output, $"Applying comment summaries to target: {Path.GetFullPath(options.TargetPath)}");
+            operations.Add("comment summaries");
         }
+
+        string message = operations.Count switch
+        {
+            0 => $"Applying changes to target: {Path.GetFullPath(options.TargetPath)}",
+            1 => $"Applying {operations[0]} to target: {Path.GetFullPath(options.TargetPath)}",
+            2 => $"Applying {operations[0]} and {operations[1]} to target: {Path.GetFullPath(options.TargetPath)}",
+            _ => $"Applying {string.Join(", ", operations.Take(operations.Count - 1))}, and {operations.Last()} to target: {Path.GetFullPath(options.TargetPath)}"
+        };
+        formatter.PrintInfo(output, message);
         output.WriteLine();
 
         var progress = new Progress<Pmad.CodeCondenser.Core.Comments.CommentSummarizationProgress>(p =>

@@ -12,8 +12,9 @@ A static analysis developer utility and .NET tool built on **.NET 10** and Rosly
 3. **Condense Verbose Comments**: Scan overly verbose regular comments (`//`, `/* */`) and XML documentation comments (`/// <summary>`, `<remarks>`, `<param>`) and condense them into clear, concise summaries using local or cloud LLMs via `Microsoft.Extensions.AI` and Ollama.
 4. **Enforce Single Type Per File (Automatic Splitting & Renaming)**: Keep each class, interface, struct, enum, record, or delegate in its own `.cs` file matching its type name (allowing small inline types like 1-line delegates via configurable line tolerance) to optimize AI agent context window loading and codebase modularity.
 5. **Detect Lines of Code Limits**: Automatically flag methods (> 150 LOC) and classes/records (> 1500 LOC) exceeding maintainability thresholds, excluding comments and blank lines (report-only, no auto-fix).
-6. **WYSIWYG Guarantee & Incremental Snapshots**: Cache generated comment summaries and AST hashes so that dry-run reviews match applied code without LLM drift, while incremental runs only analyze changed code.
-7. **CI/CD & AI Agent Guardrails**: Enforce strict duplication, repeated string, single-type-per-file, and lines-of-code tolerance in CI pipelines and AI coding agent workflows (exit code `2` on new violations).
+6. **Modernize High-Impact Condensation Patterns**: Identify verbose legacy framework calls and C# idioms (e.g. `s.ReplaceLineEndings()`, `string.IsNullOrWhiteSpace()`, `??`, `MinBy`/`MaxBy`, `ArgumentNullException.ThrowIfNull`) and automatically rewrite them with `codecondenser apply`.
+7. **WYSIWYG Guarantee & Incremental Snapshots**: Cache generated comment summaries and AST hashes so that dry-run reviews match applied code without LLM drift, while incremental runs only analyze changed code.
+8. **CI/CD & AI Agent Guardrails**: Enforce strict duplication, repeated string, single-type-per-file, and lines-of-code tolerance in CI pipelines and AI coding agent workflows (exit code `2` on new violations).
 
 ---
 

@@ -15,7 +15,7 @@ description: >-
 4. **Enforce Single Type Per File**: Automatically ensures each class, interface, struct, enum, record, or delegate has its own `.cs` file matching its type name (with line tolerance for small inline types like 1-line delegates) to optimize AI agent context window loading.
 5. **Detect Lines of Code Limits**: Flags methods (> 150 LOC) and classes/records (> 1500 LOC) exceeding maintainability thresholds, excluding comments and blank lines (report-only, no auto-fix).
 6. **Detect Predicate / Boolean Condition Clones**: Identifies duplicate complex boolean conditions across `if`, ternary, `while`, `do`, `return`, and LINQ calls (e.g. `.Where(...)`, `.Any(...)`) with >= 100 characters. Automatically matches conditions against existing static or instance helper methods/properties (>= 20 characters), handling receiver binding (`slot.IsOnline(...)`), parameter reordering, constant/enum folding, and De Morgan logical negations (`!slot.IsOnline(...)`).
-7. **Modernize High-Impact Condensation Patterns**: Identifies verbose legacy framework calls and C# idioms (e.g. `s.Replace("\r\n", "\n").Replace("\r", "\n")`, `string.IsNullOrEmpty(s.Trim())`, `x != null ? x : fallback`, `arg == null throw new ArgumentNullException`, `s.IndexOf(...) >= 0`, `OrderBy(...).First()`, `s == null || s.Length == 0`) and automatically rewrites them with `codecondenser apply`.
+7. **Modernize High-Impact Condensation Patterns**: Identifies verbose legacy framework calls and C# idioms (e.g. `s.Replace("\r\n", "\n").Replace("\r", "\n")`, `string.IsNullOrEmpty(s.Trim())`, `x != null ? x : fallback`, `arg == null throw new ArgumentNullException`, `s.IndexOf(...) >= 0`, `OrderBy(...).First()`) and automatically rewrites them with `codecondenser apply`.
 8. **Enforce Guardrails in CI**: Compares changes incrementally against a baseline snapshot and exits with code `2` when new duplication, repeated strings, type violations, lines of code violations, or predicate clones are introduced.
 
 ---
@@ -281,6 +281,14 @@ When an inline condition matches an existing helper method or property (e.g., `s
 #### Duplicate Condition Extraction Pattern (CC010)
 When duplicate conditions exist without an existing helper (>= 100 characters, configurable via `--threshold-predicates` / `-tpred`):
 - CodeCondenser recommends extracting the condition into a shared helper method (e.g., in a shared static helper class `PredicateHelpers`).
+
+---
+
+### 7. Condensation Pattern Suppressions
+
+When a legacy or verbose syntax pattern must intentionally be preserved (e.g. to avoid newer framework APIs or keep explicit null checks):
+- **Comment Marker**: Place `// codecondenser:ignore-pattern:<ruleId>` (e.g. `// codecondenser:ignore-pattern:PCC401`, `// codecondenser:ignore-pattern:PCC401,PCC402`) or general `// codecondenser:ignore` / `// nocondense` on the line directly preceding the pattern or statement.
+- **Attribute**: Apply `[SuppressMessage("CodeCondenser", "<ruleId>")]` (e.g. `[SuppressMessage("CodeCondenser", "PCC401")]`), `[CodeCondenserIgnore]`, or `[IgnorePattern]` to the enclosing member or class.
 
 ---
 

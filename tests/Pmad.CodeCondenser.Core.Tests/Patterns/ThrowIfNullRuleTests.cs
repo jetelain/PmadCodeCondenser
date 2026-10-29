@@ -118,4 +118,35 @@ public class ThrowIfNullRuleTests
         Assert.False(matched);
         Assert.Null(match);
     }
+
+    [Fact]
+    public void TryMatch_ElseIfBranch_DoesNotMatch()
+    {
+        var code = """
+            if (other)
+            {
+                DoSomething();
+            }
+            else if (argument == null)
+            {
+                throw new ArgumentNullException(nameof(argument));
+            }
+            """;
+
+        var tree = CSharpSyntaxTree.ParseText(code);
+        var root = tree.GetRoot();
+        var context = new CondensationContext
+        {
+            SyntaxTree = tree,
+            FilePath = "Test.cs",
+            Settings = _settings,
+            TargetDotNetVersion = new Version(8, 0)
+        };
+
+        var elseIfStmt = root.DescendantNodes().OfType<IfStatementSyntax>().ElementAt(1);
+        var matched = _rule.TryMatch(elseIfStmt, context, out var match);
+
+        Assert.False(matched);
+        Assert.Null(match);
+    }
 }

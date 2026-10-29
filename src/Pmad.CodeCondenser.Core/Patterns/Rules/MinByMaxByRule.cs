@@ -26,7 +26,7 @@ public sealed class MinByMaxByRule : CondensationPatternRuleBase<InvocationExpre
 
     /// <inheritdoc />
     public override string Description =>
-        "Replaces OrderBy(...).First() or OrderByDescending(...).FirstOrDefault() with MinBy(...) or MaxBy(...).";
+        "Replaces Enumerable.OrderBy(...).First() or OrderByDescending(...).FirstOrDefault() with MinBy(...) or MaxBy(...). Note: In-memory LINQ only; not supported by EF Core / IQueryable SQL translation.";
 
     /// <inheritdoc />
     public override PatternCategory Category => PatternCategory.Linq;
@@ -48,7 +48,7 @@ public sealed class MinByMaxByRule : CondensationPatternRuleBase<InvocationExpre
     {
         match = null;
 
-        // Outer: .First(), .FirstOrDefault(), .Last(), .LastOrDefault() with 0 arguments
+        // Outer: .First() or .FirstOrDefault() with 0 arguments
         if (outerInvocation.ArgumentList.Arguments.Count != 0 ||
             outerInvocation.Expression is not MemberAccessExpressionSyntax outerMemberAccess ||
             !TerminalMethods.Contains(outerMemberAccess.Name.Identifier.ValueText))

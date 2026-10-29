@@ -43,8 +43,8 @@ public sealed class ThrowIfNullRule : CondensationPatternRuleBase<IfStatementSyn
     {
         match = null;
 
-        // Cannot have an else clause
-        if (ifStatement.Else != null)
+        // Cannot have an else clause and cannot be an else-if branch
+        if (ifStatement.Else != null || ifStatement.Parent is ElseClauseSyntax)
         {
             return false;
         }

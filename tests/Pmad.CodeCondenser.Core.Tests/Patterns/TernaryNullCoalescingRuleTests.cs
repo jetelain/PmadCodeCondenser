@@ -154,4 +154,29 @@ public class TernaryNullCoalescingRuleTests
         var rewritten = _rule.Rewrite(conditional, match);
         Assert.Equal("flag ?? (a == b)", rewritten.ToString());
     }
+
+    [Fact]
+    public void TryMatch_ConditionalTarget_PreservesParentheses()
+    {
+        var code = "var name = (cond ? a : b) != null ? (cond ? a : b) : fallback;";
+        var tree = CSharpSyntaxTree.ParseText(code);
+        var root = tree.GetRoot();
+        var context = new CondensationContext
+        {
+            SyntaxTree = tree,
+            FilePath = "Test.cs",
+            Settings = _settings,
+            TargetDotNetVersion = new Version(8, 0)
+        };
+
+        var conditional = root.DescendantNodes().OfType<ConditionalExpressionSyntax>().First();
+        var matched = _rule.TryMatch(conditional, context, out var match);
+
+        Assert.True(matched);
+        Assert.NotNull(match);
+        Assert.Equal("(cond ? a : b) ?? fallback", match.SuggestedCode);
+
+        var rewritten = _rule.Rewrite(conditional, match);
+        Assert.Equal("(cond ? a : b) ?? fallback", rewritten.ToString());
+    }
 }

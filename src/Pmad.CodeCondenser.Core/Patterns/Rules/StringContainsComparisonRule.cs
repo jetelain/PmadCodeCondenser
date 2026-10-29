@@ -84,6 +84,17 @@ public sealed class StringContainsComparisonRule : CondensationPatternRuleBase<B
             return false;
         }
 
+        var firstArg = invocation.ArgumentList.Arguments[0].Expression;
+
+        // If 1 argument and it is a character literal, string.Contains(char) requires .NET Standard 2.1 / .NET 6+
+        if (argCount == 1 && firstArg.IsKind(SyntaxKind.CharacterLiteralExpression))
+        {
+            if (context.TargetDotNetVersion != null && context.TargetDotNetVersion < Net6Version)
+            {
+                return false;
+            }
+        }
+
         // If 2 arguments, second must be StringComparison
         if (argCount == 2)
         {

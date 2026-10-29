@@ -71,7 +71,11 @@ public sealed class TernaryNullCoalescingRule : CondensationPatternRuleBase<Cond
             return false;
         }
 
-        var cleanTarget = StripParens(target).WithoutTrivia();
+        var innerTarget = StripParens(target).WithoutTrivia();
+        ExpressionSyntax cleanTarget = innerTarget is ConditionalExpressionSyntax or AssignmentExpressionSyntax
+            ? SyntaxFactory.ParenthesizedExpression(innerTarget)
+            : innerTarget;
+
         var innerFallback = StripParens(fallback).WithoutTrivia();
         ExpressionSyntax cleanFallback = innerFallback is ConditionalExpressionSyntax or BinaryExpressionSyntax or AssignmentExpressionSyntax
             ? SyntaxFactory.ParenthesizedExpression(innerFallback)

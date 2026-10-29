@@ -118,4 +118,35 @@ public class PatternsCliTests
         options.CondensationRules.Should().NotBeNull();
         options.CondensationRules.Should().ContainInOrder(["PCC401", "PCC402"]);
     }
+
+    [Theory]
+    [InlineData(new string[] { "--no-comments" }, "Applying single-type file splits and condensation patterns to target:")]
+    [InlineData(new string[] { "--no-comments", "--no-type-split" }, "Applying condensation patterns to target:")]
+    [InlineData(new string[] { "--no-patterns", "--no-comments" }, "Applying single-type file splits to target:")]
+    [InlineData(new string[] { }, "Applying single-type file splits, condensation patterns, and comment summaries to target:")]
+    public async Task Apply_IntroBanner_MentionsConfiguredTransformations(string[] extraArgs, string expectedBanner)
+    {
+        var tempDir = Path.Combine(Path.GetTempPath(), "ApplyBanner_" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(tempDir);
+        try
+        {
+            using var output = new StringWriter();
+            using var error = new StringWriter();
+            var args = new List<string> { "apply", tempDir, "--no-color" };
+            args.AddRange(extraArgs);
+
+            var exitCode = await Program.RunAsync([.. args], output, error);
+
+            exitCode.Should().Be(0);
+            output.ToString().Should().Contain(expectedBanner);
+        }
+        finally
+        {
+            if (Directory.Exists(tempDir))
+            {
+                Directory.Delete(tempDir, recursive: true);
+            }
+        }
+    }
 }
+
